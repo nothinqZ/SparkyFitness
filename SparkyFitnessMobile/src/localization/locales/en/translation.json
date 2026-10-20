@@ -6027,6 +6027,20 @@
   },
   "performance": {
     "title": "Performance",
+    "today": {
+      "title": "Your training today",
+      "open": "Open performance cockpit",
+      "details": "Details ›",
+      "ready": "Good conditions for a planned session. Listen to your body.",
+      "steady": "A steady training day. Adjust intensity to how you feel.",
+      "recover": "Take it easier today. Recovery or recent load calls for caution.",
+      "unknown": "Not enough recovery data for a daily assessment yet.",
+      "unavailable": "Performance data unavailable. Tap to retry in the cockpit.",
+      "loading": "Loading performance…",
+      "load": "Load",
+      "hrv": "HRV",
+      "sleep": "Sleep (average)"
+    },
     "baseline": {
       "below": "Below baseline",
       "within": "Within baseline",

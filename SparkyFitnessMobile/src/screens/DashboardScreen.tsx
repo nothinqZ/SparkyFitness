@@ -44,6 +44,7 @@ import MedicationsCard from '../components/MedicationsCard';
 import { MindfulnessCard } from '../components/mindfulness/MindfulnessCard';
 import SymptomsCard from '../components/SymptomsCard';
 import ProgressPhotosCard from '../components/ProgressPhotosCard';
+import PerformanceTodayCard from '../components/PerformanceTodayCard';
 import SegmentedControl, { type Segment } from '../components/SegmentedControl';
 import StatusView from '../components/StatusView';
 import { NUTRIENT_META, getNutrientLabel } from '../constants/nutrients';
@@ -535,6 +536,11 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
           />
         }
       >
+        {getDateRelationToToday(selectedDate) === 'today' && (
+          <PerformanceTodayCard
+            onPress={() => navigation.navigate('Performance')}
+          />
+        )}
         {/* Goal-notification reconciliation is owned here (headless, always
             mounted) so it survives the card being hidden. Fasting is "now"-based,
             so the card is deliberately date-independent — it always reflects the
