@@ -18,6 +18,7 @@ import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
 import SegmentedControl from '../components/SegmentedControl';
 import StatusView from '../components/StatusView';
 import { weightFromKg } from '../utils/unitConversions';
+import { getAppLocale } from '../localization';
 import {
   acwrTone,
   averagePace,
@@ -405,7 +406,10 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = () => {
                 })}
                 value={
                   watch.data.last_upload_at
-                    ? new Date(watch.data.last_upload_at).toLocaleString()
+                    ? new Date(watch.data.last_upload_at).toLocaleString(
+                        getAppLocale(),
+                        { dateStyle: 'medium', timeStyle: 'short' }
+                      )
                     : '–'
                 }
                 last={watch.data.devices.length === 0}

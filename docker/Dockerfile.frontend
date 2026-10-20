@@ -19,6 +19,11 @@ COPY shared/package.json ./shared/
 # Copy patch files referenced by pnpm.patchedDependencies in root package.json
 COPY patches/ ./patches/
 
+# pnpm's default import ("auto") can fail with EAGAIN while copying from its
+# store on some overlayfs/containerd hosts. Those hosts build with
+# --build-arg PNPM_PACKAGE_IMPORT_METHOD=hardlink; the default is unchanged.
+ARG PNPM_PACKAGE_IMPORT_METHOD=auto
+ENV npm_config_package_import_method=$PNPM_PACKAGE_IMPORT_METHOD
 RUN pnpm install --frozen-lockfile --filter sparkyfitnessfrontend...
 
 # Copy the frontend and shared source code

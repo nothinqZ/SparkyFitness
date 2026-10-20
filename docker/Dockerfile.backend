@@ -20,6 +20,11 @@ COPY shared/package.json shared/
 COPY patches/ patches/
 
 # Install workspace dependencies
+# pnpm's default import ("auto") can fail with EAGAIN while copying from its
+# store on some overlayfs/containerd hosts. Those hosts build with
+# --build-arg PNPM_PACKAGE_IMPORT_METHOD=hardlink; the default is unchanged.
+ARG PNPM_PACKAGE_IMPORT_METHOD=auto
+ENV npm_config_package_import_method=$PNPM_PACKAGE_IMPORT_METHOD
 RUN pnpm install --frozen-lockfile --filter sparkyfitnessserver...
 
 # Copy server and shared source
