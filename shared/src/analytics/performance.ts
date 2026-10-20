@@ -200,8 +200,9 @@ export interface LoadPoint {
  * Acute:chronic workload ratio with rolling means: acute = mean daily load of
  * the last 7 days, chronic = mean of the last 28 days (days without training
  * count as 0). Input loads are summed per day. Output covers every day from
- * `from` to `to`; the first 27 days after the start of the data underestimate
- * chronic load and are flagged by `ratio` being computed over fewer days.
+ * `from` to `to`. Until 28 days have passed since the first recorded load the
+ * chronic window is mostly empty and the ratio would be inflated, so `ratio`
+ * is null there (acute and chronic are still reported).
  */
 export function acuteChronicLoad(
   loads: readonly DatedValue[],
@@ -214,6 +215,7 @@ export function acuteChronicLoad(
     const i = dayIndex(l.date);
     perDay.set(i, (perDay.get(i) ?? 0) + l.value);
   }
+  const firstLoadDay = perDay.size ? Math.min(...perDay.keys()) : Infinity;
   const out: LoadPoint[] = [];
   const start = dayIndex(from);
   const end = dayIndex(to);
@@ -231,7 +233,7 @@ export function acuteChronicLoad(
       date: isoDay(i),
       acute: round(a, 1),
       chronic: round(c, 1),
-      ratio: c > 0 ? round(a / c, 2) : null,
+      ratio: c > 0 && i - firstLoadDay >= 27 ? round(a / c, 2) : null,
     });
   }
   return out;
@@ -381,15 +383,15 @@ export function recoveryEstimate(input: {
   const clamp = (v: number) => Math.max(0, Math.min(100, v));
   const components: Record<string, number> = {};
   if (input.hrv?.zScore != null)
-    components.hrv = clamp(50 + 20 * input.hrv.zScore);
+    components["hrv"] = clamp(50 + 20 * input.hrv.zScore);
   if (input.restingHr?.zScore != null)
-    components.restingHr = clamp(50 - 20 * input.restingHr.zScore);
+    components["restingHr"] = clamp(50 - 20 * input.restingHr.zScore);
   if (input.lastNightSleepHours != null && input.lastNightSleepHours > 0) {
-    components.sleep = clamp((input.lastNightSleepHours / 8) * 100);
+    components["sleep"] = clamp((input.lastNightSleepHours / 8) * 100);
   }
   if (input.acwr != null) {
     const r = input.acwr;
-    components.load =
+    components["load"] =
       r >= 0.8 && r <= 1.3
         ? 100
         : r < 0.8

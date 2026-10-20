@@ -8,6 +8,7 @@ import {
   Activity, // Used for Check-In
   CalendarHeart,
   BarChart3,
+  TrendingUp,
   Utensils, // Used for Foods
   Settings as SettingsIcon,
   LogOut,
@@ -27,6 +28,8 @@ import {
   HeartPulse, // Used for the delegate-only Symptoms page
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+
+const FULL_WIDTH_ROUTES = new Set(['/performance']);
 import { toast } from '@/hooks/use-toast';
 
 import SparkyChat from '../pages/Chat/SparkyChat';
@@ -253,6 +256,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           icon: Pill,
         },
         { value: '/reports', label: t('nav.reports'), icon: BarChart3 },
+        {
+          value: '/performance',
+          label: t('nav.performance', 'Performance'),
+          icon: TrendingUp,
+        },
         { value: '/foods', label: t('nav.foods'), icon: Utensils },
         {
           value: '/exercises',
@@ -274,11 +282,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         });
       }
       if (hasPermission('reports')) {
-        tabs.push({
-          value: '/reports',
-          label: t('nav.reports'),
-          icon: BarChart3,
-        });
+        tabs.push(
+          {
+            value: '/reports',
+            label: t('nav.reports'),
+            icon: BarChart3,
+          },
+          {
+            value: '/performance',
+            label: t('nav.performance', 'Performance'),
+            icon: TrendingUp,
+          }
+        );
       }
       if (hasWritePermission('can_manage_medications')) {
         tabs.push({
@@ -471,7 +486,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-2 sm:px-4 py-4 sm:py-8">
+      <div
+        className={
+          // Dashboards built for large monitors use the full window width;
+          // every other page keeps the centred container.
+          FULL_WIDTH_ROUTES.has(location.pathname)
+            ? 'w-full px-2 sm:px-4 2xl:px-8 py-4 sm:py-8'
+            : 'container mx-auto px-2 sm:px-4 py-4 sm:py-8'
+        }
+      >
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-1">
             <img

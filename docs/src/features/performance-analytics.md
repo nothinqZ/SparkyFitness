@@ -49,7 +49,9 @@ expected values) and `scripts/e2e/performanceOverview.e2e.ts` (real database).
   reported a ratio within the last three days of the range.
 - **Estimated ACWR**: acute = mean daily training load of the last 7 days,
   chronic = mean of the last 28 (rest days count as 0), from the per-activity
-  training load Garmin attaches to each workout.
+  training load Garmin attaches to each workout. No ratio is shown until 28
+  days have passed since the first recorded load (before that the chronic
+  mean is mostly empty days and the ratio would be inflated).
 - **Zones** (Gabbett 2016): < 0.8 low, 0.8–1.3 optimal, 1.3–1.5 high,
   > 1.5 very high. The evidence linking ACWR to injury risk is debated; use it
   as a ramp-rate signal.

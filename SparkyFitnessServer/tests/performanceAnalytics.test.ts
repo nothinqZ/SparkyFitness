@@ -85,13 +85,25 @@ describe('training load', () => {
     expect(steady).toEqual([
       { date: '2026-09-28', acute: 100, chronic: 100, ratio: 1 },
     ]);
-    // One 700 session on the last day only: acute 100, chronic 25, ratio 4
+    // 28 days of history, then a 700 spike: acute (6×10 + 700)/7 = 108.6,
+    // chronic (27×10 + 700)/28 = 34.6, ratio 108.571/34.643 = 3.13
     const spike = acuteChronicLoad(
+      [...days('2026-09-01', 27, () => 10), { date: '2026-09-28', value: 700 }],
+      '2026-09-28',
+      '2026-09-28'
+    );
+    expect(spike[0]).toMatchObject({
+      acute: 108.6,
+      chronic: 34.6,
+      ratio: 3.13,
+    });
+    // Less than 28 days of history: no ratio, the chronic mean is not real yet.
+    const young = acuteChronicLoad(
       [{ date: '2026-09-28', value: 700 }],
       '2026-09-28',
       '2026-09-28'
     );
-    expect(spike[0]).toMatchObject({ acute: 100, chronic: 25, ratio: 4 });
+    expect(young[0]).toMatchObject({ acute: 100, chronic: 25, ratio: null });
     // Two sessions on the same day add up.
     const sameDay = acuteChronicLoad(
       [
