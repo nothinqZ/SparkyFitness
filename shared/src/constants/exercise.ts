@@ -134,7 +134,14 @@ export function resolveExerciseModality(
 }
 
 // Workout sources that support nested exercise editing after creation.
-const EDITABLE_SOURCES = new Set(["manual", "sparky", "workout plan"]);
+// `sparky watch` sessions come from the Connect IQ app (WatchSync.api.zod.ts);
+// they are logged by the user set by set, so they stay editable like manual ones.
+const EDITABLE_SOURCES = new Set([
+  "manual",
+  "sparky",
+  "workout plan",
+  "sparky watch",
+]);
 
 function normalizeSource(source: string | null | undefined): string | null {
   if (source == null) return null;

@@ -93,6 +93,7 @@ Quick reference of all tables by domain and purpose. For detailed security tier,
 | `exercises` | Custom exercises created by user |
 | `exercise_entries` | Logged exercises for the day |
 | `exercise_preset_entries` | Logged workout presets for the day |
+| `watch_session_imports` | Workouts uploaded by the Connect IQ watch app: idempotency key, device, and the linked Garmin activity |
 | `exercise_entry_sets` | Reps, weights, and sets completed |
 | `exercise_entry_activity_details` | Heart rate, distance, activity data |
 | `exercise_entry_laps` | Lap split intervals for workouts |

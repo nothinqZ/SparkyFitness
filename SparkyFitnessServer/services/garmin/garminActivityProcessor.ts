@@ -8,6 +8,7 @@ import activityDetailsRepository from '../../models/activityDetailsRepository.js
 import * as workoutTelemetryRepo from '../../models/workoutTelemetryRepository.js';
 import { todayInZone } from '@workspace/shared';
 import { getOrCreateGarminExercise } from './garminExerciseMapper.js';
+import { createGarminWatchLinker } from '../watch/garminWatchLink.js';
 import {
   extractGarminLaps,
   extractGarminGpsPoints,
@@ -38,6 +39,7 @@ type GarminExerciseSetDto = {
 type GarminActivityDto = {
   activityId?: number | string;
   activityName?: string;
+  startTimeGMT?: string;
   startTimeLocal?: string;
   notes?: string;
   active_calories?: number;
@@ -229,8 +231,27 @@ export async function processActivitiesAndWorkouts(
 
     // Process Activities and Workouts
     if (activities && Array.isArray(activities)) {
+      // A strength workout logged with the SparkyFitness watch app is already
+      // in the diary; its Garmin recording is linked to it, not imported again.
+      const linkIfWatchSession = await createGarminWatchLinker(
+        client,
+        userId,
+        activities.map(
+          (a) => (a as { activity?: GarminActivityDto }).activity ?? {}
+        )
+      );
       for (const activityData of activities) {
         const act = activityData as Record<string, Record<string, unknown>>;
+        if (
+          act.activity &&
+          (await linkIfWatchSession(
+            act.activity as GarminActivityDto,
+            activityData
+          ))
+        ) {
+          processedCount++;
+          continue;
+        }
         const hasSummarizedSets =
           Array.isArray(act.activity?.['summarizedExerciseSets']) &&
           (act.activity['summarizedExerciseSets'] as unknown[]).length > 0;
