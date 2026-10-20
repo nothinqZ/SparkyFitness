@@ -1,0 +1,14 @@
+# Optional: put release-web on an existing reverse-proxy network so the proxy
+# can reach it by the alias below.
+#   docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+services:
+  release-web:
+    networks:
+      default: {}
+      proxy:
+        aliases: [sparky-release-web]
+
+networks:
+  proxy:
+    name: ${PROXY_NETWORK:-proxy_health}
+    external: true

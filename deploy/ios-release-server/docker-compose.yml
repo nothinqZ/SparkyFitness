@@ -11,6 +11,18 @@
 name: sparky-release
 
 services:
+  release-data-init:
+    image: alpine:3.22
+    user: "0:0"
+    command: ["sh", "-c", "chown 10001:10001 /data"]
+    volumes:
+      - release-data:/data
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+
   release-web:
     image: nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de
     restart: unless-stopped
@@ -38,6 +50,9 @@ services:
       start_period: 20s
 
   release-publisher:
+    depends_on:
+      release-data-init:
+        condition: service_completed_successfully
     build:
       context: ../..
       dockerfile: deploy/ios-release-server/Dockerfile
