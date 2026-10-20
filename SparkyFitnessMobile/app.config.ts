@@ -6,6 +6,13 @@ const {
   getIosAppGroup,
   DEV_BUNDLE_IDENTIFIER,
 } = require('./app.identifiers.js');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const {
+  isSideloadVariant,
+  sideloadBundleIdentifier,
+  sideloadAppGroup,
+  sideloadPlugins,
+} = require('./app.sideload.js');
 
 const APP_NAME = 'SparkyFitness';
 const APP_SLUG = 'sparkyfitnessmobile';
@@ -125,6 +132,14 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
   const environment = process.env.APP_VARIANT || 'dev';
 
   const isDev = environment === 'dev' || environment === 'development';
+  // SideStore build for a free Apple ID; see app.sideload.js.
+  const isSideload = isSideloadVariant();
+  const iosBundleIdentifier = isSideload
+    ? sideloadBundleIdentifier()
+    : isDev
+      ? DEV_BUNDLE_IDENTIFIER
+      : IOS_PROD_BUNDLE_IDENTIFIER;
+  const iosAppGroup = isSideload ? sideloadAppGroup() : getIosAppGroup();
 
   if (isDev) {
     androidPermissions.push(...devAndroidPermissions);
@@ -162,10 +177,18 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
       ])
     ),
     ios: {
-      bundleIdentifier: isDev
-        ? DEV_BUNDLE_IDENTIFIER
-        : IOS_PROD_BUNDLE_IDENTIFIER,
-      appleTeamId: isDev ? DEV_APPLE_TEAM_ID : PROD_APPLE_TEAM_ID,
+      bundleIdentifier: iosBundleIdentifier,
+      // CFBundleVersion. SideStore offers an update only when version or build
+      // increases, so CI passes its run number for sideload builds.
+      ...(isSideload && process.env.IOS_BUILD_NUMBER
+        ? { buildNumber: process.env.IOS_BUILD_NUMBER }
+        : {}),
+      // A sideload build is signed on the phone by SideStore, never by Xcode.
+      appleTeamId: isSideload
+        ? ''
+        : isDev
+          ? DEV_APPLE_TEAM_ID
+          : PROD_APPLE_TEAM_ID,
       supportsTablet: false,
       infoPlist: {
         NSLocalNetworkUsageDescription:
@@ -195,7 +218,7 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
         UIBackgroundModes: ['audio'],
       },
       entitlements: {
-        'com.apple.security.application-groups': [getIosAppGroup()],
+        'com.apple.security.application-groups': [iosAppGroup],
         // Lets iOS honour the `timeSensitive` rest alert (see
         // `scheduleRestNotification`); without it a Focus mode silences it.
         'com.apple.developer.usernotifications.time-sensitive': true,
@@ -213,7 +236,10 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
     plugins: [
       // Must be first — see the comment on `devPlugins` above for why.
       ...(isDev ? devPlugins : []),
-      ...(config.plugins ?? []),
+      ...(isSideload ? ['./plugins/withSideloadEntitlements'] : []),
+      ...(isSideload
+        ? sideloadPlugins(config.plugins ?? [])
+        : (config.plugins ?? [])),
       'expo-image',
       [
         // No mic permission and no Android record/foreground-service perms.
@@ -252,27 +278,31 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
           },
         },
       ],
-      [
-        'expo-widgets',
-        {
-          groupIdentifier: getIosAppGroup(),
-          bundleIdentifier:
-            process.env.WIDGET_BUNDLE_IDENTIFIER ||
-            (isDev
-              ? `${DEV_BUNDLE_IDENTIFIER}.ExpoWidgetsTarget`
-              : 'com.SparkyApps.SparkyFitnessMobile.ExpoWidgetsTarget'),
-          // Live Activities register at runtime via createLiveActivity and must
-          // NOT be listed here — widgets[] is only for home/Lock Screen widgets
-          // (an entry without supportedFamilies breaks the generated target).
-          widgets: [],
-        },
-      ],
+      ...(isSideload
+        ? []
+        : [
+            [
+              'expo-widgets',
+              {
+                groupIdentifier: getIosAppGroup(),
+                bundleIdentifier:
+                  process.env.WIDGET_BUNDLE_IDENTIFIER ||
+                  (isDev
+                    ? `${DEV_BUNDLE_IDENTIFIER}.ExpoWidgetsTarget`
+                    : 'com.SparkyApps.SparkyFitnessMobile.ExpoWidgetsTarget'),
+                // Live Activities register at runtime via createLiveActivity and must
+                // NOT be listed here — widgets[] is only for home/Lock Screen widgets
+                // (an entry without supportedFamilies breaks the generated target).
+                widgets: [],
+              },
+            ],
+          ]),
       ...(!isDev ? prodPlugins : []),
     ],
     extra: {
       ...config.extra,
       APP_VARIANT: environment,
-      iosAppGroup: getIosAppGroup(),
+      iosAppGroup,
       // Whether the Android build has a Maps key. The key itself stays out
       // of the JS bundle; the route screen only needs to know it is there.
       androidGoogleMapsEnabled: GOOGLE_MAPS_ANDROID_API_KEY !== '',

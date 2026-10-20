@@ -1,0 +1,221 @@
+name: iOS sideload IPA
+
+# Builds an unsigned iPhone IPA for SideStore/AltStore (free Apple ID).
+# No Apple credentials are involved: SideStore signs the app on the phone.
+#
+# - Manual run: Actions > iOS sideload IPA > Run workflow. The IPA is a
+#   workflow artifact.
+# - Tag `sideload-v<version>` (e.g. sideload-v1.8.0-1): additionally creates
+#   a GitHub release with the IPA, its SHA-256 and a metadata file, which the
+#   homelab release server (deploy/ios-release-server) picks up.
+#
+# The build uses the "sideload" app variant (SparkyFitnessMobile/app.sideload.js):
+# custom bundle id, no widget/watch/Live Activity extensions (free Apple IDs
+# get 3 App IDs and every extension needs one), no push or time-sensitive
+# notification entitlements.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_id:
+        description: Bundle identifier (stable; changing it installs a separate app)
+        required: false
+        default: ""
+        type: string
+      strip_healthkit_background:
+        description: Strip HealthKit background delivery (only if SideStore refuses the entitlement)
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - "sideload-v*"
+
+concurrency:
+  group: ios-sideload-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Repository variable SIDELOAD_BUNDLE_ID overrides the default for tag builds.
+  BUNDLE_ID: ${{ inputs.bundle_id || vars.SIDELOAD_BUNDLE_ID || 'com.sparkyfitness.personal' }}
+
+jobs:
+  build:
+    name: Build unsigned IPA
+    runs-on: macos-latest
+    timeout-minutes: 90
+    outputs:
+      ipa_name: ${{ steps.package.outputs.ipa_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      # Same Node major as the mobile CI job (ci-tests.yml).
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          node --version
+          pnpm --version
+          pod --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prebuild iOS project (sideload variant)
+        working-directory: SparkyFitnessMobile
+        env:
+          APP_VARIANT: sideload
+          IOS_SIDELOAD_BUNDLE_IDENTIFIER: ${{ env.BUNDLE_ID }}
+          IOS_BUILD_NUMBER: ${{ github.run_number }}
+          SIDELOAD_STRIP_HEALTHKIT_BACKGROUND: ${{ inputs.strip_healthkit_background && '1' || '' }}
+        # Runs `pod install` itself.
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Check generated project
+        working-directory: SparkyFitnessMobile
+        run: |
+          echo "--- targets ---"
+          xcodebuild -list -workspace ios/SparkyFitness.xcworkspace
+          echo "--- entitlements ---"
+          cat ios/SparkyFitness/SparkyFitness.entitlements
+          # The sideload variant must be a single app target.
+          count=$(grep -c 'productType = "com.apple.product-type.app-extension"\|productType = "com.apple.product-type.application.watchapp2' ios/SparkyFitness.xcodeproj/project.pbxproj || true)
+          if [ "$count" != "0" ]; then
+            echo "::error::extension targets present in the sideload project"
+            exit 1
+          fi
+
+      - name: Build for device (unsigned, Release)
+        working-directory: SparkyFitnessMobile
+        run: |
+          # Full log goes to an artifact; the job log shows errors only.
+          if ! xcodebuild \
+            -workspace ios/SparkyFitness.xcworkspace \
+            -scheme SparkyFitness \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build > xcodebuild.log 2>&1; then
+            echo "::group::errors"
+            grep -E 'error:|\*\* BUILD FAILED' -A3 xcodebuild.log | head -200 || true
+            echo "::endgroup::"
+            tail -80 xcodebuild.log
+            exit 1
+          fi
+          grep -E '\*\* BUILD SUCCEEDED' xcodebuild.log
+
+      - name: Package IPA
+        id: package
+        working-directory: SparkyFitnessMobile
+        run: |
+          APP="build/Build/Products/Release-iphoneos/SparkyFitness.app"
+          test -d "$APP"
+          VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")
+          BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")
+          NAME="SparkyFitness-${VERSION}-${BUILD}.ipa"
+          rm -rf dist && mkdir -p dist/Payload
+          cp -R "$APP" dist/Payload/
+          (cd dist && zip -qry "$NAME" Payload && rm -rf Payload)
+          echo "ipa_name=$NAME" >> "$GITHUB_OUTPUT"
+          ls -la dist
+
+      - name: Validate IPA structure
+        working-directory: SparkyFitnessMobile
+        run: |
+          IPA="dist/${{ steps.package.outputs.ipa_name }}"
+          python3 ../scripts/ios/validate_ipa.py "$IPA" \
+            --bundle-id "$BUNDLE_ID" --no-extensions > dist/ipa-check.json
+          cat dist/ipa-check.json
+          shasum -a 256 "$IPA" | awk '{print $1}' > "$IPA.sha256"
+          python3 - "$IPA" <<'PY'
+          import json, os, subprocess, sys
+          ipa = sys.argv[1]
+          check = json.load(open("dist/ipa-check.json"))
+          meta = {
+              "name": "SparkyFitness",
+              "bundle_id": check["bundle_id"],
+              "version": check["version"],
+              "build": check["build"],
+              "minimum_os_version": check["minimum_os_version"],
+              "size": check["size"],
+              "sha256": check["sha256"],
+              "git_sha": os.environ["GITHUB_SHA"],
+              "git_ref": os.environ["GITHUB_REF_NAME"],
+              "built_at": subprocess.check_output(["date", "-u", "+%Y-%m-%dT%H:%M:%SZ"]).decode().strip(),
+              "ipa": os.path.basename(ipa),
+          }
+          json.dump(meta, open("dist/release.json", "w"), indent=2)
+          print(json.dumps(meta, indent=2))
+          PY
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparkyfitness-ipa
+          path: |
+            SparkyFitnessMobile/dist/*.ipa
+            SparkyFitnessMobile/dist/*.sha256
+            SparkyFitnessMobile/dist/release.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: SparkyFitnessMobile/xcodebuild.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/sideload-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download IPA artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sparkyfitness-ipa
+          path: dist
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Release notes: the annotated tag's message if there is one.
+          NOTES=$(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" --jq '.object' \
+            | python3 -c "import json,sys; o=json.load(sys.stdin); print(o['sha'] if o['type']=='tag' else '')")
+          BODY="Unsigned IPA for SideStore. Install via the homelab AltSource or download and open in SideStore."
+          if [ -n "$NOTES" ]; then
+            MSG=$(gh api "repos/${{ github.repository }}/git/tags/$NOTES" --jq '.message')
+            [ -n "$MSG" ] && BODY="$MSG"
+          fi
+          gh release create "$TAG" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "SparkyFitness iOS $TAG" \
+            --notes "$BODY" \
+            --prerelease
