@@ -1,7 +1,9 @@
 name: iOS sideload IPA
 
-# Builds an unsigned iPhone IPA for SideStore/AltStore (free Apple ID).
-# No Apple credentials are involved: SideStore signs the app on the phone.
+# Builds an IPA for SideStore/AltStore (free Apple ID). It carries only an
+# ad-hoc signature (no Apple certificate, no provisioning profile) so the
+# entitlements travel with it; SideStore signs it with your Apple ID on the
+# phone. No Apple credentials are involved in CI.
 #
 # - Manual run: Actions > iOS sideload IPA > Run workflow. The IPA is a
 #   workflow artifact.
@@ -134,6 +136,16 @@ jobs:
           NAME="SparkyFitness-${VERSION}-${BUILD}.ipa"
           rm -rf dist && mkdir -p dist/Payload
           cp -R "$APP" dist/Payload/
+          # Ad-hoc signature (no Apple certificate): SideStore reads the app's
+          # entitlements from its code signature when it re-signs on the phone,
+          # so a fully unsigned binary would lose HealthKit and the app group.
+          # Nested code is signed first, as codesign requires.
+          SIGNED_APP="dist/Payload/SparkyFitness.app"
+          find "$SIGNED_APP" \( -name '*.framework' -o -name '*.dylib' \) -print0 \
+            | xargs -0 -r -n1 codesign --force --sign - --timestamp=none
+          codesign --force --sign - --timestamp=none \
+            --entitlements ios/SparkyFitness/SparkyFitness.entitlements "$SIGNED_APP"
+          codesign -d --entitlements - "$SIGNED_APP"
           (cd dist && zip -qry "$NAME" Payload && rm -rf Payload)
           echo "ipa_name=$NAME" >> "$GITHUB_OUTPUT"
           ls -la dist
@@ -143,7 +155,10 @@ jobs:
         run: |
           IPA="dist/${{ steps.package.outputs.ipa_name }}"
           python3 ../scripts/ios/validate_ipa.py "$IPA" \
-            --bundle-id "$BUNDLE_ID" --no-extensions > dist/ipa-check.json
+            --bundle-id "$BUNDLE_ID" --no-extensions \
+            --require-entitlement com.apple.developer.healthkit \
+            --require-entitlement com.apple.security.application-groups \
+            > dist/ipa-check.json
           cat dist/ipa-check.json
           shasum -a 256 "$IPA" | awk '{print $1}' > "$IPA.sha256"
           python3 - "$IPA" <<'PY'
@@ -156,6 +171,8 @@ jobs:
               "version": check["version"],
               "build": check["build"],
               "minimum_os_version": check["minimum_os_version"],
+              "entitlements": check["entitlements"],
+              "privacy": check["privacy"],
               "size": check["size"],
               "sha256": check["sha256"],
               "git_sha": os.environ["GITHUB_SHA"],

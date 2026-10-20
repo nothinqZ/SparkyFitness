@@ -12,11 +12,28 @@ sys.path.insert(0, os.path.dirname(__file__))
 import validate_ipa as v  # noqa: E402
 
 
-def macho(cputype=v.CPU_TYPE_ARM64, platform=v.PLATFORM_IOS):
-    """Minimal 64-bit little-endian Mach-O with one LC_BUILD_VERSION command."""
-    cmd = struct.pack("<IIIIII", v.LC_BUILD_VERSION, 24, platform, 0, 0, 0)
-    header = struct.pack("<IiiIIIII", v.MH_MAGIC_64, cputype, 0, 2, 1, len(cmd), 0, 0)
-    return header + cmd
+def code_signature(entitlements):
+    """Embedded-signature superblob holding only an entitlements blob."""
+    ent = plistlib.dumps(entitlements)
+    ent_blob = struct.pack(">II", v.CSMAGIC_EMBEDDED_ENTITLEMENTS, 8 + len(ent)) + ent
+    header_len = 12 + 8
+    return struct.pack(">IIIII", v.CSMAGIC_EMBEDDED_SIGNATURE, header_len + len(ent_blob), 1,
+                       5, header_len) + ent_blob
+
+
+def macho(cputype=v.CPU_TYPE_ARM64, platform=v.PLATFORM_IOS, entitlements=None):
+    """Minimal 64-bit little-endian Mach-O: LC_BUILD_VERSION and, optionally,
+    an ad-hoc code signature carrying entitlements."""
+    cmds = struct.pack("<IIIIII", v.LC_BUILD_VERSION, 24, platform, 0, 0, 0)
+    ncmds = 1
+    sig = b""
+    if entitlements is not None:
+        sig = code_signature(entitlements)
+        ncmds += 1
+        header_size = 32 + len(cmds) + 16
+        cmds += struct.pack("<IIII", v.LC_CODE_SIGNATURE, 16, header_size, len(sig))
+    header = struct.pack("<IiiIIIII", v.MH_MAGIC_64, cputype, 0, 2, ncmds, len(cmds), 0, 0)
+    return header + cmds + sig
 
 
 def fat(*slices):
@@ -37,6 +54,7 @@ def make_ipa(path, *, info=None, exe=None, extra=None, omit=()):
         "CFBundleVersion": "42",
         "CFBundleSupportedPlatforms": ["iPhoneOS"],
         "MinimumOSVersion": "16.0",
+        "NSCameraUsageDescription": "Scan barcodes",
         **(info or {}),
     }
     files = {
@@ -96,6 +114,22 @@ class ValidateIpaTest(unittest.TestCase):
         errors = self.check()["errors"]
         self.assertTrue(any("Widget.appex" in e and "SparkyFitnessWatch.app" in e for e in errors), errors)
         self.assertEqual(self.check(no_extensions=False)["errors"], [])
+
+    def test_reads_entitlements_from_ad_hoc_signature(self):
+        make_ipa(self.ipa, exe=macho(entitlements={
+            "com.apple.developer.healthkit": True,
+            "com.apple.security.application-groups": ["group.com.sparkyfitness.personal"],
+        }))
+        result = v.validate(self.ipa, None, True, True, ("com.apple.developer.healthkit",))
+        self.assertEqual(result["errors"], [])
+        self.assertEqual(result["entitlements"], [
+            "com.apple.developer.healthkit", "com.apple.security.application-groups"])
+        self.assertEqual(result["privacy"], {"NSCameraUsageDescription": "Scan barcodes"})
+
+    def test_unsigned_binary_fails_required_entitlement(self):
+        make_ipa(self.ipa)
+        result = v.validate(self.ipa, None, True, True, ("com.apple.developer.healthkit",))
+        self.assertTrue(any("not embedded" in e for e in result["errors"]))
 
     def test_missing_executable_and_js_bundle(self):
         make_ipa(self.ipa, omit=("Payload/SparkyFitness.app/SparkyFitness",

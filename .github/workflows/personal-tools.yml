@@ -1,0 +1,79 @@
+name: Personal tooling
+
+# Checks for the parts this fork adds outside the pnpm workspace: the IPA
+# validator and release server (Python), and the Connect IQ watch app.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/ios/**"
+      - "deploy/ios-release-server/**"
+      - "SparkyFitnessConnectIQ/**"
+      - ".github/workflows/personal-tools.yml"
+  push:
+    branches: [personal]
+    paths:
+      - "scripts/ios/**"
+      - "deploy/ios-release-server/**"
+      - "SparkyFitnessConnectIQ/**"
+      - ".github/workflows/personal-tools.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: IPA validator and release server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: |
+          python -m unittest discover -s scripts/ios -v
+          python -m unittest discover -s deploy/ios-release-server/tests -v
+      - name: Build release server image
+        run: docker build -f deploy/ios-release-server/Dockerfile -t sparky-release-publisher:ci .
+
+  connectiq:
+    name: Connect IQ compile check
+    runs-on: ubuntu-latest
+    env:
+      SDK_ZIP: connectiq-sdk-lin-9.2.0-2026-06-09-92a1605b2.zip
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Cache Connect IQ SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/connectiq-sdk
+          key: ciq-sdk-${{ env.SDK_ZIP }}
+      - name: Download SDK (public, no login)
+        run: |
+          if [ ! -x ~/connectiq-sdk/bin/monkeyc ]; then
+            curl -fsSL -o /tmp/sdk.zip "https://developer.garmin.com/downloads/connect-iq/sdks/$SDK_ZIP"
+            mkdir -p ~/connectiq-sdk && unzip -q /tmp/sdk.zip -d ~/connectiq-sdk
+            chmod +x ~/connectiq-sdk/bin/*
+          fi
+      - name: Throwaway developer key
+        run: |
+          openssl genrsa -out /tmp/key.pem 4096 2>/dev/null
+          openssl pkcs8 -topk8 -inform PEM -outform DER -in /tmp/key.pem -out /tmp/key.der -nocrypt
+      - name: Compile app and unit-test build
+        working-directory: SparkyFitnessConnectIQ
+        env:
+          CIQ_SDK: /home/runner/connectiq-sdk
+          CIQ_HOME: /tmp/ciqhome
+          CIQ_KEY: /tmp/key.der
+          OUT_DIR: /tmp/ciq-out
+          SPARKY_SERVER_URL: https://fitness.example.invalid
+        run: |
+          tools/make-check-device.sh
+          tools/build.sh sparkygeneric
+          tools/build.sh sparkygeneric --test

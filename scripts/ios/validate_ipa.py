@@ -27,6 +27,9 @@ FAT_MAGIC = 0xCAFEBABE
 FAT_MAGIC_64 = 0xCAFEBABF
 CPU_TYPE_ARM64 = 0x0100000C
 LC_BUILD_VERSION = 0x32
+LC_CODE_SIGNATURE = 0x1D
+CSMAGIC_EMBEDDED_SIGNATURE = 0xFADE0CC0
+CSMAGIC_EMBEDDED_ENTITLEMENTS = 0xFADE7171
 PLATFORM_IOS = 2
 PLATFORM_IOS_SIMULATOR = 7
 
@@ -51,12 +54,34 @@ def macho_slices(data: bytes) -> list[bytes]:
     return [data]
 
 
+def read_entitlements(image: bytes, dataoff: int, datasize: int) -> dict | None:
+    """Entitlements plist from an embedded code signature, or None."""
+    blob = image[dataoff:dataoff + datasize]
+    if len(blob) < 12:
+        return None
+    magic, _length, count = struct.unpack(">III", blob[:12])
+    if magic != CSMAGIC_EMBEDDED_SIGNATURE:
+        return None
+    for i in range(count):
+        _type, off = struct.unpack(">II", blob[12 + i * 8:20 + i * 8])
+        if off + 8 > len(blob):
+            continue
+        bmagic, blen = struct.unpack(">II", blob[off:off + 8])
+        if bmagic == CSMAGIC_EMBEDDED_ENTITLEMENTS:
+            try:
+                return plistlib.loads(blob[off + 8:off + blen])
+            except Exception:
+                return None
+    return None
+
+
 def describe_slice(image: bytes) -> dict:
-    """cputype and LC_BUILD_VERSION platform of a thin little-endian Mach-O."""
+    """cputype, platform and signed entitlements of a thin little-endian Mach-O."""
     if len(image) < 32 or struct.unpack("<I", image[:4])[0] != MH_MAGIC_64:
         return {"valid": False}
     cputype, _sub, _ftype, ncmds, _size, _flags, _res = struct.unpack("<iiIIIII", image[4:32])
     platform = None
+    entitlements = None
     offset = 32
     for _ in range(ncmds):
         if offset + 8 > len(image):
@@ -64,13 +89,18 @@ def describe_slice(image: bytes) -> dict:
         cmd, cmdsize = struct.unpack("<II", image[offset:offset + 8])
         if cmd == LC_BUILD_VERSION and offset + 12 <= len(image):
             platform = struct.unpack("<I", image[offset + 8:offset + 12])[0]
+        if cmd == LC_CODE_SIGNATURE and offset + 16 <= len(image):
+            dataoff, datasize = struct.unpack("<II", image[offset + 8:offset + 16])
+            entitlements = read_entitlements(image, dataoff, datasize)
         if cmdsize == 0:
             break
         offset += cmdsize
-    return {"valid": True, "cputype": cputype & 0xFFFFFFFF, "platform": platform}
+    return {"valid": True, "cputype": cputype & 0xFFFFFFFF, "platform": platform,
+            "entitlements": entitlements}
 
 
-def validate(path: str, bundle_id: str | None, no_extensions: bool, require_js_bundle: bool) -> dict:
+def validate(path: str, bundle_id: str | None, no_extensions: bool, require_js_bundle: bool,
+             required_entitlements: tuple[str, ...] = ()) -> dict:
     errors: list[str] = []
     with open(path, "rb") as fh:
         raw = fh.read()
@@ -107,6 +137,7 @@ def validate(path: str, bundle_id: str | None, no_extensions: bool, require_js_b
 
     exe_path = f"{app}/{info.get('CFBundleExecutable', '')}"
     arch = None
+    entitlements: dict = {}
     if exe_path in names:
         slices = [describe_slice(s) for s in macho_slices(zf.read(exe_path))]
         arm64 = [s for s in slices if s.get("valid") and s["cputype"] == CPU_TYPE_ARM64]
@@ -115,6 +146,8 @@ def validate(path: str, bundle_id: str | None, no_extensions: bool, require_js_b
         elif any(s["platform"] == PLATFORM_IOS_SIMULATOR for s in arm64):
             errors.append("executable is built for the iOS simulator")
         arch = "arm64" if arm64 else None
+        if arm64 and arm64[0].get("entitlements"):
+            entitlements = arm64[0]["entitlements"]
     else:
         errors.append(f"executable {exe_path} missing")
 
@@ -128,6 +161,12 @@ def validate(path: str, bundle_id: str | None, no_extensions: bool, require_js_b
     if require_js_bundle and f"{app}/main.jsbundle" not in names:
         errors.append("main.jsbundle missing: a Release build must embed the JS bundle")
 
+    # SideStore requests capabilities from the entitlements embedded in the
+    # app's (ad-hoc) signature; a fully unsigned binary would lose them.
+    for key in required_entitlements:
+        if key not in entitlements:
+            errors.append(f"entitlement {key} not embedded (ad-hoc sign with --entitlements)")
+
     if f"{app}/embedded.mobileprovision" in names:
         errors.append("IPA is already provisioned; SideStore expects an unsigned build")
 
@@ -140,6 +179,9 @@ def validate(path: str, bundle_id: str | None, no_extensions: bool, require_js_b
         "minimum_os_version": info.get("MinimumOSVersion"),
         "executable_arch": arch,
         "extensions": extensions + watch,
+        "entitlements": sorted(entitlements),
+        # Info.plist privacy usage strings, for the AltSource appPermissions.
+        "privacy": {k: v for k, v in sorted(info.items()) if k.endswith("UsageDescription")},
         "size": len(raw),
         "sha256": hashlib.sha256(raw).hexdigest(),
     }
@@ -151,8 +193,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--bundle-id")
     parser.add_argument("--no-extensions", action="store_true")
     parser.add_argument("--allow-missing-js-bundle", action="store_true")
+    parser.add_argument("--require-entitlement", action="append", default=[])
     args = parser.parse_args(argv)
-    result = validate(args.ipa, args.bundle_id, args.no_extensions, not args.allow_missing_js_bundle)
+    result = validate(args.ipa, args.bundle_id, args.no_extensions, not args.allow_missing_js_bundle,
+                      tuple(args.require_entitlement))
     if result["errors"]:
         for err in result["errors"]:
             print(f"IPA check failed: {err}", file=sys.stderr)
