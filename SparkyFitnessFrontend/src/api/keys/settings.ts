@@ -42,3 +42,8 @@ export const preferencesKeys = {
   nutrientGoalDirection: () =>
     [...preferencesKeys.all, 'nutrient-goal-direction'] as const,
 };
+
+export const watchSyncKeys = {
+  all: ['watchSync'] as const,
+  status: () => [...watchSyncKeys.all, 'status'] as const,
+};

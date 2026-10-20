@@ -135,6 +135,64 @@ await step("create an exercise and a workout preset", async () => {
   presetId = preset.json.id;
 });
 
+await step(
+  "a watch pairs itself with a code confirmed by the user",
+  async () => {
+    // The watch has no credentials and sends no Origin header.
+    const raw = (path, body) =>
+      fetch(`${BASE}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).then(async (r) => ({ status: r.status, json: await r.json() }));
+    const start = await raw("/api/v2/watch/pairing/start", {
+      device_id: "e2e-pairing-device",
+      device_model: "fenix7",
+    });
+    assert.equal(start.status, 201, JSON.stringify(start.json));
+    const pending = await raw("/api/v2/watch/pairing/poll", {
+      poll_token: start.json.poll_token,
+    });
+    assert.equal(pending.status, 202);
+    const wrongCode = await call("/api/v2/watch/pairing/claim", {
+      method: "POST",
+      body: { pairing_code: "ZZZZ-ZZZZ" },
+      cookie: other.cookie,
+    });
+    assert.equal(wrongCode.status, 404);
+    const code = start.json.pairing_code;
+    const claim = await call("/api/v2/watch/pairing/claim", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        pairing_code: `${code.slice(0, 4).toLowerCase()}-${code.slice(4)}`,
+      },
+    });
+    assert.equal(claim.status, 201, JSON.stringify(claim.json));
+    const paired = await raw("/api/v2/watch/pairing/poll", {
+      poll_token: start.json.poll_token,
+    });
+    assert.equal(paired.status, 200, JSON.stringify(paired.json));
+    assert.ok(paired.json.api_key.length >= 32);
+    // The key is handed out exactly once.
+    const again = await raw("/api/v2/watch/pairing/poll", {
+      poll_token: start.json.poll_token,
+    });
+    assert.equal(again.status, 404);
+    const manifest = await call("/api/v2/watch/manifest", {
+      apiKey: paired.json.api_key,
+    });
+    assert.equal(manifest.status, 200);
+    // A claimed code cannot be claimed again by anyone.
+    const reclaim = await call("/api/v2/watch/pairing/claim", {
+      method: "POST",
+      cookie: other.cookie,
+      body: { pairing_code: code },
+    });
+    assert.equal(reclaim.status, 404);
+  },
+);
+
 await step("watch downloads the manifest with its API key", async () => {
   const res = await call("/api/v2/watch/manifest?date=2026-10-20", { apiKey });
   assert.equal(res.status, 200, JSON.stringify(res.json));

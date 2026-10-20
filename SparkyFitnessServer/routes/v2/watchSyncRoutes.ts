@@ -6,7 +6,9 @@ import {
 } from '@workspace/shared';
 import { authenticate } from '../../middleware/authMiddleware.js';
 import { loadUserTimezone } from '../../utils/timezoneLoader.js';
-import watchSyncService from '../../services/watchSyncService.js';
+import watchSyncService, {
+  MAX_MANIFEST_WORKOUTS,
+} from '../../services/watchSyncService.js';
 
 // Endpoints for the SparkyFitness Connect IQ watch app. The watch authenticates
 // with a regular Better Auth API key (Settings > API Keys), sent as
@@ -39,6 +41,10 @@ function ownerId(req: express.Request): string {
  *         name: date
  *         schema: { type: string, format: date }
  *         description: First day of the schedule window. Defaults to today in the user's timezone.
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, minimum: 1, maximum: 30 }
+ *         description: Maximum number of workouts (default 30).
  *     responses:
  *       200: { description: Manifest. }
  *       400: { description: Invalid date. }
@@ -51,8 +57,23 @@ router.get('/manifest', async (req, res, next) => {
     if (date !== null && !isDayString(date)) {
       return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
     }
+    const limitRaw = req.query.limit;
+    const limit =
+      typeof limitRaw === 'string' ? Number.parseInt(limitRaw, 10) : NaN;
+    if (
+      limitRaw !== undefined &&
+      (!Number.isInteger(limit) || limit < 1 || limit > MAX_MANIFEST_WORKOUTS)
+    ) {
+      return res
+        .status(400)
+        .json({ error: `limit must be 1-${MAX_MANIFEST_WORKOUTS}` });
+    }
     date ??= todayInZone(await loadUserTimezone(userId));
-    const manifest = await watchSyncService.buildManifest(userId, date);
+    const manifest = await watchSyncService.buildManifest(
+      userId,
+      date,
+      Number.isInteger(limit) ? limit : MAX_MANIFEST_WORKOUTS
+    );
     res.set('Cache-Control', 'no-store');
     res.json(manifest);
   } catch (error) {

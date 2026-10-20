@@ -19,6 +19,7 @@ vi.mock('../utils/timezoneLoader.js', () => ({
   loadUserTimezone: vi.fn().mockResolvedValue('UTC'),
 }));
 vi.mock('../services/watchSyncService.js', () => ({
+  MAX_MANIFEST_WORKOUTS: 30,
   default: {
     buildManifest: vi.fn(),
     importSession: vi.fn(),
@@ -68,8 +69,29 @@ describe('GET /api/v2/watch/manifest', () => {
     expect(res.headers['cache-control']).toBe('no-store');
     expect(watchSyncService.buildManifest).toHaveBeenCalledWith(
       'owner',
-      '2026-10-20'
+      '2026-10-20',
+      30
     );
+  });
+
+  it('passes a valid limit through and rejects out-of-range ones', async () => {
+    vi.mocked(watchSyncService.buildManifest).mockResolvedValue({
+      schema_version: 1,
+      generated_at: 'x',
+      weight_unit: 'kg',
+      default_rest_seconds: 90,
+      workouts: [],
+    });
+    await request(app).get('/api/v2/watch/manifest?date=2026-10-20&limit=8');
+    expect(watchSyncService.buildManifest).toHaveBeenCalledWith(
+      'owner',
+      '2026-10-20',
+      8
+    );
+    for (const bad of ['0', '31', 'abc']) {
+      const res = await request(app).get(`/api/v2/watch/manifest?limit=${bad}`);
+      expect(res.statusCode).toBe(400);
+    }
   });
 
   it('rejects malformed dates', async () => {

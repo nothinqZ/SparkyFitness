@@ -37,6 +37,7 @@ import AllergenSettings from '@/pages/Settings/AllergenSettings';
 import { DeveloperResources } from './DevloperResources';
 import { AccountSecurity } from './AccountSecurity';
 import { ApiSettings } from './ApiSettings';
+import { GarminWatchSettings } from './GarminWatchSettings';
 import { WaterTrackingSettings } from './WaterTrackingSettings';
 import { FastingSettings } from './FastingSettings';
 import { GuidedWorkoutSettings } from './GuidedWorkoutSettings';
@@ -452,6 +453,7 @@ const Settings = () => {
                 <AIServiceSettings />
               </AccordionContent>
             </AccordionItem>
+            <GarminWatchSettings />
             <ApiSettings />
             <DeveloperResources />
           </Accordion>

@@ -96,6 +96,7 @@ import pregnancyRoutesV2 from './routes/v2/pregnancyRoutes.js';
 import reportRoutesV2 from './routes/v2/reportRoutes.js';
 import nutritionKineticsRoutesV2 from './routes/v2/nutritionKineticsRoutes.js';
 import mindfulnessRoutesV2 from './routes/v2/mindfulnessRoutes.js';
+import watchPairingRoutesV2 from './routes/v2/watchPairingRoutes.js';
 import watchSyncRoutesV2 from './routes/v2/watchSyncRoutes.js';
 import backupRoutes from './routes/backupRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
@@ -688,6 +689,10 @@ const publicRoutes = [
   '/api/uploads',
   '/uploads',
   '/api/ping',
+  // Called by a not-yet-paired watch; rate limited in watchPairingRoutes.ts.
+  // /api/v2/watch/pairing/claim stays authenticated.
+  '/api/v2/watch/pairing/start',
+  '/api/v2/watch/pairing/poll',
 ];
 
 // Apply authentication middleware to all protected routes
@@ -794,6 +799,9 @@ app.use('/api/v2/pregnancy', pregnancyRoutesV2);
 app.use('/api/v2/reports', reportRoutesV2);
 app.use('/api/v2/nutrition', nutritionKineticsRoutesV2);
 app.use('/api/v2/mindfulness', mindfulnessRoutesV2);
+// Pairing must mount first: its start/poll routes run without credentials,
+// while the watch router authenticates everything it sees.
+app.use('/api/v2/watch/pairing', watchPairingRoutesV2);
 app.use('/api/v2/watch', watchSyncRoutesV2);
 app.use('/api/workout-presets', workoutPresetRoutes);
 app.use('/api/workout-plan-templates', workoutPlanTemplateRoutes);

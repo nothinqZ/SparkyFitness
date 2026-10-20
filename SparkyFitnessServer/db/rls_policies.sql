@@ -49,6 +49,7 @@ BEGIN
     'mood_entries',
     'mindfulness_sessions',
     'watch_session_imports',
+    'watch_pairing_requests',
     'onboarding_data',
     'onboarding_status',
     'openfoodfacts_product_read_rate_limit',
@@ -613,6 +614,9 @@ SELECT create_owner_policy('api_key', 'reference_id');
 SELECT create_owner_policy('user_oidc_links');
 SELECT create_owner_policy('sparky_chat_history');
 SELECT create_owner_policy('watch_session_imports');
+-- Pairing rows are only touched through the system connection; the owner
+-- policy keeps every unclaimed row invisible to the app role.
+SELECT create_owner_policy('watch_pairing_requests');
 
 -- Profiles: delegates can read (with any meaningful permission) but only owner can write.
 -- Delegates do not need to modify another user's profile to manage their diary.

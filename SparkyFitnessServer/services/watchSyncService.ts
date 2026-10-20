@@ -19,7 +19,7 @@ import watchSessionImportRepository, {
 } from '../models/watchSessionImportRepository.js';
 
 export const WATCH_SESSION_SOURCE = 'sparky watch';
-const MAX_MANIFEST_WORKOUTS = 30;
+export const MAX_MANIFEST_WORKOUTS = 30;
 const DEFAULT_REST_SECONDS = 90;
 
 interface ServiceError extends Error {
@@ -146,6 +146,8 @@ export function toPlannedWorkout(
 async function buildManifest(
   userId: string,
   today: string,
+  // Watches have little memory; the app asks for as many as it can hold.
+  maxWorkouts = MAX_MANIFEST_WORKOUTS,
   days = 7
 ): Promise<WatchManifestResponse> {
   const scheduled = new Map<number, string>();
@@ -185,7 +187,7 @@ async function buildManifest(
       const db = scheduled.get(b.id) ?? '9999-12-31';
       return da === db ? a.name.localeCompare(b.name) : da.localeCompare(db);
     })
-    .slice(0, MAX_MANIFEST_WORKOUTS);
+    .slice(0, maxWorkouts);
 
   const exerciseIds = [
     ...new Set(

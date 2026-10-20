@@ -2139,6 +2139,22 @@
         "custom": "Custom"
       }
     },
+    "garminWatch": {
+      "title": "Garmin watch",
+      "description": "Pair the Sparky Strength Connect IQ app and check its sync status",
+      "codeLabel": "Pairing code shown on the watch",
+      "pair": "Pair",
+      "codeHelp": "On the watch, open Sparky Strength and choose \"Pair watch\". Pairing creates an API key named after the watch; delete that key under API Key Management to unpair it.",
+      "statusTitle": "Sync status",
+      "loading": "Loading…",
+      "sessions": "Workouts uploaded",
+      "linked": "Linked to Garmin activities",
+      "lastUpload": "Last upload",
+      "never": "Never",
+      "statusError": "Failed to load watch sync status",
+      "paired": "Watch paired. It finishes setup on its own within a few seconds.",
+      "pairError": "Pairing failed. Check the code on the watch; codes expire after 10 minutes."
+    },
     "apiKeyManagement": {
       "title": "API Key Management",
       "description": "Generate and manage API keys for external integrations",

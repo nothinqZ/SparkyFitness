@@ -142,3 +142,63 @@ export type WatchSessionUploadResponse = z.infer<
 export type WatchSyncStatusResponse = z.infer<
   typeof watchSyncStatusResponseSchema
 >;
+
+// --- Pairing -----------------------------------------------------------------
+// A side-loaded watch app cannot have its settings edited in Garmin Connect,
+// so the watch pairs itself: it asks for a short code, shows it, and polls
+// while the user confirms the code in SparkyFitness. Confirming mints a
+// regular, revocable API key, which the watch collects exactly once.
+
+export const WATCH_PAIRING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+export const watchPairingStartRequestSchema = z
+  .object({
+    device_id: z.string().min(1).max(128),
+    device_model: z.string().max(128).nullable().optional(),
+  })
+  .strict();
+
+export const watchPairingStartResponseSchema = z.object({
+  pairing_code: z.string(),
+  poll_token: z.string(),
+  expires_at: z.string(),
+  poll_interval_seconds: z.number().int().positive(),
+});
+
+export const watchPairingPollRequestSchema = z
+  .object({ poll_token: z.string().min(32).max(128) })
+  .strict();
+
+export const watchPairingPollResponseSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("pending") }),
+  z.object({ status: z.literal("paired"), api_key: z.string() }),
+]);
+
+export const watchPairingClaimRequestSchema = z
+  .object({
+    // Accepts "ABCD-EFGH", "abcd efgh" or "ABCDEFGH".
+    pairing_code: z
+      .string()
+      .transform((v) => v.toUpperCase().replace(/[^A-Z0-9]/g, ""))
+      .pipe(z.string().length(8)),
+  })
+  .strict();
+
+export const watchPairingClaimResponseSchema = z.object({
+  paired: z.literal(true),
+  api_key_id: z.string(),
+  api_key_name: z.string(),
+});
+
+export type WatchPairingStartRequest = z.infer<
+  typeof watchPairingStartRequestSchema
+>;
+export type WatchPairingStartResponse = z.infer<
+  typeof watchPairingStartResponseSchema
+>;
+export type WatchPairingPollResponse = z.infer<
+  typeof watchPairingPollResponseSchema
+>;
+export type WatchPairingClaimResponse = z.infer<
+  typeof watchPairingClaimResponseSchema
+>;
