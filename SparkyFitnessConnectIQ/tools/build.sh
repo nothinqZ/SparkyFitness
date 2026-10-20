@@ -17,6 +17,10 @@
 # --package  Build an .iq store/sideload package for all manifest products.
 # --release  Strip debug info.
 #
+# PRODUCTS="fr265 fenix7" limits the build copy of the manifest to these
+# products, e.g. for a Connect IQ Store beta package when only some device
+# definitions are installed (the SDK Manager needs a Garmin login per device).
+#
 # Generate a developer key once (keep it private; Garmin ties app updates to it):
 #   openssl genrsa -out developer_key.pem 4096
 #   openssl pkcs8 -topk8 -inform PEM -outform DER -in developer_key.pem \
@@ -65,6 +69,18 @@ text = text.replace('<property id="serverUrl" type="string"></property>',
                     '<property id="serverUrl" type="string">%s</property>' % s.escape(url))
 open(path, "w").write(text)
 PY
+fi
+
+if [ -n "${PRODUCTS:-}" ]; then
+  python3 - "$WORK/app/manifest.xml" $PRODUCTS <<'PY2'
+import re, sys
+path, products = sys.argv[1], sys.argv[2:]
+text = open(path).read()
+lines = "".join('            <iq:product id="%s"/>\n' % p for p in products)
+text = re.sub(r"(<iq:products>\s*\n).*?(\s*</iq:products>)",
+              lambda m: m.group(1) + lines.rstrip("\n") + m.group(2), text, flags=re.S)
+open(path, "w").write(text)
+PY2
 fi
 
 # The compile-check device is not a Garmin product; add it to a copy of the

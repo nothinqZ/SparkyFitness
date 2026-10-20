@@ -2,7 +2,7 @@ import Toybox.Lang;
 import Toybox.Communications;
 import Toybox.WatchUi;
 
-const APP_VERSION = "0.1.0";
+const APP_VERSION = "0.1.2";
 
 // Talks to the SparkyFitness server through the paired phone (Connect IQ web
 // requests are proxied by the Garmin Connect app, so the server must be
@@ -52,14 +52,14 @@ class SyncClient {
     }
 
     private function uploadNext() as Void {
-        var q = Store.queue();
-        if (q.size() == 0) {
+        var head = Store.queueHead();
+        if (head == null) {
             fetchManifest();
             return;
         }
         Communications.makeWebRequest(
             Store.serverUrl() + "/api/v2/watch/sessions",
-            q[0] as Dictionary,
+            head,
             {
                 :method => Communications.HTTP_REQUEST_METHOD_POST,
                 :headers => authHeaders(true),
@@ -102,9 +102,14 @@ class SyncClient {
 
     function onManifestResponse(code as Number, data as Dictionary or String or Null) as Void {
         if (code == 200 && data instanceof Dictionary && data["workouts"] != null) {
-            Store.setManifest(data as Dictionary);
-            Store.markSynced();
-            finish(true);
+            if (Store.setManifest(data as Dictionary)) {
+                Store.markSynced();
+                finish(true);
+            } else {
+                // Workouts that fit are still usable; say that some are missing.
+                Store.setLastError("Watch storage full, some workouts missing");
+                finish(false);
+            }
         } else if (code == 401) {
             authFailed(code);
         } else {

@@ -197,6 +197,64 @@ module SparkyLogic {
         };
     }
 
+    // Copies only the given keys whose value is not null.
+    function pick(source as Dictionary, keys as Array) as Dictionary {
+        var out = {} as Dictionary;
+        for (var i = 0; i < keys.size(); i++) {
+            var v = source[keys[i]];
+            if (v != null) {
+                out[keys[i]] = v;
+            }
+        }
+        return out;
+    }
+
+    function pickEach(source as Array or Null, keys as Array) as Array {
+        var out = [] as Array;
+        if (source != null) {
+            for (var i = 0; i < source.size(); i++) {
+                out.add(pick(source[i] as Dictionary, keys));
+            }
+        }
+        return out;
+    }
+
+    // A manifest workout reduced to the fields the watch reads, so each one
+    // fits comfortably into a single Storage value (32 KB at most) and into
+    // the active session that is rewritten after every set. Same shape as
+    // the manifest, minus category, set type, duration and set numbers.
+    function compactWorkout(workout as Dictionary) as Dictionary {
+        var exercises = [] as Array;
+        var source = workout["exercises"] as Array or Null;
+        if (source != null) {
+            for (var i = 0; i < source.size(); i++) {
+                var ex = source[i] as Dictionary;
+                var out = {
+                    "exercise_id" => ex["exercise_id"],
+                    "name" => ex["name"],
+                    "sets" => pickEach(ex["sets"] as Array or Null, ["reps", "weight", "rest_time"])
+                } as Dictionary;
+                var previous = ex["previous"] as Dictionary or Null;
+                if (previous != null) {
+                    out["previous"] = {
+                        "sets" => pickEach(previous["sets"] as Array or Null, ["reps", "weight"])
+                    };
+                }
+                exercises.add(out);
+            }
+        }
+        var compact = pick(workout, ["workout_preset_id", "name", "scheduled_date"]);
+        compact["exercises"] = exercises;
+        return compact;
+    }
+
+    // Start-menu entry for a compacted workout.
+    function workoutSummary(workout as Dictionary) as Dictionary {
+        var summary = pick(workout, ["name", "scheduled_date"]);
+        summary["exercises"] = (workout["exercises"] as Array).size();
+        return summary;
+    }
+
     // Seconds as "m:ss".
     function formatClock(seconds as Number) as String {
         if (seconds < 0) {

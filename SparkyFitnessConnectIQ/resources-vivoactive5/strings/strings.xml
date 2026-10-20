@@ -1,0 +1,5 @@
+<!-- Product name the watch reports when pairing and uploading, so the apps
+     can show it the way Garmin Connect does instead of the part number. -->
+<strings>
+    <string id="DeviceName">vívoactive 5</string>
+</strings>

@@ -105,3 +105,47 @@ function testNormalizeBaseUrl(logger as Logger) as Boolean {
     Test.assertEqual(SparkyLogic.normalizeBaseUrl(null), null);
     return true;
 }
+
+(:test)
+function testCompactWorkout(logger as Logger) as Boolean {
+    var workout = {
+        "workout_preset_id" => 17,
+        "name" => "Torso A",
+        "scheduled_date" => null,
+        "exercises" => [{
+            "exercise_id" => "67facb5a-6d9d-45ac-8ddf-300325c19c31",
+            "name" => "Brustpresse",
+            "category" => "Chest",
+            "sort_order" => 0,
+            "sets" => [{ "set_number" => 1, "set_type" => "warmup", "reps" => 12,
+                         "weight" => 75, "duration" => null, "rest_time" => 90 }],
+            "previous" => { "entry_date" => "2026-10-11",
+                            "sets" => [{ "set_number" => 1, "reps" => 15, "weight" => 50 }] }
+        }, {
+            "exercise_id" => "10adaa4e-6024-4fc8-a3b4-cbd154521f9e",
+            "name" => "Rudern",
+            "sets" => [],
+            "previous" => null
+        }]
+    };
+    var compact = SparkyLogic.compactWorkout(workout);
+    Test.assertEqual(compact["workout_preset_id"], 17);
+    Test.assert(!compact.hasKey("scheduled_date"));
+    var exercises = compact["exercises"] as Array;
+    Test.assertEqual(exercises.size(), 2);
+    var first = exercises[0] as Dictionary;
+    Test.assert(!first.hasKey("category"));
+    var set = (first["sets"] as Array)[0] as Dictionary;
+    Test.assertEqual(set.size(), 3);
+    Test.assertEqual(set["reps"], 12);
+    Test.assertEqual(set["rest_time"], 90);
+    var previous = ((first["previous"] as Dictionary)["sets"] as Array)[0] as Dictionary;
+    Test.assertEqual(previous.size(), 2);
+    Test.assertEqual(previous["weight"], 50);
+    Test.assert(!(exercises[1] as Dictionary).hasKey("previous"));
+
+    var summary = SparkyLogic.workoutSummary(compact);
+    Test.assertEqual(summary["name"], "Torso A");
+    Test.assertEqual(summary["exercises"], 2);
+    return true;
+}

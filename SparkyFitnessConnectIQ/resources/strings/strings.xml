@@ -27,4 +27,7 @@
     <string id="PairWatch">Pair watch</string>
     <string id="PairHint">Enter this code in SparkyFitness: Settings &gt; Garmin watch</string>
     <string id="Paired">Paired</string>
+    <!-- Overridden per product in resources-<device>/strings; empty means
+         "send the part number instead". -->
+    <string id="DeviceName"></string>
 </strings>

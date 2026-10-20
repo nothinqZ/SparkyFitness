@@ -14,7 +14,7 @@ module MainMenu {
             return WatchUi.loadResource(Rez.Strings.NotConfigured) as String;
         }
         var parts = "";
-        var queued = Store.queue().size();
+        var queued = Store.queueSize();
         if (queued > 0) {
             parts = (WatchUi.loadResource(Rez.Strings.Queue) as String) + ": " + queued + " · ";
         }
@@ -47,7 +47,7 @@ module MainMenu {
             var workouts = Store.workouts();
             for (var i = 0; i < workouts.size(); i++) {
                 var w = workouts[i] as Dictionary;
-                var sub = (w["exercises"] as Array).size() + " " + (WatchUi.loadResource(Rez.Strings.Exercises) as String);
+                var sub = (w["exercises"] as Number) + " " + (WatchUi.loadResource(Rez.Strings.Exercises) as String);
                 if (w["scheduled_date"] != null) {
                     sub = (w["scheduled_date"] as String).substring(5, 10) + " · " + sub;
                 }
@@ -100,7 +100,10 @@ class MainMenuDelegate extends WatchUi.Menu2InputDelegate {
             }
             session = new WorkoutSession(active);
         } else {
-            var workout = Store.workouts()[id as Number] as Dictionary;
+            var workout = Store.workout(id as Number);
+            if (workout == null) {
+                return;
+            }
             session = WorkoutSession.start(workout);
             getApp().recorder.start(workout["name"] as String);
         }

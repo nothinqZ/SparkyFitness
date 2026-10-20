@@ -5,16 +5,14 @@ import Toybox.Application.Properties;
 import Toybox.Cryptography;
 import Toybox.System;
 import Toybox.Time;
+import Toybox.WatchUi;
 
 // Everything the app keeps between launches lives in Application.Storage, so a
 // workout survives the app being closed, the watch rebooting or the phone
 // being out of range. The active session is saved after every logged set.
 module Store {
 
-    const KEY_MANIFEST = "manifest";
     const KEY_ACTIVE = "active";
-    const KEY_QUEUE = "queue";
-    const KEY_FAILED = "failed";
     const KEY_DEVICE_ID = "deviceId";
     const KEY_LAST_SYNC = "lastSync";
     const KEY_LAST_ERROR = "lastError";
@@ -22,9 +20,60 @@ module Store {
     // apiKey app setting, which only store-installed apps can edit.
     const KEY_PAIRED_API_KEY = "pairedApiKey";
 
+    // A single Storage value may hold at most 32 KB, and a real manifest or a
+    // few queued workouts easily exceed that (a 45 KB manifest crashed the app
+    // on every start). So nothing that grows with the plan or the queue is
+    // stored as one value: each workout, queued upload and failed upload gets
+    // its own key, and a small index value lists them.
+    const KEY_WORKOUT_INDEX = "workoutIndex";
+    const WORKOUT_PREFIX = "workout_";
+    const KEY_WEIGHT_UNIT = "weightUnit";
+    const KEY_QUEUE_IDS = "queueIds";
+    const QUEUE_PREFIX = "queued_";
+    const KEY_FAILED_INDEX = "failedIndex";
+    const FAILED_PREFIX = "failed_";
+    // Single-value layouts of version 0.1.0, migrated or dropped on start.
+    const LEGACY_MANIFEST = "manifest";
+    const LEGACY_QUEUE = "queue";
+    const LEGACY_FAILED = "failed";
+
     // Uploads that the server rejected for good are kept for inspection, but
     // only the most recent few, so they cannot fill the storage.
     const MAX_FAILED = 5;
+
+    // Storage.setValue throws when the value is too large or the object store
+    // is full. An uncaught exception ends the app, so every write goes
+    // through here and reports failure instead.
+    function trySet(key as String, value as Application.PropertyValueType) as Boolean {
+        try {
+            Storage.setValue(key, value);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // Moves data written by 0.1.0 into the per-key layout. Called once per
+    // app start before the first sync.
+    function migrate() as Void {
+        if (Storage.getValue(LEGACY_MANIFEST) != null) {
+            // Refetched on the next sync; the old value may be partial.
+            Storage.deleteValue(LEGACY_MANIFEST);
+        }
+        var legacy = Storage.getValue(LEGACY_QUEUE);
+        if (legacy != null) {
+            var q = legacy as Array;
+            var all = true;
+            for (var i = 0; i < q.size(); i++) {
+                all = enqueue(q[i] as Dictionary) && all;
+            }
+            // Keep the old queue if any session could not be moved.
+            if (all) {
+                Storage.deleteValue(LEGACY_QUEUE);
+            }
+        }
+        Storage.deleteValue(LEGACY_FAILED);
+    }
 
     function newUuid() as String {
         return SparkyLogic.uuidFromBytes(Cryptography.randomBytes(16));
@@ -34,7 +83,7 @@ module Store {
         var id = Storage.getValue(KEY_DEVICE_ID);
         if (id == null) {
             id = newUuid();
-            Storage.setValue(KEY_DEVICE_ID, id);
+            trySet(KEY_DEVICE_ID, id);
         }
         return id as String;
     }
@@ -56,7 +105,7 @@ module Store {
     }
 
     function setPairedApiKey(key as String) as Void {
-        Storage.setValue(KEY_PAIRED_API_KEY, key);
+        trySet(KEY_PAIRED_API_KEY, key);
         Storage.deleteValue(KEY_LAST_ERROR);
     }
 
@@ -84,80 +133,128 @@ module Store {
         return v instanceof Boolean ? v as Boolean : true;
     }
 
-    function manifest() as Dictionary or Null {
-        return Storage.getValue(KEY_MANIFEST) as Dictionary or Null;
-    }
-
-    function setManifest(m as Dictionary) as Void {
-        Storage.setValue(KEY_MANIFEST, m);
-    }
-
-    function workouts() as Array {
-        var m = manifest();
-        if (m == null || m["workouts"] == null) {
-            return [] as Array;
+    // Stores a downloaded manifest, one compacted workout per key. Returns
+    // false when some workouts did not fit; the ones that did stay usable.
+    function setManifest(m as Dictionary) as Boolean {
+        var incoming = m["workouts"] as Array;
+        var oldCount = workouts().size();
+        var index = [] as Array;
+        for (var i = 0; i < incoming.size(); i++) {
+            var compact = SparkyLogic.compactWorkout(incoming[i] as Dictionary);
+            if (trySet(WORKOUT_PREFIX + index.size(), compact)) {
+                index.add(SparkyLogic.workoutSummary(compact));
+            }
         }
-        return m["workouts"] as Array;
+        for (var j = index.size(); j < oldCount; j++) {
+            Storage.deleteValue(WORKOUT_PREFIX + j);
+        }
+        var stored = trySet(KEY_WORKOUT_INDEX, index);
+        trySet(KEY_WEIGHT_UNIT, "lbs".equals(m["weight_unit"]) ? "lbs" : "kg");
+        return stored && index.size() == incoming.size();
+    }
+
+    // Start-menu entries: [{ "name", "exercises" (count), "scheduled_date" }].
+    function workouts() as Array {
+        var index = Storage.getValue(KEY_WORKOUT_INDEX);
+        return index == null ? [] as Array : index as Array;
+    }
+
+    function workout(i as Number) as Dictionary or Null {
+        return Storage.getValue(WORKOUT_PREFIX + i) as Dictionary or Null;
     }
 
     function weightUnit() as String {
-        var m = manifest();
-        return m != null && "lbs".equals(m["weight_unit"]) ? "lbs" : "kg";
+        return "lbs".equals(Storage.getValue(KEY_WEIGHT_UNIT)) ? "lbs" : "kg";
     }
 
     function activeSession() as Dictionary or Null {
         return Storage.getValue(KEY_ACTIVE) as Dictionary or Null;
     }
 
-    function saveActiveSession(s as Dictionary) as Void {
-        Storage.setValue(KEY_ACTIVE, s);
+    function saveActiveSession(s as Dictionary) as Boolean {
+        return trySet(KEY_ACTIVE, s);
     }
 
     function clearActiveSession() as Void {
         Storage.deleteValue(KEY_ACTIVE);
     }
 
-    function queue() as Array {
-        var q = Storage.getValue(KEY_QUEUE);
-        return q == null ? [] as Array : q as Array;
+    function queueIds() as Array {
+        var ids = Storage.getValue(KEY_QUEUE_IDS);
+        return ids == null ? [] as Array : ids as Array;
     }
 
-    function enqueue(upload as Dictionary) as Void {
-        var q = queue();
+    function queueSize() as Number {
+        return queueIds().size();
+    }
+
+    // Oldest queued upload, or null when the queue is empty.
+    function queueHead() as Dictionary or Null {
+        var ids = queueIds();
+        while (ids.size() > 0) {
+            var upload = Storage.getValue(QUEUE_PREFIX + ids[0]);
+            if (upload != null) {
+                return upload as Dictionary;
+            }
+            // Index entry without a payload: drop it rather than stall.
+            ids = ids.slice(1, null);
+            trySet(KEY_QUEUE_IDS, ids);
+        }
+        return null;
+    }
+
+    // Returns false when the upload could not be stored; the caller keeps
+    // the workout in that case.
+    function enqueue(upload as Dictionary) as Boolean {
+        var id = upload["client_session_id"] as String;
+        var ids = queueIds();
         // Idempotent on the client side as well: never queue a session twice.
-        for (var i = 0; i < q.size(); i++) {
-            if ((q[i] as Dictionary)["client_session_id"].equals(upload["client_session_id"])) {
-                return;
+        for (var i = 0; i < ids.size(); i++) {
+            if (id.equals(ids[i])) {
+                return true;
             }
         }
-        q.add(upload);
-        Storage.setValue(KEY_QUEUE, q);
+        if (!trySet(QUEUE_PREFIX + id, upload)) {
+            return false;
+        }
+        ids.add(id);
+        if (!trySet(KEY_QUEUE_IDS, ids)) {
+            Storage.deleteValue(QUEUE_PREFIX + id);
+            return false;
+        }
+        return true;
     }
 
     function dequeueHead() as Void {
-        var q = queue();
-        if (q.size() > 0) {
-            Storage.setValue(KEY_QUEUE, q.slice(1, null));
+        var ids = queueIds();
+        if (ids.size() > 0) {
+            Storage.deleteValue(QUEUE_PREFIX + ids[0]);
+            trySet(KEY_QUEUE_IDS, ids.slice(1, null));
         }
     }
 
     function moveHeadToFailed(code as Number) as Void {
-        var q = queue();
-        if (q.size() == 0) {
+        var ids = queueIds();
+        if (ids.size() == 0) {
             return;
         }
-        var failed = Storage.getValue(KEY_FAILED);
+        var id = ids[0] as String;
+        var upload = Storage.getValue(QUEUE_PREFIX + id);
+        var failed = Storage.getValue(KEY_FAILED_INDEX);
         var list = failed == null ? [] as Array : failed as Array;
-        list.add({ "code" => code, "session" => q[0] });
-        if (list.size() > MAX_FAILED) {
-            list = list.slice(list.size() - MAX_FAILED, null);
+        if (upload != null && trySet(FAILED_PREFIX + id, upload)) {
+            list.add({ "code" => code, "client_session_id" => id });
+            while (list.size() > MAX_FAILED) {
+                Storage.deleteValue(FAILED_PREFIX + ((list[0] as Dictionary)["client_session_id"] as String));
+                list = list.slice(1, null);
+            }
+            trySet(KEY_FAILED_INDEX, list);
         }
-        Storage.setValue(KEY_FAILED, list);
         dequeueHead();
     }
 
     function markSynced() as Void {
-        Storage.setValue(KEY_LAST_SYNC, Time.now().value());
+        trySet(KEY_LAST_SYNC, Time.now().value());
         Storage.deleteValue(KEY_LAST_ERROR);
     }
 
@@ -166,14 +263,20 @@ module Store {
     }
 
     function setLastError(message as String) as Void {
-        Storage.setValue(KEY_LAST_ERROR, message);
+        trySet(KEY_LAST_ERROR, message);
     }
 
     function lastError() as String or Null {
         return Storage.getValue(KEY_LAST_ERROR) as String or Null;
     }
 
+    // Product name such as "Forerunner 265" (resources-<device>), else the
+    // part number for a product the app has no name for.
     function deviceModel() as String or Null {
+        var name = WatchUi.loadResource(Rez.Strings.DeviceName) as String;
+        if (name.length() > 0) {
+            return name;
+        }
         var settings = System.getDeviceSettings();
         return settings has :partNumber ? settings.partNumber : null;
     }

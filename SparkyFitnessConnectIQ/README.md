@@ -53,15 +53,18 @@ The watch pairs itself; no key has to be typed:
    committed.
 2. On the watch: **Sparky Strength → Pair watch**. It shows a code like
    `K7QM-2XPA` (valid 10 minutes).
-3. In SparkyFitness (web): **Settings → Garmin watch**, enter the code,
-   **Pair**.
-4. The server creates an API key named "Garmin watch <model>" for your account.
-   The watch collects it once (the server keeps it encrypted until then) and
-   stores it on the watch.
+3. In the SparkyFitness iPhone app: **Settings → Garmin watch**, enter the
+   code, **Pair**. The web app has the same under **Settings → Developer &
+   Integrations → Garmin watch**.
+4. The server creates an API key named "Garmin watch <model>" for your account
+   and records it as this watch's key (`watch_devices`). The watch collects it
+   once (the server keeps it encrypted until then) and stores it on the watch.
+   Pairing the same watch again revokes its previous key.
 
-To unpair, delete that key under **Settings → API Key Management**. The watch
-gets 401, forgets the key, offers "Pair watch" again and keeps its queued
-sessions until it is paired again.
+To unpair, use **Unpair** next to the watch on the same screen (or delete the
+key under **Settings → API Key Management**). The watch gets 401, forgets the
+key, offers "Pair watch" again and keeps its queued sessions until it is
+paired again.
 
 Store-installed builds can alternatively take a key in the app settings
 (Garmin Connect app → Device → Activities & Apps → Sparky Strength →
@@ -80,6 +83,23 @@ server must therefore be reachable from the phone, over **HTTPS with a
 certificate the phone trusts** (plain HTTP and self-signed certificates are
 refused by the phone). Tailscale works if the phone runs Tailscale: use the
 MagicDNS name with a certificate from `tailscale cert` or `tailscale serve`.
+
+## Storage on the watch
+
+A single `Application.Storage` value may hold at most 32 KB. Version 0.1.0
+stored the whole manifest as one value; a real 45 KB manifest made
+`Storage.setValue` throw and the app crashed (IQ! icon) on every start after
+pairing. Since 0.1.1 nothing that grows is stored as one value:
+
+- each workout is compacted (`SparkyLogic.compactWorkout`: only reps, weight
+  and rest per set) and stored under its own key, with a small index for the
+  start menu;
+- queued and failed uploads are stored one per key, listed by id;
+- every write goes through `Store.trySet`, which reports failure instead of
+  ending the app. A finished workout is removed from the watch only once it is
+  in the queue.
+
+`Store.migrate()` moves a 0.1.0 queue into the new layout on start.
 
 ## Sync behaviour
 
@@ -144,6 +164,28 @@ appears under Activities & Apps. Side-loaded apps cannot be configured from
 the Garmin Connect app, which is why the server URL is set at build time and
 the key comes from pairing.
 
+### Installing without USB: Connect IQ Store beta
+
+A beta app in the Connect IQ Store is visible only to the Garmin account that
+uploaded it, needs no store review, and installs and updates through the
+Garmin Connect app like any store app (settings can then also be edited there).
+
+```bash
+PRODUCTS=fr265 SPARKY_SERVER_URL=https://… tools/build.sh all --package --release
+# -> bin/SparkyStrength.iq
+```
+
+`PRODUCTS` limits the package to the watches whose device definitions are
+installed (each one comes from the SDK Manager). Upload the `.iq` at
+https://apps.garmin.com/developer as a **beta app**, signed in with the same
+Garmin account the watch uses, then install it from the Connect IQ section
+of the Garmin Connect app. Keep the developer key: every update must be signed
+with the same key.
+
+The watch reports its product name ("Forerunner 265") from
+`resources-<device>/strings`; add a folder when you add a product to
+`manifest.xml`.
+
 ## Status
 
 - Compiles and type-checks with Connect IQ SDK 9.2.0 (`sparkygeneric`).
@@ -152,6 +194,9 @@ the key comes from pairing.
 - The upload format is pinned by a server-side contract test
   (`SparkyFitnessServer/tests/watchSyncContract.test.ts`, fixture in
   `test/fixtures/upload.json`).
-- **Not verified on real hardware**: layout on your watch's screen, memory
-  with a large manifest, ActivityRecording on your firmware, phone-proxied
-  HTTPS to your server.
+- Pairing and manifest download verified on a Forerunner 265 with 0.1.0,
+  which then crashed storing a 45 KB manifest (fixed in 0.1.1, see *Storage on
+  the watch*).
+- Phone-proxied HTTPS to the server works (pairing over Garmin Connect).
+- **Not verified on real hardware**: layout on your watch's screen, logging a
+  workout and its upload, ActivityRecording on your firmware.

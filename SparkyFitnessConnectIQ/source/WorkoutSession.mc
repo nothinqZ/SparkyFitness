@@ -48,7 +48,9 @@ class WorkoutSession {
     }
 
     function save() as Void {
-        Store.saveActiveSession(data);
+        if (!Store.saveActiveSession(data)) {
+            Store.setLastError("Watch storage full, workout not saved");
+        }
     }
 
     function exercises() as Array {
@@ -162,7 +164,9 @@ class WorkoutSession {
     }
 
     // Queue the finished workout for upload. Returns false when no set was
-    // logged (nothing to save).
+    // logged (nothing to save). The workout is removed from the watch only
+    // once it is in the queue; if the queue cannot store it, it stays as the
+    // active workout so it can be finished again after the next sync.
     function finishAndQueue() as Boolean {
         var upload = SparkyLogic.buildUpload(
             data,
@@ -171,11 +175,15 @@ class WorkoutSession {
             Store.deviceModel(),
             APP_VERSION
         );
-        Store.clearActiveSession();
         if (upload == null) {
+            Store.clearActiveSession();
             return false;
         }
-        Store.enqueue(upload);
+        if (Store.enqueue(upload)) {
+            Store.clearActiveSession();
+        } else {
+            Store.setLastError("Watch storage full, workout kept");
+        }
         return true;
     }
 

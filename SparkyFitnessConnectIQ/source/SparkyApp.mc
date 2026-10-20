@@ -14,6 +14,7 @@ class SparkyApp extends Application.AppBase {
     }
 
     function onStart(state as Dictionary or Null) as Void {
+        Store.migrate();
         // Upload anything left from earlier workouts and refresh the plan.
         sync.sync(method(:onBackgroundSync));
     }
