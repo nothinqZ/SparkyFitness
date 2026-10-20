@@ -29,6 +29,7 @@ jest.mock('@/contexts/ThemeContext', () => ({
 
 const overview: PerformanceOverviewResponse = {
   range: { start: '2026-07-23', end: '2026-10-20', timezone: 'UTC' },
+  today: null,
   running: {
     provenance: 'measured',
     totals: { runs: 2, distanceKm: 15, durationMinutes: 75 },

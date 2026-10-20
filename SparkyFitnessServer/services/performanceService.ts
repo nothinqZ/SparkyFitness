@@ -16,7 +16,9 @@ import {
   type PerformanceOverviewResponse,
   type RunRow,
 } from '@workspace/shared';
-import performanceRepository from '../models/performanceRepository.js';
+import performanceRepository, {
+  type HealthMetricsRow,
+} from '../models/performanceRepository.js';
 import reportRepository from '../models/reportRepository.js';
 import { loadUserTimezone } from '../utils/timezoneLoader.js';
 
@@ -46,6 +48,38 @@ const avg = (values: number[]) =>
   values.length
     ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10
     : null;
+
+/**
+ * The wearable summary for `end` (Garmin Connect's "My Day"): that day's
+ * metrics row, falling back to the day before when the device has not synced
+ * today yet. Last night's sleep comes from the sleep entry dated `end`.
+ */
+export function buildToday(
+  metricRows: readonly HealthMetricsRow[],
+  sleepByDate: ReadonlyMap<string, { hours: number; score: number | null }>,
+  end: string
+): PerformanceOverviewResponse['today'] {
+  const row =
+    metricRows.find((m) => m.date === end) ??
+    metricRows.find((m) => m.date === shiftDay(end, -1));
+  const sleep = sleepByDate.get(end);
+  if (!row && !sleep) return null;
+  return {
+    date: row?.date ?? end,
+    bodyBatteryHighest: num(row?.body_battery_highest),
+    bodyBatteryLowest: num(row?.body_battery_lowest),
+    bodyBatteryCharged: num(row?.body_battery_charged),
+    bodyBatteryDrained: num(row?.body_battery_drained),
+    avgStress: num(row?.avg_stress_level),
+    steps: num(row?.total_steps),
+    stepGoal: num(row?.step_goal),
+    restingHr: num(row?.resting_heart_rate),
+    trainingReadiness: num(row?.training_readiness_score),
+    recoveryTimeHours: num(row?.recovery_time_hours),
+    sleepHours: sleep?.hours ?? null,
+    sleepScore: sleep?.score ?? null,
+  };
+}
 
 export function summarizeStrength(
   sets: ReadonlyArray<{
@@ -289,6 +323,11 @@ async function getOverview(
 
   return {
     range: { start, end, timezone },
+    today: buildToday(
+      metricRows,
+      new Map(sleepHours.map((s) => [s.date, s])),
+      end
+    ),
     running: {
       provenance: 'measured',
       totals: {

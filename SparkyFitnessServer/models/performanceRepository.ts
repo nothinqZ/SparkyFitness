@@ -28,6 +28,14 @@ export interface HealthMetricsRow {
   chronic_training_load: string | number | null;
   acwr_ratio: string | number | null;
   training_readiness_score: number | null;
+  recovery_time_hours: string | number | null;
+  body_battery_highest: number | null;
+  body_battery_lowest: number | null;
+  body_battery_charged: number | null;
+  body_battery_drained: number | null;
+  avg_stress_level: number | null;
+  total_steps: number | null;
+  step_goal: number | null;
   source_provider: string;
 }
 
@@ -121,7 +129,10 @@ async function getHealthMetrics(
               race_prediction_5k_seconds, race_prediction_10k_seconds,
               race_prediction_half_marathon_seconds, race_prediction_marathon_seconds,
               acute_training_load, chronic_training_load, acwr_ratio,
-              training_readiness_score, source_provider
+              training_readiness_score, recovery_time_hours,
+              body_battery_highest, body_battery_lowest, body_battery_charged,
+              body_battery_drained, avg_stress_level, total_steps, step_goal,
+              source_provider
        FROM daily_health_metrics
        WHERE user_id = $1 AND entry_date BETWEEN $2 AND $3
        ORDER BY entry_date, (source_provider = 'garmin') DESC, updated_at DESC NULLS LAST`,

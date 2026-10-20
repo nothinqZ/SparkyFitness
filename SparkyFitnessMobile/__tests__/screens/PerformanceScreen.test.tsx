@@ -34,6 +34,21 @@ jest.mock('react-native-safe-area-context', () => ({
 
 const overview: PerformanceOverviewResponse = {
   range: { start: '2026-07-23', end: '2026-10-20', timezone: 'UTC' },
+  today: {
+    date: '2026-10-20',
+    bodyBatteryHighest: 88,
+    bodyBatteryLowest: 21,
+    bodyBatteryCharged: 64,
+    bodyBatteryDrained: 70,
+    avgStress: 31,
+    steps: 8412,
+    stepGoal: 10000,
+    restingHr: 52,
+    trainingReadiness: 64,
+    recoveryTimeHours: 14,
+    sleepHours: 7.25,
+    sleepScore: 82,
+  },
   running: {
     provenance: 'measured',
     totals: { runs: 4, distanceKm: 25, durationMinutes: 126 },

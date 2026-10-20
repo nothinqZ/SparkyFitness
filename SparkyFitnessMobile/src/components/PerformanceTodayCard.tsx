@@ -22,6 +22,74 @@ function trainingMessage(
   return 'steady';
 }
 
+const Stat: React.FC<{ label: string; value: string; detail?: string }> = ({
+  label,
+  value,
+  detail,
+}) => (
+  <View className="flex-1 min-w-[22%] mb-2">
+    <Text className="text-text-secondary text-xs">{label}</Text>
+    <Text className="text-text-primary text-base font-semibold">{value}</Text>
+    {detail ? <Text className="text-text-muted text-xs">{detail}</Text> : null}
+  </View>
+);
+
+/** Garmin's day summary (Body Battery, stress, steps, recovery time). */
+const DayStats: React.FC<{
+  today: NonNullable<Overview['today']>;
+}> = ({ today }) => {
+  const { t } = useTranslation();
+  const n = (v: number | null) =>
+    v === null ? '–' : formatLocalizedNumber(Math.round(v));
+  return (
+    <View
+      className="flex-row flex-wrap border-t border-border-subtle pt-3 mb-2"
+      testID="performance-day-stats"
+    >
+      <Stat
+        label={t('performance.today.bodyBattery', {
+          defaultValue: 'Body Battery',
+        })}
+        value={n(today.bodyBatteryHighest)}
+        detail={
+          today.bodyBatteryLowest !== null
+            ? t('performance.today.bodyBatteryLow', {
+                defaultValue: 'low {{value}}',
+                value: n(today.bodyBatteryLowest),
+              })
+            : undefined
+        }
+      />
+      <Stat
+        label={t('performance.today.stress', { defaultValue: 'Stress' })}
+        value={n(today.avgStress)}
+        detail={t('performance.today.average', { defaultValue: 'average' })}
+      />
+      <Stat
+        label={t('performance.today.steps', { defaultValue: 'Steps' })}
+        value={n(today.steps)}
+        detail={
+          today.stepGoal !== null
+            ? t('performance.today.stepGoal', {
+                defaultValue: 'of {{value}}',
+                value: n(today.stepGoal),
+              })
+            : undefined
+        }
+      />
+      <Stat
+        label={t('performance.today.recovery', { defaultValue: 'Recovery' })}
+        value={
+          today.recoveryTimeHours === null
+            ? '–'
+            : `${n(today.recoveryTimeHours)} h`
+        }
+        detail="Garmin"
+      />
+    </View>
+  );
+};
+
 const PerformanceTodayCard: React.FC<{ onPress: () => void }> = ({
   onPress,
 }) => {
@@ -115,6 +183,7 @@ const PerformanceTodayCard: React.FC<{ onPress: () => void }> = ({
             </Text>
           </View>
           <Text className="text-text-primary text-sm mb-3">{guidance}</Text>
+          {data?.today && <DayStats today={data.today} />}
           <View className="flex-row flex-wrap">
             <Text className="text-text-secondary text-xs mr-4">
               {t('performance.today.load', { defaultValue: 'Load' })}:{' '}

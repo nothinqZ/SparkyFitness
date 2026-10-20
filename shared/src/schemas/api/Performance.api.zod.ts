@@ -23,6 +23,24 @@ const raceTimes = z.object({
   marathon: z.number().nullable(),
 });
 
+// The latest day's wearable summary, as Garmin Connect's "My Day" shows it.
+// All values are device-reported; null when the device did not send them.
+const today = z.object({
+  date: z.string(),
+  bodyBatteryHighest: z.number().nullable(),
+  bodyBatteryLowest: z.number().nullable(),
+  bodyBatteryCharged: z.number().nullable(),
+  bodyBatteryDrained: z.number().nullable(),
+  avgStress: z.number().nullable(),
+  steps: z.number().nullable(),
+  stepGoal: z.number().nullable(),
+  restingHr: z.number().nullable(),
+  trainingReadiness: z.number().nullable(),
+  recoveryTimeHours: z.number().nullable(),
+  sleepHours: z.number().nullable(),
+  sleepScore: z.number().nullable(),
+});
+
 export const performanceOverviewQuerySchema = z.object({
   end: z
     .string()
@@ -33,6 +51,7 @@ export const performanceOverviewQuerySchema = z.object({
 
 export const performanceOverviewResponseSchema = z.object({
   range: z.object({ start: z.string(), end: z.string(), timezone: z.string() }),
+  today: today.nullable(),
   running: z.object({
     provenance: provenance,
     totals: z.object({

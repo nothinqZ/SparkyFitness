@@ -6039,7 +6039,14 @@
       "loading": "Loading performance…",
       "load": "Load",
       "hrv": "HRV",
-      "sleep": "Sleep (average)"
+      "sleep": "Sleep (average)",
+      "bodyBattery": "Body Battery",
+      "bodyBatteryLow": "low {{value}}",
+      "stress": "Stress",
+      "average": "average",
+      "steps": "Steps",
+      "stepGoal": "of {{value}}",
+      "recovery": "Recovery"
     },
     "baseline": {
       "below": "Below baseline",
