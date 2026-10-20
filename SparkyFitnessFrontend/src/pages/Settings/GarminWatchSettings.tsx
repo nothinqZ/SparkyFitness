@@ -6,13 +6,29 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   useClaimWatchPairingMutation,
+  usePairedWatchesQuery,
+  useUnpairWatchMutation,
   useWatchSyncStatusQuery,
 } from '@/hooks/Settings/useWatchSync';
+import {
+  isCompleteWatchPairingCode,
+  type WatchPairedDevice,
+} from '@workspace/shared';
 import { formatPairingCodeInput } from '@/utils/watchPairing';
 
 export const GarminWatchSettings = () => {
@@ -20,7 +36,10 @@ export const GarminWatchSettings = () => {
   const [code, setCode] = useState('');
   const { data: status, isLoading } = useWatchSyncStatusQuery();
   const { mutate: claim, isPending } = useClaimWatchPairingMutation();
-  const complete = code.replace('-', '').length === 8;
+  const { data: paired } = usePairedWatchesQuery();
+  const { mutate: unpair, isPending: isUnpairing } = useUnpairWatchMutation();
+  const [toUnpair, setToUnpair] = useState<WatchPairedDevice | null>(null);
+  const complete = isCompleteWatchPairingCode(code);
 
   return (
     <AccordionItem value="garmin-watch" className="border rounded-lg mb-4">
@@ -66,7 +85,7 @@ export const GarminWatchSettings = () => {
           <p className="text-xs text-muted-foreground">
             {t(
               'settings.garminWatch.codeHelp',
-              'On the watch, open Sparky Strength and choose "Pair watch". Pairing creates an API key named after the watch; delete that key under API Key Management to unpair it.'
+              'On the watch, open Sparky Strength and choose "Pair watch", then enter the code it shows. Each paired watch gets its own API key, which unpairing revokes.'
             )}
           </p>
         </form>
@@ -104,25 +123,85 @@ export const GarminWatchSettings = () => {
               </dd>
             </dl>
           )}
-          {status && status.devices.length > 0 && (
-            <ul className="text-sm space-y-1">
-              {status.devices.map((device) => (
+        </div>
+
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium">
+            {t('settings.garminWatch.devicesTitle', 'Paired watches')}
+          </h4>
+          {paired && paired.devices.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              {t('settings.garminWatch.noDevices', 'No watch is paired yet.')}
+            </p>
+          )}
+          {paired && paired.devices.length > 0 && (
+            <ul className="space-y-2 max-w-md">
+              {paired.devices.map((device) => (
                 <li
-                  key={device.device_id}
-                  className="flex justify-between max-w-md"
+                  key={device.api_key_id}
+                  data-testid="paired-watch"
+                  className="flex items-center justify-between gap-4 text-sm"
                 >
-                  <span>
-                    {device.device_model ?? device.device_id.slice(0, 8)}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {device.app_version ? `v${device.app_version} · ` : ''}
-                    {new Date(device.last_seen_at).toLocaleDateString()}
-                  </span>
+                  <div>
+                    <div>
+                      {device.device_model ??
+                        t('settings.garminWatch.title', 'Garmin watch')}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {device.app_version ? `v${device.app_version} · ` : ''}
+                      {t('settings.garminWatch.lastContact', 'Last contact')}
+                      {': '}
+                      {device.last_used_at
+                        ? new Date(device.last_used_at).toLocaleString()
+                        : t('settings.garminWatch.never', 'Never')}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isUnpairing}
+                    onClick={() => setToUnpair(device)}
+                  >
+                    {t('settings.garminWatch.unpair', 'Unpair')}
+                  </Button>
                 </li>
               ))}
             </ul>
           )}
         </div>
+
+        <AlertDialog
+          open={toUnpair !== null}
+          onOpenChange={(open) => !open && setToUnpair(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {t('settings.garminWatch.unpairTitle', 'Unpair this watch?')}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {t(
+                  'settings.garminWatch.unpairDescription',
+                  'The watch can no longer download workouts or upload sessions until it is paired again. Workouts it has not uploaded yet stay on the watch.'
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>
+                {t('settings.garminWatch.cancel', 'Cancel')}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  if (toUnpair) unpair(toUnpair.api_key_id);
+                  setToUnpair(null);
+                }}
+              >
+                {t('settings.garminWatch.unpair', 'Unpair')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </AccordionContent>
     </AccordionItem>
   );

@@ -171,7 +171,9 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = () => {
             }
           />
           <Row
-            label="Garmin"
+            label={t('performance.readiness.garmin', {
+              defaultValue: 'Garmin',
+            })}
             value={
               d.recovery.readiness.device !== null
                 ? String(d.recovery.readiness.device)
@@ -253,7 +255,11 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = () => {
             label={t('performance.kpi.pace', { defaultValue: 'Average pace' })}
             value={formatPacePerUnit(averagePace(d.running.totals), distUnit)}
           />
-          <Row label="VO2max" value={vo2 ? vo2.value.toFixed(1) : '–'} last />
+          <Row
+            label={t('performance.kpi.vo2max', { defaultValue: 'VO2max' })}
+            value={vo2 ? vo2.value.toFixed(1) : '–'}
+            last
+          />
         </Card>
 
         <Card

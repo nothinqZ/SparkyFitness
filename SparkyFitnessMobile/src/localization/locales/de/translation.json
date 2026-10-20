@@ -112,7 +112,8 @@
       "whatsNew": "Neuigkeiten",
       "logs": "Protokolle ansehen",
       "about": "Über",
-      "shareReport": "Diagnosebericht teilen"
+      "shareReport": "Diagnosebericht teilen",
+      "garminWatch": "Garmin-Uhr"
     },
     "theme": {
       "title": "Darstellung",
@@ -136,7 +137,10 @@
     "cameraShutter": {
       "title": "Auslöseton",
       "subtitle": "Beim Aufnehmen von Fotos einen Ton abspielen."
-    }
+    },
+    "garminWatchPaired_one": "{{count}} gekoppelt",
+    "garminWatchPaired_other": "{{count}} gekoppelt",
+    "garminWatchNotPaired": "Nicht gekoppelt"
   },
   "languageSettings": {
     "subtitle": "Verwende die Sprache deines Geräts oder wähle eine Sprache für SparkyFitness aus."
@@ -851,7 +855,8 @@
     "progressPhotos": "Fortschrittsfotos",
     "progressPhotoCompare": "Vergleichen",
     "progressPhotoTimelapse": "Zeitraffer",
-    "performance": "Performance"
+    "performance": "Performance",
+    "garminWatchSettings": "Garmin-Uhr"
   },
   "healthCategories": {
     "Common": "Allgemein",
@@ -5255,7 +5260,8 @@
       "pace": "Ø Pace",
       "readiness": "Bereitschaft",
       "sleep": "Schlaf (Ø)",
-      "weightTrend": "Gewichtstrend"
+      "weightTrend": "Gewichtstrend",
+      "vo2max": "VO2max"
     },
     "loadError": "Performance-Daten konnten nicht geladen werden",
     "marathon": "Marathon",
@@ -5294,7 +5300,9 @@
       "stress": "Stress",
       "title": "Dein Training heute",
       "unavailable": "Performance-Daten nicht verfügbar. Tippen, um es im Cockpit erneut zu versuchen.",
-      "unknown": "Noch zu wenig Erholungsdaten für eine Tageseinschätzung."
+      "unknown": "Noch zu wenig Erholungsdaten für eine Tageseinschätzung.",
+      "hrvValue": "{{value}} ms",
+      "sleepValue": "{{value}} h"
     },
     "topLifts": "Geschätztes 1RM pro Übung",
     "watchLastUpload": "Letzter Upload",
@@ -5309,6 +5317,37 @@
       "low": "Niedrig (< 0,8)",
       "optimal": "Optimal (0,8–1,3)",
       "veryHigh": "Sehr hoch (> 1,5)"
+    },
+    "readiness": {
+      "garmin": "Garmin"
     }
+  },
+  "garminWatch": {
+    "addTitle": "Uhr hinzufügen",
+    "addAnotherTitle": "Weitere Uhr hinzufügen",
+    "noDevices": "Noch keine Uhr gekoppelt. Sparky Strength erfasst deine Sätze auf der Uhr und lädt sie zu SparkyFitness hoch.",
+    "step1": "Öffne auf der Uhr „Sparky Strength“.",
+    "step2": "Wähle „Uhr koppeln“. Die Uhr zeigt einen Code.",
+    "step3": "Gib den Code hier ein. Lass die Garmin-Connect-App laufen, damit die Uhr die Einrichtung abschließen kann.",
+    "codeLabel": "Kopplungscode auf der Uhr",
+    "codePlaceholder": "ABCD-EFGH",
+    "pair": "Koppeln",
+    "paired": "Uhr gekoppelt",
+    "pairedDetail": "Sie schließt die Einrichtung in wenigen Sekunden selbst ab.",
+    "pairError": "Koppeln fehlgeschlagen",
+    "pairErrorCode": "Dieser Code ist unbekannt oder abgelaufen. Codes gelten 10 Minuten; starte das Koppeln auf der Uhr neu, um einen neuen zu bekommen.",
+    "pairErrorReadOnly": "Diese App ist mit einem Nur-Lese-API-Key angemeldet und kann keine Uhr koppeln.",
+    "pairErrorRateLimited": "Zu viele Versuche. Warte ein paar Minuten und versuche es erneut.",
+    "devicesError": "Gekoppelte Uhren konnten nicht geladen werden.",
+    "appName": "Sparky Strength",
+    "appVersion": "Sparky Strength {{version}}",
+    "lastSynced": "Zuletzt synchronisiert: {{time}}",
+    "notSyncedYet": "Noch nicht synchronisiert",
+    "sessions": "Hochgeladene Workouts",
+    "linked": "Mit Garmin-Aktivitäten verknüpft",
+    "unpair": "Entfernen",
+    "unpairTitle": "{{name}} entfernen?",
+    "unpairMessage": "Die Uhr kann dann keine Workouts mehr laden oder hochladen, bis sie wieder gekoppelt ist. Noch nicht hochgeladene Workouts bleiben auf der Uhr.",
+    "unpairError": "Die Uhr konnte nicht entfernt werden"
   }
 }

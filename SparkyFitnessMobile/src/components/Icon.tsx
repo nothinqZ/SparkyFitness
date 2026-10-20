@@ -148,6 +148,7 @@ const ICON_MAP = {
   'diary-settings': { sf: 'book', ion: 'book-outline' },
   'workout-settings': { sf: 'dumbbell', ion: 'barbell-outline' },
   'watch-settings': { sf: 'applewatch', ion: 'watch-outline' },
+  'garmin-watch': { sf: 'watch.analog', ion: 'watch-outline' },
   'app-settings': { sf: 'slider.horizontal.3', ion: 'options-outline' },
   logs: { sf: 'doc.plaintext', ion: 'document-text-outline' },
   about: { sf: 'info.circle', ion: 'information-circle-outline' },

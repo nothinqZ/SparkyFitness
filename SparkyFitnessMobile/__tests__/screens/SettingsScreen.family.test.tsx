@@ -31,6 +31,10 @@ jest.mock('../../src/hooks', () => ({
   queryClient: { getQueryCache: () => ({ getAll: () => [] }) },
 }));
 
+jest.mock('../../src/hooks/useGarminWatch', () => ({
+  usePairedWatches: () => ({ devices: [] }),
+}));
+
 jest.mock('../../src/hooks/useDiscreetMode', () => ({
   useDiscreetMode: () => ({ discreetMode: false }),
 }));
@@ -93,6 +97,10 @@ describe('SettingsScreen family diary entry', () => {
     fireEvent.press(getByText('Family Diaries'));
 
     expect(navigation.navigate).toHaveBeenCalledWith('FamilyMembers');
+
+    fireEvent.press(getByText('settings.rows.garminWatch'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('GarminWatchSettings');
   });
 
   test('hides family diaries while disconnected', () => {
@@ -112,5 +120,6 @@ describe('SettingsScreen family diary entry', () => {
     );
 
     expect(queryByText('Family Diaries')).toBeNull();
+    expect(queryByText('settings.rows.garminWatch')).toBeNull();
   });
 });

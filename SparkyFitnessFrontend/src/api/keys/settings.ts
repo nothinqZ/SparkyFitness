@@ -46,4 +46,5 @@ export const preferencesKeys = {
 export const watchSyncKeys = {
   all: ['watchSync'] as const,
   status: () => [...watchSyncKeys.all, 'status'] as const,
+  devices: () => [...watchSyncKeys.all, 'devices'] as const,
 };

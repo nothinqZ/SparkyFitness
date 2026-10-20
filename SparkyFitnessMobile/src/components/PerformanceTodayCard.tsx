@@ -191,8 +191,12 @@ const PerformanceTodayCard: React.FC<{ onPress: () => void }> = ({
             </Text>
             <Text className="text-text-secondary text-xs mr-4">
               {t('performance.today.hrv', { defaultValue: 'HRV' })}:{' '}
-              {data?.recovery.hrv.status.recent ?? '–'}
-              {data?.recovery.hrv.status.recent != null ? ' ms' : ''}
+              {data?.recovery.hrv.status.recent != null
+                ? t('performance.today.hrvValue', {
+                    defaultValue: '{{value}} ms',
+                    value: data.recovery.hrv.status.recent,
+                  })
+                : '–'}
             </Text>
             <Text className="text-text-secondary text-xs">
               {t('performance.today.sleep', {
@@ -201,7 +205,13 @@ const PerformanceTodayCard: React.FC<{ onPress: () => void }> = ({
               :{' '}
               {data?.recovery.sleep.avgSleepHours == null
                 ? '–'
-                : `${formatLocalizedNumber(data.recovery.sleep.avgSleepHours, { maximumFractionDigits: 1 })} h`}
+                : t('performance.today.sleepValue', {
+                    defaultValue: '{{value}} h',
+                    value: formatLocalizedNumber(
+                      data.recovery.sleep.avgSleepHours,
+                      { maximumFractionDigits: 1 }
+                    ),
+                  })}
             </Text>
           </View>
         </>

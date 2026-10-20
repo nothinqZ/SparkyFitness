@@ -29,6 +29,16 @@ vi.mock('../models/watchPairingRepository.js', () => ({
     takeReadyKey: vi.fn(),
   },
 }));
+vi.mock('../models/watchDeviceRepository.js', () => ({
+  default: {
+    registerKey: vi.fn(),
+    listByUser: vi.fn(),
+    deleteKey: vi.fn(),
+  },
+}));
+vi.mock('../models/watchSessionImportRepository.js', () => ({
+  default: { getSyncStatus: vi.fn() },
+}));
 vi.mock('../middleware/authMiddleware.js', () => ({
   authenticate: (
     req: express.Request,
@@ -46,6 +56,8 @@ vi.mock('../middleware/authMiddleware.js', () => ({
 
 import { auth } from '../auth.js';
 import repo from '../models/watchPairingRepository.js';
+import deviceRepo from '../models/watchDeviceRepository.js';
+import importRepo from '../models/watchSessionImportRepository.js';
 import watchPairingService, {
   generatePairingCode,
   hashPollToken,
@@ -60,6 +72,7 @@ app.use('/api/v2/watch/pairing', watchPairingRoutes);
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(repo.countPending).mockResolvedValue(0);
+  vi.mocked(deviceRepo.registerKey).mockResolvedValue([]);
 });
 
 describe('generatePairingCode', () => {
@@ -123,6 +136,94 @@ describe('watchPairingService', () => {
       iv: 'iv',
       tag: 'tag',
     });
+    // Recorded as this watch's key, which also revokes its earlier keys.
+    expect(deviceRepo.registerKey).toHaveBeenCalledWith(
+      'owner',
+      'key-1',
+      'abcdef123456',
+      'fenix7'
+    );
+  });
+
+  it('still pairs when the watch cannot be recorded', async () => {
+    vi.mocked(repo.claim).mockResolvedValue({
+      id: 'p1',
+      device_id: 'd',
+      device_model: null,
+    } as never);
+    vi.mocked(
+      (auth.api as unknown as { createApiKey: () => unknown }).createApiKey
+    ).mockResolvedValue({ id: 'key-1', key: 'k', name: 'Garmin watch d' });
+    vi.mocked(deviceRepo.registerKey).mockRejectedValue(new Error('db down'));
+    await expect(
+      watchPairingService.claim('ABCDEFGH', 'owner')
+    ).resolves.toMatchObject({ paired: true, api_key_id: 'key-1' });
+    expect(repo.unclaim).not.toHaveBeenCalled();
+  });
+
+  it('lists paired watches with their last request and upload', async () => {
+    vi.mocked(deviceRepo.listByUser).mockResolvedValue([
+      {
+        api_key_id: 'key-1',
+        name: 'Garmin watch 006-B4257-00',
+        device_id: 'dev-1',
+        device_model: '006-B4257-00',
+        paired_at: new Date('2026-10-20T21:42:59Z'),
+        last_used_at: new Date('2026-10-20T21:43:23Z'),
+      },
+      // Paired before watch_devices existed: no device id, model from name.
+      {
+        api_key_id: 'key-0',
+        name: 'Garmin watch fenix7',
+        device_id: null,
+        device_model: null,
+        paired_at: '2026-10-19T10:00:00Z',
+        last_used_at: null,
+      },
+    ]);
+    vi.mocked(importRepo.getSyncStatus).mockResolvedValue({
+      totals: {},
+      devices: [
+        {
+          device_id: 'dev-1',
+          device_model: '006-B4257-00',
+          app_version: '0.1.1',
+          last_seen_at: new Date('2026-10-21T07:00:00Z'),
+        },
+        {
+          device_id: 'old',
+          device_model: 'fenix7',
+          app_version: '0.1.0',
+          last_seen_at: '2026-10-19T12:00:00Z',
+        },
+      ],
+    } as never);
+
+    const result = await watchPairingService.listDevices('owner');
+
+    expect(result.devices).toEqual([
+      {
+        api_key_id: 'key-1',
+        name: 'Garmin watch 006-B4257-00',
+        device_id: 'dev-1',
+        // Part number from watch app 0.1.x, shown as the product name.
+        device_model: 'Forerunner 265',
+        paired_at: '2026-10-20T21:42:59.000Z',
+        last_used_at: '2026-10-20T21:43:23.000Z',
+        last_upload_at: '2026-10-21T07:00:00.000Z',
+        app_version: '0.1.1',
+      },
+      {
+        api_key_id: 'key-0',
+        name: 'Garmin watch fenix7',
+        device_id: null,
+        device_model: 'fenix7',
+        paired_at: '2026-10-19T10:00:00.000Z',
+        last_used_at: null,
+        last_upload_at: '2026-10-19T12:00:00.000Z',
+        app_version: '0.1.0',
+      },
+    ]);
   });
 
   it('releases the claim when the key cannot be minted', async () => {
@@ -199,6 +300,42 @@ describe('watch pairing routes', () => {
       .send({ pairing_code: 'abcd-efgh' });
     expect(res.statusCode).toBe(404);
     expect(repo.claim).toHaveBeenCalledWith('ABCDEFGH', 'owner');
+  });
+
+  it("lists and unpairs only the signed-in account's watches", async () => {
+    expect(
+      (await request(app).get('/api/v2/watch/pairing/devices')).statusCode
+    ).toBe(401);
+    expect(
+      (await request(app).delete('/api/v2/watch/pairing/devices/key-1'))
+        .statusCode
+    ).toBe(401);
+
+    vi.mocked(deviceRepo.listByUser).mockResolvedValue([]);
+    vi.mocked(importRepo.getSyncStatus).mockResolvedValue({
+      totals: {},
+      devices: [],
+    } as never);
+    const list = await request(app)
+      .get('/api/v2/watch/pairing/devices')
+      .set('Authorization', 'Bearer session');
+    expect(list.statusCode).toBe(200);
+    expect(list.body).toEqual({ devices: [] });
+    expect(deviceRepo.listByUser).toHaveBeenCalledWith('owner');
+
+    vi.mocked(deviceRepo.deleteKey).mockResolvedValueOnce(true);
+    const unpaired = await request(app)
+      .delete('/api/v2/watch/pairing/devices/key-1')
+      .set('Authorization', 'Bearer session');
+    expect(unpaired.statusCode).toBe(204);
+    expect(deviceRepo.deleteKey).toHaveBeenCalledWith('owner', 'key-1');
+
+    // Not a watch key (or someone else's): nothing deleted.
+    vi.mocked(deviceRepo.deleteKey).mockResolvedValueOnce(false);
+    const missing = await request(app)
+      .delete('/api/v2/watch/pairing/devices/other-key')
+      .set('Authorization', 'Bearer session');
+    expect(missing.statusCode).toBe(404);
   });
 
   it('rejects malformed bodies', async () => {

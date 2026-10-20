@@ -2145,7 +2145,7 @@
       "description": "Pair the Sparky Strength Connect IQ app and check its sync status",
       "codeLabel": "Pairing code shown on the watch",
       "pair": "Pair",
-      "codeHelp": "On the watch, open Sparky Strength and choose \"Pair watch\". Pairing creates an API key named after the watch; delete that key under API Key Management to unpair it.",
+      "codeHelp": "On the watch, open Sparky Strength and choose \"Pair watch\", then enter the code it shows. Each paired watch gets its own API key, which unpairing revokes.",
       "statusTitle": "Sync status",
       "loading": "Loading…",
       "sessions": "Workouts uploaded",
@@ -2154,7 +2154,17 @@
       "never": "Never",
       "statusError": "Failed to load watch sync status",
       "paired": "Watch paired. It finishes setup on its own within a few seconds.",
-      "pairError": "Pairing failed. Check the code on the watch; codes expire after 10 minutes."
+      "pairError": "Pairing failed. Check the code on the watch; codes expire after 10 minutes.",
+      "devicesTitle": "Paired watches",
+      "noDevices": "No watch is paired yet.",
+      "lastContact": "Last contact",
+      "unpair": "Unpair",
+      "unpairTitle": "Unpair this watch?",
+      "unpairDescription": "The watch can no longer download workouts or upload sessions until it is paired again. Workouts it has not uploaded yet stay on the watch.",
+      "cancel": "Cancel",
+      "unpaired": "Watch unpaired. It asks to be paired again the next time it syncs.",
+      "unpairError": "The watch could not be unpaired.",
+      "devicesError": "Failed to load paired watches"
     },
     "apiKeyManagement": {
       "title": "API Key Management",

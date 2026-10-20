@@ -947,7 +947,7 @@
       }
     },
     "garminWatch": {
-      "codeHelp": "Öffne auf der Uhr „Sparky Kraft“ und wähle „Uhr koppeln“. Beim Koppeln entsteht ein API-Key mit dem Namen der Uhr; lösche ihn unter „API-Key-Verwaltung“, um die Uhr zu entkoppeln.",
+      "codeHelp": "Öffne auf der Uhr „Sparky Strength“, wähle „Uhr koppeln“ und gib hier den angezeigten Code ein. Jede gekoppelte Uhr bekommt einen eigenen API-Key, der beim Entkoppeln widerrufen wird.",
       "codeLabel": "Kopplungscode auf der Uhr",
       "description": "Die Connect-IQ-App „Sparky Strength“ koppeln und ihren Sync-Status prüfen",
       "lastUpload": "Letzter Upload",
@@ -960,7 +960,17 @@
       "sessions": "Hochgeladene Workouts",
       "statusError": "Uhren-Sync-Status konnte nicht geladen werden",
       "statusTitle": "Sync-Status",
-      "title": "Garmin-Uhr"
+      "title": "Garmin-Uhr",
+      "devicesTitle": "Gekoppelte Uhren",
+      "noDevices": "Noch keine Uhr gekoppelt.",
+      "lastContact": "Zuletzt verbunden",
+      "unpair": "Entkoppeln",
+      "unpairTitle": "Diese Uhr entkoppeln?",
+      "unpairDescription": "Die Uhr kann dann keine Workouts mehr laden oder hochladen, bis sie wieder gekoppelt ist. Noch nicht hochgeladene Workouts bleiben auf der Uhr.",
+      "cancel": "Abbrechen",
+      "unpaired": "Uhr entkoppelt. Beim nächsten Sync bittet sie darum, neu gekoppelt zu werden.",
+      "unpairError": "Die Uhr konnte nicht entkoppelt werden.",
+      "devicesError": "Gekoppelte Uhren konnten nicht geladen werden"
     }
   },
   "aboutDialog": {

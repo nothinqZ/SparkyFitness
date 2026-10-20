@@ -151,6 +151,7 @@
       "about": "About",
       "shareReport": "Share Diagnostic Report",
       "watch": "Apple Watch",
+      "garminWatch": "Garmin watch",
       "ai": "AI"
     },
     "theme": {
@@ -175,7 +176,10 @@
     "cameraShutter": {
       "title": "Camera shutter",
       "subtitle": "Play a sound when capturing photos."
-    }
+    },
+    "garminWatchPaired_one": "{{count}} paired",
+    "garminWatchPaired_other": "{{count}} paired",
+    "garminWatchNotPaired": "Not paired"
   },
   "languageSettings": {
     "subtitle": "Use your device language or choose a language for SparkyFitness."
@@ -591,6 +595,7 @@
     "exerciseStatistics": "Exercise Statistics",
     "cardioSession": "Cardio Session",
     "watchSettings": "Apple Watch",
+    "garminWatchSettings": "Garmin watch",
     "aiSettings": "AI",
     "performance": "Performance"
   },
@@ -5616,6 +5621,34 @@
     "setInputKeypad": "Keypad",
     "setInputCrown": "Digital Crown"
   },
+  "garminWatch": {
+    "addTitle": "Add a watch",
+    "addAnotherTitle": "Add another watch",
+    "noDevices": "No watch is paired yet. Sparky Strength logs your sets on the watch and uploads them to SparkyFitness.",
+    "step1": "On the watch, open Sparky Strength.",
+    "step2": "Choose \"Pair watch\". The watch shows a code.",
+    "step3": "Enter the code here. Keep the Garmin Connect app running so the watch can finish setup.",
+    "codeLabel": "Pairing code shown on the watch",
+    "codePlaceholder": "ABCD-EFGH",
+    "pair": "Pair",
+    "paired": "Watch paired",
+    "pairedDetail": "It finishes setup on its own within a few seconds.",
+    "pairError": "Pairing failed",
+    "pairErrorCode": "This code is unknown or expired. Codes are valid for 10 minutes; start pairing on the watch again for a new one.",
+    "pairErrorReadOnly": "This app is signed in with a read-only API key, which cannot pair a watch.",
+    "pairErrorRateLimited": "Too many attempts. Wait a few minutes and try again.",
+    "devicesError": "Paired watches could not be loaded.",
+    "appName": "Sparky Strength",
+    "appVersion": "Sparky Strength {{version}}",
+    "lastSynced": "Last synced: {{time}}",
+    "notSyncedYet": "Not synced yet",
+    "sessions": "Workouts uploaded",
+    "linked": "Linked to Garmin activities",
+    "unpair": "Remove",
+    "unpairTitle": "Remove {{name}}?",
+    "unpairMessage": "The watch can no longer download workouts or upload sessions until it is paired again. Workouts it has not uploaded yet stay on the watch.",
+    "unpairError": "The watch could not be removed"
+  },
   "progressPhotos": {
     "card": {
       "title": "Progress",
@@ -6046,7 +6079,9 @@
       "average": "average",
       "steps": "Steps",
       "stepGoal": "of {{value}}",
-      "recovery": "Recovery"
+      "recovery": "Recovery",
+      "hrvValue": "{{value}} ms",
+      "sleepValue": "{{value}} h"
     },
     "baseline": {
       "below": "Below baseline",
@@ -6068,7 +6103,8 @@
       "sleep": "Sleep (avg)",
       "distance": "Running distance",
       "pace": "Average pace",
-      "weightTrend": "Weight trend"
+      "weightTrend": "Weight trend",
+      "vo2max": "VO2max"
     },
     "provenance": {
       "estimated": "Estimated",
@@ -6095,6 +6131,9 @@
     "watchLinked": "Linked to Garmin activities",
     "watchLastUpload": "Last upload",
     "watchUnavailable": "Watch status unavailable on this server.",
-    "watchNone": "Pair the watch in SparkyFitness web: Settings > Garmin watch."
+    "watchNone": "Pair the watch in SparkyFitness web: Settings > Garmin watch.",
+    "readiness": {
+      "garmin": "Garmin"
+    }
   }
 }

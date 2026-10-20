@@ -3,7 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { apiKeyKeys, watchSyncKeys } from '@/api/keys/settings';
 import {
   claimWatchPairing,
+  getPairedWatches,
   getWatchSyncStatus,
+  unpairWatch,
 } from '@/api/Settings/watchSyncService';
 
 export const useWatchSyncStatusQuery = () => {
@@ -38,6 +40,43 @@ export const useClaimWatchPairingMutation = () => {
       errorMessage: t(
         'settings.garminWatch.pairError',
         'Pairing failed. Check the code on the watch; codes expire after 10 minutes.'
+      ),
+    },
+  });
+};
+
+export const usePairedWatchesQuery = () => {
+  const { t } = useTranslation();
+  return useQuery({
+    queryKey: watchSyncKeys.devices(),
+    queryFn: getPairedWatches,
+    meta: {
+      errorMessage: t(
+        'settings.garminWatch.devicesError',
+        'Failed to load paired watches'
+      ),
+    },
+  });
+};
+
+export const useUnpairWatchMutation = () => {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+  return useMutation({
+    mutationFn: (apiKeyId: string) => unpairWatch(apiKeyId),
+    onSuccess: () => {
+      // Unpairing revokes the watch's API key.
+      queryClient.invalidateQueries({ queryKey: apiKeyKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: watchSyncKeys.all });
+    },
+    meta: {
+      successMessage: t(
+        'settings.garminWatch.unpaired',
+        'Watch unpaired. It asks to be paired again the next time it syncs.'
+      ),
+      errorMessage: t(
+        'settings.garminWatch.unpairError',
+        'The watch could not be unpaired.'
       ),
     },
   });

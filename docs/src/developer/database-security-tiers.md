@@ -37,6 +37,7 @@ These tables contain highly sensitive credentials, API keys, SSO tokens, 2FA rec
 | `sparky_chat_history` | AI Assistant chat messages and history | Owner-Only | Owner-Only |
 | `watch_session_imports` | Idempotency and Garmin-link records for workouts uploaded by the Connect IQ watch app | Owner-Only | Owner-Only |
 | `watch_pairing_requests` | Short-lived Connect IQ watch pairing handshakes (encrypted key until collected once) | System only (no app-role access) | System only (no app-role access) |
+| `watch_devices` | Which API key belongs to which paired Connect IQ watch (deleted with the key) | Owner-Only | Owner-Only |
 | `user_ignored_updates` | Records of skipped release updates | Owner-Only | Owner-Only |
 | `admin_activity_logs` | Admin action audits | Admin-Only | Admin-Only |
 | `ai_service_settings` | User-defined custom assistant configurations | Owner-Only | Owner-Only (Public configs readable by all) |

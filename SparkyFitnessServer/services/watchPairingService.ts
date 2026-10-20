@@ -1,7 +1,9 @@
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import {
   API_KEY_SCOPE_PERMISSIONS,
+  garminProductName,
   WATCH_PAIRING_CODE_ALPHABET,
+  type WatchPairedDevicesResponse,
   type WatchPairingClaimResponse,
   type WatchPairingPollResponse,
   type WatchPairingStartRequest,
@@ -11,6 +13,8 @@ import { auth } from '../auth.js';
 import { log } from '../config/logging.js';
 import { encrypt, decrypt, ENCRYPTION_KEY } from '../security/encryption.js';
 import watchPairingRepository from '../models/watchPairingRepository.js';
+import watchDeviceRepository from '../models/watchDeviceRepository.js';
+import watchSessionImportRepository from '../models/watchSessionImportRepository.js';
 
 export const PAIRING_TTL_MS = 10 * 60 * 1000;
 export const POLL_INTERVAL_SECONDS = 5;
@@ -131,6 +135,26 @@ async function claim(
       'info',
       `[watchPairing] User ${userId} paired watch ${row.device_id} as key ${created.id}`
     );
+    try {
+      const revoked = await watchDeviceRepository.registerKey(
+        userId,
+        created.id,
+        row.device_id,
+        row.device_model
+      );
+      if (revoked.length > 0) {
+        log(
+          'info',
+          `[watchPairing] Revoked earlier key(s) ${revoked.join(', ')} of watch ${row.device_id}`
+        );
+      }
+    } catch (error) {
+      // The pairing itself worked; the key is still listed by its name.
+      log(
+        'warn',
+        `[watchPairing] Could not record watch ${row.device_id} for key ${created.id}: ${(error as Error).message}`
+      );
+    }
     return { paired: true, api_key_id: created.id, api_key_name: created.name };
   } catch (error) {
     await watchPairingRepository.unclaim(row.id).catch(() => undefined);
@@ -138,4 +162,53 @@ async function claim(
   }
 }
 
-export default { start, poll, claim };
+const toIso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
+
+/** Paired watches of the user with their last request and last upload. */
+async function listDevices(
+  userId: string
+): Promise<WatchPairedDevicesResponse> {
+  const [keys, status] = await Promise.all([
+    watchDeviceRepository.listByUser(userId),
+    watchSessionImportRepository.getSyncStatus(userId),
+  ]);
+  const uploads = status.devices as Array<{
+    device_id: string;
+    device_model: string | null;
+    app_version: string | null;
+    last_seen_at: unknown;
+  }>;
+  return {
+    devices: keys.map((key) => {
+      // Keys paired before watch_devices existed only carry the model in
+      // their name ("Garmin watch <model>"), so match their uploads by model.
+      const model =
+        key.device_model ?? key.name?.replace(/^Garmin watch /, '') ?? null;
+      const upload = uploads.find((u) =>
+        key.device_id
+          ? u.device_id === key.device_id
+          : model !== null && u.device_model === model
+      );
+      return {
+        api_key_id: key.api_key_id,
+        name: key.name ?? '',
+        device_id: key.device_id,
+        device_model: garminProductName(model),
+        paired_at: toIso(key.paired_at) ?? '',
+        last_used_at: toIso(key.last_used_at),
+        last_upload_at: toIso(upload?.last_seen_at),
+        app_version: upload?.app_version ?? null,
+      };
+    }),
+  };
+}
+
+/** Unpairs a watch by revoking its key; the watch then offers pairing again. */
+async function unpair(userId: string, apiKeyId: string): Promise<void> {
+  if (!(await watchDeviceRepository.deleteKey(userId, apiKeyId))) {
+    throw serviceError(404, 'Paired watch not found.');
+  }
+  log('info', `[watchPairing] User ${userId} unpaired watch key ${apiKeyId}`);
+}
+
+export default { start, poll, claim, listDevices, unpair };

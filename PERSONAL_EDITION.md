@@ -14,7 +14,9 @@ few conflicts.
 | Watch pairing by code (API key minted on confirm, collected once) | `routes/v2/watchPairingRoutes.ts`, `services/watchPairingService.ts`, migration `20261020110000_*` | Unit + e2e tested |
 | Garmin dedup: a watch-logged workout recorded by Garmin is linked, not imported twice | `services/watch/garminWatchLink.ts`, hook in `services/garmin/garminActivityProcessor.ts` | Unit + e2e tested (incl. re-sync) |
 | Performance analytics API | `routes/v2/performanceRoutes.ts`, `shared/src/analytics/performance.ts` | Unit (hand-calculated) + e2e tested |
-| Web: Settings > Garmin watch (pair, status) | `SparkyFitnessFrontend/src/pages/Settings/GarminWatchSettings.tsx` | Unit tested |
+| Paired watches: list and unpair, re-pairing revokes the old key | `routes/v2/watchPairingRoutes.ts` (`/devices`), `models/watchDeviceRepository.ts`, migration `20261021100000_*` | Unit tested |
+| Web: Settings > Garmin watch (pair, status, unpair) | `SparkyFitnessFrontend/src/pages/Settings/GarminWatchSettings.tsx` | Unit tested |
+| Mobile: Settings > Garmin watch (pair, paired watches, unpair, status) | `SparkyFitnessMobile/src/screens/GarminWatchSettingsScreen.tsx` | Unit tested |
 | Web: `/performance` desktop dashboard | `SparkyFitnessFrontend/src/pages/Performance/` | Unit tested, rendered at 2560 px light/dark |
 | Mobile: Library > Performance | `SparkyFitnessMobile/src/screens/PerformanceScreen.tsx` | Unit tested |
 | Mobile: `sideload` variant (single App ID, free-Apple-ID entitlements, custom bundle id) | `SparkyFitnessMobile/app.sideload.js`, `plugins/withSideloadEntitlements.ts` | Config tests + Linux `expo prebuild` verified |
@@ -76,7 +78,7 @@ Nothing in this repository touches your running stack. To switch to it:
    its store, which happens on the homelab's overlayfs/containerd Docker; the
    images were built and smoke-tested there this way.
 
-2. **Back up the database** first (migrations add two tables):
+2. **Back up the database** first (migrations add three tables):
 
    ```bash
    docker exec sparkyfitness-db pg_dump -U "$POSTGRES_USER" -Fc sparkyfitness_db > sparky-before-personal.dump
@@ -99,8 +101,9 @@ Nothing in this repository touches your running stack. To switch to it:
    v1.7.3 while the stack currently runs v1.8.0.
 
 5. `docker compose up -d`, then check the logs for
-   `Successfully applied migration: 20261020100000_create_watch_session_imports.sql`
-   and `…110000_create_watch_pairing_requests.sql`.
+   `Successfully applied migration: 20261020100000_create_watch_session_imports.sql`,
+   `…110000_create_watch_pairing_requests.sql` and
+   `20261021100000_create_watch_devices.sql`.
 
 The watch and the iPhone reach the server through your reverse proxy or
 Tailscale; both need HTTPS with a certificate the phone trusts.
@@ -137,8 +140,9 @@ SPARKY_SERVER_URL=https://fitness.<tailnet>.ts.net tools/build.sh fenix7   # you
 # copy bin/SparkyStrength-fenix7.prg to GARMIN/APPS/ on the watch (USB)
 ```
 
-Then on the watch: Sparky Strength > Pair watch, and enter the code in
-SparkyFitness under Settings > Garmin watch.
+Then on the watch: Sparky Strength > Pair watch, and enter the code in the
+iPhone app under Settings > Garmin watch (or on the web under Settings >
+Developer & Integrations > Garmin watch).
 
 ## Tests
 

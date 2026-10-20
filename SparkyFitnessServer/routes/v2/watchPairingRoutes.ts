@@ -11,7 +11,8 @@ import watchPairingService from '../../services/watchPairingService.js';
 // Pairing handshake for the Connect IQ watch app (see WatchSync.api.zod.ts).
 // `start` and `poll` are called by a watch without credentials, so they are
 // rate limited per IP; `claim` needs a signed-in user and is limited per user
-// to make guessing a code impractical.
+// to make guessing a code impractical. `devices` lists and unpairs the
+// signed-in user's watches for the web and mobile apps.
 
 const router = express.Router();
 
@@ -106,6 +107,52 @@ router.post('/claim', authenticate, claimLimit, async (req, res, next) => {
     res
       .status(201)
       .json(await watchPairingService.claim(parsed.data.pairing_code, userId));
+  } catch (error) {
+    sendError(res, error, next);
+  }
+});
+
+/**
+ * @swagger
+ * /v2/watch/pairing/devices:
+ *   get:
+ *     summary: List the signed-in user's paired watches
+ *     tags: [Fitness & Workouts]
+ *     responses:
+ *       200: { description: Paired watches with last request and last upload. }
+ *       401: { description: Unauthorized. }
+ */
+router.get('/devices', authenticate, async (req, res, next) => {
+  try {
+    // Watches belong to the signed-in account, never a switched family context.
+    const userId = String(req.authenticatedUserId ?? req.userId);
+    res.json(await watchPairingService.listDevices(userId));
+  } catch (error) {
+    sendError(res, error, next);
+  }
+});
+
+/**
+ * @swagger
+ * /v2/watch/pairing/devices/{apiKeyId}:
+ *   delete:
+ *     summary: Unpair a watch (revokes its API key)
+ *     tags: [Fitness & Workouts]
+ *     parameters:
+ *       - in: path
+ *         name: apiKeyId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       204: { description: Unpaired. }
+ *       401: { description: Unauthorized. }
+ *       404: { description: No watch with this key. }
+ */
+router.delete('/devices/:apiKeyId', authenticate, async (req, res, next) => {
+  try {
+    const userId = String(req.authenticatedUserId ?? req.userId);
+    await watchPairingService.unpair(userId, String(req.params.apiKeyId));
+    res.status(204).end();
   } catch (error) {
     sendError(res, error, next);
   }

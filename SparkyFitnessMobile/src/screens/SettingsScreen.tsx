@@ -29,6 +29,7 @@ import { formatRelativeTime } from '../utils/dateUtils';
 import type { DiagnosticQueryState } from '../types/diagnosticReport';
 import Constants from 'expo-constants';
 import { useDiscreetMode } from '../hooks/useDiscreetMode';
+import { usePairedWatches } from '../hooks/useGarminWatch';
 import WatchConnectivity from '../../modules/watch-connectivity';
 
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -62,6 +63,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
     enabled: isConnected,
   });
   const { discreetMode } = useDiscreetMode();
+  const { devices: pairedGarminWatches } = usePairedWatches(isConnected);
+  const garminWatchSubtitle =
+    pairedGarminWatches && pairedGarminWatches.length > 0
+      ? t('settings.garminWatchPaired', {
+          defaultValue: '{{count}} paired',
+          count: pairedGarminWatches.length,
+        })
+      : t('settings.garminWatchNotPaired', { defaultValue: 'Not paired' });
   const [isSharing, setIsSharing] = useState<boolean>(false);
   const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
 
@@ -334,6 +343,17 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
                     defaultValue: 'Apple Watch',
                   })}
                   onPress={() => navigation.navigate('WatchSettings')}
+                  iconColor={catSlate}
+                />
+              )}
+              {isConnected && (
+                <SettingsRow
+                  icon="garmin-watch"
+                  title={t('settings.rows.garminWatch', {
+                    defaultValue: 'Garmin watch',
+                  })}
+                  subtitle={garminWatchSubtitle}
+                  onPress={() => navigation.navigate('GarminWatchSettings')}
                   iconColor={catSlate}
                 />
               )}

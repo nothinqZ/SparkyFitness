@@ -202,3 +202,30 @@ export type WatchPairingPollResponse = z.infer<
 export type WatchPairingClaimResponse = z.infer<
   typeof watchPairingClaimResponseSchema
 >;
+
+// --- Paired watches ------------------------------------------------------------
+// Every paired watch is one API key. Listing them lets the web and mobile apps
+// show and unpair watches without sending users to API Key Management.
+
+export const watchPairedDeviceSchema = z.object({
+  api_key_id: z.string(),
+  name: z.string(),
+  // Null for keys paired before the pairing stored the device on the key.
+  device_id: z.string().nullable(),
+  device_model: z.string().nullable(),
+  paired_at: z.string(),
+  // Last request the watch made with its key (manifest download or upload).
+  last_used_at: z.string().nullable(),
+  // Last workout this watch uploaded, and the app version it reported then.
+  last_upload_at: z.string().nullable(),
+  app_version: z.string().nullable(),
+});
+
+export const watchPairedDevicesResponseSchema = z.object({
+  devices: z.array(watchPairedDeviceSchema),
+});
+
+export type WatchPairedDevice = z.infer<typeof watchPairedDeviceSchema>;
+export type WatchPairedDevicesResponse = z.infer<
+  typeof watchPairedDevicesResponseSchema
+>;

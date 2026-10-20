@@ -95,6 +95,7 @@ Quick reference of all tables by domain and purpose. For detailed security tier,
 | `exercise_preset_entries` | Logged workout presets for the day |
 | `watch_session_imports` | Workouts uploaded by the Connect IQ watch app: idempotency key, device, and the linked Garmin activity |
 | `watch_pairing_requests` | Short-lived pairing handshakes for the Connect IQ watch app |
+| `watch_devices` | Paired Connect IQ watches: one row per watch API key, removed when the key is revoked |
 | `exercise_entry_sets` | Reps, weights, and sets completed |
 | `exercise_entry_activity_details` | Heart rate, distance, activity data |
 | `exercise_entry_laps` | Lap split intervals for workouts |

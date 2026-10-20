@@ -1,5 +1,6 @@
 import { apiCall } from '@/api/api';
 import type {
+  WatchPairedDevicesResponse,
   WatchPairingClaimResponse,
   WatchSyncStatusResponse,
 } from '@workspace/shared';
@@ -17,3 +18,11 @@ export const claimWatchPairing = (
 
 export const getWatchSyncStatus = (): Promise<WatchSyncStatusResponse> =>
   apiCall('/v2/watch/status', { method: 'GET' });
+
+export const getPairedWatches = (): Promise<WatchPairedDevicesResponse> =>
+  apiCall('/v2/watch/pairing/devices', { method: 'GET' });
+
+export const unpairWatch = (apiKeyId: string): Promise<void> =>
+  apiCall(`/v2/watch/pairing/devices/${encodeURIComponent(apiKeyId)}`, {
+    method: 'DELETE',
+  });
