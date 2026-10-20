@@ -842,13 +842,16 @@
       "loadingRecentItems": "Kürzliche Einträge werden geladen …",
       "failedRecentItems": "Kürzliche Einträge konnten nicht geladen werden.",
       "noRecentItems": "Noch keine aktuellen Einträge",
-      "recentItemsHint": "Lebensmittel, Mahlzeiten und Übungen, die du erfasst, erscheinen hier für den schnellen Zugriff."
+      "recentItemsHint": "Lebensmittel, Mahlzeiten und Übungen, die du erfasst, erscheinen hier für den schnellen Zugriff.",
+      "performance": "Performance",
+      "performanceSubtitle": "Bereitschaft, Laufen, Erholung und Uhren-Sync"
     },
     "sleep": "Schlaf",
     "healthTrendsSettings": "Gesundheitstrends",
     "progressPhotos": "Fortschrittsfotos",
     "progressPhotoCompare": "Vergleichen",
-    "progressPhotoTimelapse": "Zeitraffer"
+    "progressPhotoTimelapse": "Zeitraffer",
+    "performance": "Performance"
   },
   "healthCategories": {
     "Common": "Allgemein",
@@ -5234,6 +5237,78 @@
     "toasts": {
       "added_one": "{{count}} Lebensmittel hinzugefügt",
       "added_other": "{{count}} Lebensmittel hinzugefügt"
+    }
+  },
+  "performance": {
+    "baseline": {
+      "above": "Über der Baseline",
+      "below": "Unter der Baseline",
+      "insufficient": "Noch zu wenig Verlauf",
+      "within": "Im Normalbereich"
+    },
+    "bedtimeSpreadLabel": "Streuung Schlafenszeit",
+    "calories": "Kalorien (kcal)",
+    "halfMarathon": "Halbmarathon",
+    "kpi": {
+      "acwr": "Belastungsquote (ACWR)",
+      "distance": "Laufdistanz",
+      "pace": "Ø Pace",
+      "readiness": "Bereitschaft",
+      "sleep": "Schlaf (Ø)",
+      "weightTrend": "Gewichtstrend"
+    },
+    "loadError": "Performance-Daten konnten nicht geladen werden",
+    "marathon": "Marathon",
+    "proteinTitle": "Eiweiß (g)",
+    "provenance": {
+      "device": "Gerät",
+      "estimated": "Geschätzt",
+      "measured": "Gemessen"
+    },
+    "raceLegend": "Garmin · ~Schätzung (Riegel, bester Lauf ≥ 3 km)",
+    "racePredictions": "Laufprognosen",
+    "range180": "180 T",
+    "restingHrShort": "Ruhepuls",
+    "sections": {
+      "body": "Körper",
+      "recovery": "Schlaf & Erholung",
+      "running": "Laufen"
+    },
+    "title": "Performance",
+    "today": {
+      "average": "Durchschnitt",
+      "bodyBattery": "Energielevel",
+      "bodyBatteryLow": "tiefster Wert {{value}}",
+      "details": "Details ›",
+      "hrv": "HRV",
+      "load": "Belastung",
+      "loading": "Performance lädt …",
+      "open": "Performance-Cockpit öffnen",
+      "ready": "Gute Voraussetzungen für eine geplante Einheit. Hör auf deinen Körper.",
+      "recover": "Lass es heute ruhiger angehen. Erholung oder die jüngste Belastung sprechen für Vorsicht.",
+      "recovery": "Erholungszeit",
+      "sleep": "Schlaf (Ø)",
+      "steady": "Ein normaler Trainingstag. Passe die Intensität deinem Gefühl an.",
+      "stepGoal": "von {{value}}",
+      "steps": "Schritte",
+      "stress": "Stress",
+      "title": "Dein Training heute",
+      "unavailable": "Performance-Daten nicht verfügbar. Tippen, um es im Cockpit erneut zu versuchen.",
+      "unknown": "Noch zu wenig Erholungsdaten für eine Tageseinschätzung."
+    },
+    "topLifts": "Geschätztes 1RM pro Übung",
+    "watchLastUpload": "Letzter Upload",
+    "watchLinked": "Mit Garmin-Aktivitäten verknüpft",
+    "watchNone": "Kopple die Uhr in SparkyFitness im Web: Einstellungen > Garmin-Uhr.",
+    "watchTitle": "Garmin-Uhr (Sparky Strength)",
+    "watchUnavailable": "Uhren-Status auf diesem Server nicht verfügbar.",
+    "watchUploads": "Hochgeladene Workouts",
+    "weekShort": "Wo.",
+    "zone": {
+      "high": "Hoch (1,3–1,5)",
+      "low": "Niedrig (< 0,8)",
+      "optimal": "Optimal (0,8–1,3)",
+      "veryHigh": "Sehr hoch (> 1,5)"
     }
   }
 }

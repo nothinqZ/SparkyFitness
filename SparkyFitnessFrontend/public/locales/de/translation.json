@@ -11,7 +11,8 @@
     "pregnancy": "Schwangerschaft",
     "medications": "Medikamente",
     "foodLog": "Ernährungsprotokoll",
-    "wellness": "Wellness"
+    "wellness": "Wellness",
+    "performance": "Performance"
   },
   "settings": {
     "profileInformation": {
@@ -944,6 +945,22 @@
         "WHO_MAXIMUM": "WHO-Maximum (10 % der Kalorien)",
         "AHA_FIXED": "AHA-Festwert (36 g Männer / 25 g Frauen)"
       }
+    },
+    "garminWatch": {
+      "codeHelp": "Öffne auf der Uhr „Sparky Kraft“ und wähle „Uhr koppeln“. Beim Koppeln entsteht ein API-Key mit dem Namen der Uhr; lösche ihn unter „API-Key-Verwaltung“, um die Uhr zu entkoppeln.",
+      "codeLabel": "Kopplungscode auf der Uhr",
+      "description": "Die Connect-IQ-App „Sparky Strength“ koppeln und ihren Sync-Status prüfen",
+      "lastUpload": "Letzter Upload",
+      "linked": "Mit Garmin-Aktivitäten verknüpft",
+      "loading": "Lädt …",
+      "never": "Nie",
+      "pair": "Koppeln",
+      "pairError": "Koppeln fehlgeschlagen. Prüfe den Code auf der Uhr; Codes laufen nach 10 Minuten ab.",
+      "paired": "Uhr gekoppelt. Sie schließt die Einrichtung in wenigen Sekunden selbst ab.",
+      "sessions": "Hochgeladene Workouts",
+      "statusError": "Uhren-Sync-Status konnte nicht geladen werden",
+      "statusTitle": "Sync-Status",
+      "title": "Garmin-Uhr"
     }
   },
   "aboutDialog": {
@@ -6030,5 +6047,100 @@
     "quickAdd": "Getränke-Schnellauswahl",
     "caffeineBadge": "{{amount}} mg Koffein",
     "alcoholBadge": "{{abv}} % Vol."
+  },
+  "performance": {
+    "acwrNote": "Last der letzten 7 vs. 28 Tage; das Band markiert 0,8–1,3",
+    "acwrTitle": "Belastungsquote (akut:chronisch)",
+    "average7d": "7-Tage-Schnitt",
+    "baseline": {
+      "above": "Über der Baseline",
+      "below": "Unter der Baseline",
+      "insufficient": "Noch zu wenig Verlauf",
+      "within": "Im Normalbereich"
+    },
+    "baselineValue": "Baseline {{value}}",
+    "bedtimeSummary": "Typische Schlafenszeit {{time}}, ±{{minutes}} Min.",
+    "calories": "Kalorien (kcal)",
+    "carbs": "Kohlenhydrate",
+    "collapseSidebar": "Seitenleiste einklappen",
+    "date": "Datum",
+    "distance": "Distanz",
+    "e1rmNote": "Epley, Sätze mit 1–10 Wiederholungen",
+    "exercise": "Übung",
+    "expandSidebar": "Seitenleiste ausklappen",
+    "fasterIsUp": "Schneller ist weiter oben",
+    "fat": "Fett",
+    "garminAsOf": "Garmin, Stand {{date}}",
+    "halfMarathon": "Halbmarathon",
+    "hideSection": "{{section}} ausblenden",
+    "kpi": {
+      "acwr": "Belastungsquote (ACWR)",
+      "bedtimeSpread": "Schlafenszeit ±{{minutes}} Min.",
+      "distance": "Laufdistanz",
+      "garminReadiness": "Garmin: {{value}}",
+      "pace": "Ø Pace",
+      "readiness": "Bereitschaft",
+      "runs": "{{count}} Läufe",
+      "sleep": "Schlaf (Ø)",
+      "weightTrend": "Gewichtstrend"
+    },
+    "loadError": "Performance-Daten konnten nicht geladen werden",
+    "loading": "Lädt …",
+    "marathon": "Marathon",
+    "methodsNote": "„Geschätzte“ Werte berechnet SparkyFitness (Epley-1RM, Riegel-Laufzeiten, 7/28-Tage-Belastungsquote, 60-Tage-Baselines, Bereitschafts-Heuristik). Sie dienen der Orientierung und sind keine medizinische Beratung. Details: „Performance analytics“ in der Dokumentation.",
+    "noData": "Keine Daten in diesem Zeitraum",
+    "nutritionAverages": "Durchschnitt über {{days}} erfasste Tage: {{calories}} kcal · {{protein}} g Eiweiß · {{carbs}} g Kohlenhydrate · {{fat}} g Fett",
+    "pace": "Pace",
+    "paceTrend": "Pace-Verlauf (pro Woche)",
+    "protein": "Eiweiß",
+    "proteinTitle": "Eiweiß (g)",
+    "provenance": {
+      "device": "Gerät",
+      "deviceHelp": "Vom Hersteller deines Wearables berechnet (z. B. Garmin)",
+      "estimated": "Geschätzt",
+      "estimatedHelp": "Von SparkyFitness berechnet; siehe Hinweis zu den Methoden",
+      "measured": "Gemessen",
+      "measuredHelp": "Von einem Gerät erfasst oder von dir eingetragen"
+    },
+    "racePredictions": "Laufprognosen",
+    "range": "Zeitraum",
+    "rangeDays": "{{count}} Tage",
+    "rangeYear": "1 Jahr",
+    "restingHr": "Ruhepuls (bpm)",
+    "riegelNote": "Schätzung: Riegel-Formel aus deinem besten Lauf ≥ 3 km",
+    "runs": "Läufe",
+    "score": "Wert",
+    "sections": {
+      "body": "Körper",
+      "load": "Trainingsbelastung",
+      "nutrition": "Ernährung",
+      "overview": "Überblick",
+      "recovery": "Schlaf & Erholung",
+      "running": "Laufen",
+      "strength": "Kraft"
+    },
+    "sets": "Sätze",
+    "showChart": "Diagramm anzeigen",
+    "showSection": "{{section}} einblenden",
+    "showTable": "Tabelle anzeigen",
+    "sidebar": "Dashboard-Bereiche",
+    "sleepDuration": "Schlafdauer (h)",
+    "title": "Performance",
+    "topLifts": "Geschätztes 1RM pro Übung",
+    "trend": "Verlauf",
+    "volumeNote": "Gewicht × Wiederholungen der Arbeitssätze",
+    "week": "Woche",
+    "weekShort": "Wo.",
+    "weeklyDistance": "Wochendistanz",
+    "weeklyVolume": "Wochenvolumen",
+    "weighIns": "Wiegungen",
+    "weight": "Körpergewicht ({{unit}})",
+    "zone": {
+      "high": "Hoch (1,3–1,5)",
+      "low": "Niedrig (< 0,8)",
+      "optimal": "Optimal (0,8–1,3)",
+      "optimalShort": "optimal",
+      "veryHigh": "Sehr hoch (> 1,5)"
+    }
   }
 }
