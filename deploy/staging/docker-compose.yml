@@ -1,0 +1,60 @@
+# Side-by-side staging instance of the personal edition. Separate project,
+# containers, network and database volume, so it never touches a production
+# SparkyFitness running on the same host. Starts with an empty database.
+#
+#   ./init-env.sh            # once: generates .env with random secrets
+#   docker compose up -d
+#   ssh -L 3104:127.0.0.1:3104 <host>   then open http://localhost:3104
+name: sparky-next
+
+services:
+  next-db:
+    image: postgres:15-alpine@sha256:f7d23353e1b15400d22ebe31189f4d314b87a4c129cc400c8c2d8d4ca127bf81
+    environment:
+      POSTGRES_DB: sparkyfitness_db
+      POSTGRES_USER: ${SPARKY_FITNESS_DB_USER}
+      POSTGRES_PASSWORD: ${SPARKY_FITNESS_DB_PASSWORD}
+    volumes:
+      - next-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d sparkyfitness_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+
+  next-server:
+    image: ${SERVER_IMAGE:-sparkyfitness-server:personal-rc}
+    env_file: .env
+    environment:
+      SPARKY_FITNESS_DB_HOST: next-db
+      SPARKY_FITNESS_DB_PORT: 5432
+      SPARKY_FITNESS_DB_NAME: sparkyfitness_db
+      SPARKY_FITNESS_SERVER_PORT: 3010
+      NODE_ENV: production
+    depends_on:
+      next-db:
+        condition: service_healthy
+    volumes:
+      - next-uploads:/app/SparkyFitnessServer/uploads
+      - next-backup:/app/SparkyFitnessServer/backup
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+
+  next-frontend:
+    image: ${FRONTEND_IMAGE:-sparkyfitness-frontend:personal-rc}
+    environment:
+      SPARKY_FITNESS_FRONTEND_URL: ${SPARKY_FITNESS_FRONTEND_URL}
+      SPARKY_FITNESS_SERVER_HOST: next-server
+      SPARKY_FITNESS_SERVER_PORT: 3010
+    depends_on: [next-server]
+    ports:
+      - "${STAGING_BIND:-127.0.0.1}:${STAGING_PORT:-3104}:80"
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+
+volumes:
+  next-db:
+  next-uploads:
+  next-backup:
