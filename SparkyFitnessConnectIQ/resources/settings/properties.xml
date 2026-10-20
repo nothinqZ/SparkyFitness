@@ -1,0 +1,7 @@
+<properties>
+    <!-- Edited in the Garmin Connect phone app: Device > Activities & Apps > Sparky Strength > Settings. -->
+    <property id="serverUrl" type="string"></property>
+    <property id="apiKey" type="string"></property>
+    <property id="defaultRestSeconds" type="number">90</property>
+    <property id="recordActivity" type="boolean">true</property>
+</properties>

@@ -1,0 +1,22 @@
+{
+  "client_session_id": "8f0b6b0c-2f4e-4c55-9a39-1f2d3c4b5a69",
+  "device_id": "5d8a3b52-8f8e-4b5e-9a42-3c1c6e0f7d21",
+  "device_model": "006-B3906-00",
+  "app_version": "0.1.0",
+  "workout_preset_id": 7,
+  "name": "Push Day",
+  "entry_date": "2026-10-20",
+  "started_at": "2026-10-20T06:00:00.000Z",
+  "ended_at": "2026-10-20T06:52:10.000Z",
+  "started_at_local": "2026-10-20T08:00:00",
+  "exercises": [
+    {
+      "exercise_id": "11111111-1111-4111-8111-111111111111",
+      "sort_order": 0,
+      "sets": [
+        { "set_number": 1, "reps": 5, "weight": 100.0, "completed_at": "2026-10-20T06:04:00.000Z", "rpe": 8.0, "rest_time": 120 },
+        { "set_number": 2, "reps": 5, "weight": 100.0, "completed_at": "2026-10-20T06:08:00.000Z", "rest_time": 120 }
+      ]
+    }
+  ]
+}

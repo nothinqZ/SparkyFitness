@@ -1,0 +1,30 @@
+<strings>
+    <string id="AppName">Sparky Strength</string>
+    <string id="SyncNow">Sync now</string>
+    <string id="Resume">Resume workout</string>
+    <string id="NoWorkouts">No workouts. Create a workout preset in SparkyFitness, then sync.</string>
+    <string id="NotConfigured">No server URL. Rebuild with SPARKY_SERVER_URL or set it in the app settings.</string>
+    <string id="Queue">Queued</string>
+    <string id="Synced">Synced</string>
+    <string id="Never">never</string>
+    <string id="Set">Set</string>
+    <string id="Last">Last</string>
+    <string id="Reps">Reps</string>
+    <string id="Weight">Weight</string>
+    <string id="Rpe">RPE</string>
+    <string id="Rest">Rest</string>
+    <string id="Skip">Press to skip</string>
+    <string id="Finish">Finish and save</string>
+    <string id="Discard">Discard workout</string>
+    <string id="Continue">Continue</string>
+    <string id="Done">All sets done</string>
+    <string id="Suggest">Try</string>
+    <string id="Exercises">Exercises</string>
+    <string id="ServerUrlTitle">Server URL (https://...)</string>
+    <string id="ApiKeyTitle">API key (Settings &gt; API Keys)</string>
+    <string id="RestTitle">Default rest (seconds)</string>
+    <string id="RecordTitle">Record Garmin activity</string>
+    <string id="PairWatch">Pair watch</string>
+    <string id="PairHint">Enter this code in SparkyFitness: Settings &gt; Garmin watch</string>
+    <string id="Paired">Paired</string>
+</strings>

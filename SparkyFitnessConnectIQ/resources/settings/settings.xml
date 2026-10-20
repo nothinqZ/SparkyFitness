@@ -1,0 +1,14 @@
+<settings>
+    <setting propertyKey="@Properties.serverUrl" title="@Strings.ServerUrlTitle">
+        <settingConfig type="alphaNumeric" required="true"/>
+    </setting>
+    <setting propertyKey="@Properties.apiKey" title="@Strings.ApiKeyTitle">
+        <settingConfig type="alphaNumeric" required="true"/>
+    </setting>
+    <setting propertyKey="@Properties.defaultRestSeconds" title="@Strings.RestTitle">
+        <settingConfig type="numeric" min="15" max="600"/>
+    </setting>
+    <setting propertyKey="@Properties.recordActivity" title="@Strings.RecordTitle">
+        <settingConfig type="boolean"/>
+    </setting>
+</settings>

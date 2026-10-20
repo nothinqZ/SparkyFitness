@@ -1,0 +1,5 @@
+project.manifest = manifest.xml
+
+# Unit tests (annotated with :test) live next to the sources they exercise and
+# are only compiled into test builds (monkeyc --unit-test).
+base.sourcePath = source;test

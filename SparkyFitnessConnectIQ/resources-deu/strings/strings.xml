@@ -1,0 +1,30 @@
+<strings>
+    <string id="AppName">Sparky Kraft</string>
+    <string id="SyncNow">Jetzt synchronisieren</string>
+    <string id="Resume">Training fortsetzen</string>
+    <string id="NoWorkouts">Keine Workouts. Lege in SparkyFitness eine Vorlage an und synchronisiere.</string>
+    <string id="NotConfigured">Keine Server-URL. Mit SPARKY_SERVER_URL neu bauen oder in den App-Einstellungen setzen.</string>
+    <string id="Queue">Wartend</string>
+    <string id="Synced">Sync</string>
+    <string id="Never">nie</string>
+    <string id="Set">Satz</string>
+    <string id="Last">Zuletzt</string>
+    <string id="Reps">Wdh.</string>
+    <string id="Weight">Gewicht</string>
+    <string id="Rpe">RPE</string>
+    <string id="Rest">Pause</string>
+    <string id="Skip">Taste zum Überspringen</string>
+    <string id="Finish">Beenden und speichern</string>
+    <string id="Discard">Training verwerfen</string>
+    <string id="Continue">Weiter</string>
+    <string id="Done">Alle Sätze erledigt</string>
+    <string id="Suggest">Versuch</string>
+    <string id="Exercises">Übungen</string>
+    <string id="ServerUrlTitle">Server-URL (https://...)</string>
+    <string id="ApiKeyTitle">API-Key (Einstellungen &gt; API-Keys)</string>
+    <string id="RestTitle">Standardpause (Sekunden)</string>
+    <string id="RecordTitle">Garmin-Aktivität aufzeichnen</string>
+    <string id="PairWatch">Uhr koppeln</string>
+    <string id="PairHint">Code in SparkyFitness eingeben: Einstellungen &gt; Garmin-Uhr</string>
+    <string id="Paired">Gekoppelt</string>
+</strings>
