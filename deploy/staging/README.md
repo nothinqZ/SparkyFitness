@@ -42,3 +42,19 @@ Images default to `sparkyfitness-server:personal-rc` and
 `sparkyfitness-frontend:personal-rc`; override with `SERVER_IMAGE` /
 `FRONTEND_IMAGE`. Remove everything, including data:
 `docker compose down -v`.
+
+## Copy an existing SparkyFitness into staging
+
+```bash
+./import-from-production.sh
+```
+
+Reads the existing instance (`pg_dump` of `sparkyfitness-db`, read-only copy of
+its uploads), replaces the staging database with it, runs the new migrations on
+the copy, switches off every external provider (no second Garmin poller) and
+closes sign-up. It reuses the source's `BETTER_AUTH_SECRET` and encryption key
+from `/data/docker/env/sparkyfitness.env` when readable, so two-factor login
+works in the copy. Passkeys are bound to the original hostname and do not
+carry over; sign in with email and password. The dump stays in
+`/data/docker/sparky-next-import-<timestamp>/` (mode 700) until you delete it.
+Anything entered in staging is lost on the next import.
