@@ -181,6 +181,7 @@ export type RootStackParamList = {
     goal?: number;
   };
   ExerciseStatistics: undefined;
+  Performance: undefined;
   CardioSession: {
     session: ExerciseActivityQueryItem;
     distanceUnit: 'km' | 'miles';

@@ -579,7 +579,9 @@
       "noRecentItems": "No recent items yet",
       "recentItemsHint": "Foods, meals, and exercises you log will appear here for quick access.",
       "exerciseStatistics": "Exercise statistics",
-      "exerciseStatisticsSubtitle": "Sets per muscle and a body heat map"
+      "exerciseStatisticsSubtitle": "Sets per muscle and a body heat map",
+      "performance": "Performance",
+      "performanceSubtitle": "Readiness, running, recovery and watch sync"
     },
     "sleep": "Sleep",
     "healthTrendsSettings": "Health Trends",
@@ -589,7 +591,8 @@
     "exerciseStatistics": "Exercise Statistics",
     "cardioSession": "Cardio Session",
     "watchSettings": "Apple Watch",
-    "aiSettings": "AI"
+    "aiSettings": "AI",
+    "performance": "Performance"
   },
   "healthMetrics": {
     "steps": "Steps",
@@ -6021,5 +6024,56 @@
       "resume": "Resume",
       "finishAndSave": "Finish & Save"
     }
+  },
+  "performance": {
+    "title": "Performance",
+    "baseline": {
+      "below": "Below baseline",
+      "within": "Within baseline",
+      "above": "Above baseline",
+      "insufficient": "Not enough history yet"
+    },
+    "zone": {
+      "low": "Low (< 0.8)",
+      "optimal": "Optimal (0.8–1.3)",
+      "high": "High (1.3–1.5)",
+      "veryHigh": "Very high (> 1.5)"
+    },
+    "halfMarathon": "Half marathon",
+    "marathon": "Marathon",
+    "kpi": {
+      "readiness": "Readiness",
+      "acwr": "Load ratio (ACWR)",
+      "sleep": "Sleep (avg)",
+      "distance": "Running distance",
+      "pace": "Average pace",
+      "weightTrend": "Weight trend"
+    },
+    "provenance": {
+      "estimated": "Estimated",
+      "measured": "Measured",
+      "device": "Device"
+    },
+    "sections": {
+      "recovery": "Sleep & recovery",
+      "running": "Running",
+      "body": "Body"
+    },
+    "restingHrShort": "Resting HR",
+    "bedtimeSpreadLabel": "Bedtime spread",
+    "racePredictions": "Race predictions",
+    "raceLegend": "Garmin · ~Estimate (Riegel, best run ≥ 3 km)",
+    "topLifts": "Estimated 1RM by lift",
+    "weekShort": "wk",
+    "calories": "Calories (kcal)",
+    "proteinTitle": "Protein (g)",
+    "range180": "180d",
+    "loadError": "Failed to load performance data",
+    "watchTitle": "Garmin watch (Sparky Strength)",
+    "watchUploads": "Workouts uploaded",
+    "watchLinked": "Linked to Garmin activities",
+    "watchLastUpload": "Last upload",
+    "watchUnavailable": "Watch status unavailable on this server.",
+    "watchNone": "Pair the watch in SparkyFitness web: Settings > Garmin watch."
   }
 }

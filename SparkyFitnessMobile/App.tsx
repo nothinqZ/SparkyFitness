@@ -99,6 +99,7 @@ import {
   SafeDailyNutritionDetails,
   SafeNutrientTrends,
   SafeExerciseStatistics,
+  SafePerformance,
   SafeCardioSession,
   SafeFamilyMembers,
   SafeFamilyDiary,
@@ -709,6 +710,11 @@ function AppContent() {
             name="ExerciseStatistics"
             component={SafeExerciseStatistics}
             options={createStackScreenOptions(t('screens.exerciseStatistics', { defaultValue: 'Exercise Statistics' }), { headerBackButtonDisplayMode: 'minimal' })}
+          />
+          <Stack.Screen
+            name="Performance"
+            component={SafePerformance}
+            options={createStackScreenOptions(t('screens.performance', { defaultValue: 'Performance' }), { headerBackButtonDisplayMode: 'minimal' })}
           />
           <Stack.Screen
             name="CardioSession"
