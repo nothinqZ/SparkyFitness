@@ -422,6 +422,9 @@ export interface GarminExerciseEntryTelemetry {
   elevation_loss_meters: number | null;
   floors_climbed: number | null;
   vo2_max_estimate: number | null;
+  training_load: number | null;
+  aerobic_training_effect: number | null;
+  anaerobic_training_effect: number | null;
   moving_time_seconds: number | null;
   elapsed_time_seconds: number | null;
   resting_calories: number | null;
@@ -443,6 +446,12 @@ export interface GarminExerciseEntryTelemetry {
  * sync path (garminActivityProcessor.ts) and the one-off backfill script
  * (scripts/backfillWorkoutTelemetry.script.ts) so this field mapping only exists once.
  */
+function roundOrNull(value: number | null, digits: number): number | null {
+  if (value === null) return null;
+  const f = 10 ** digits;
+  return Math.round(value * f) / f;
+}
+
 export function extractGarminTelemetryFields(
   payload: UnknownRecord
 ): GarminExerciseEntryTelemetry {
@@ -514,6 +523,18 @@ export function extractGarminTelemetryFields(
     ]),
     floors_climbed: firstInt(activity, ['floorsClimbed']),
     vo2_max_estimate: firstNum(activity, ['vo2MaxEstimate', 'vO2MaxValue']),
+    // Garmin's per-activity EPOC load and training effects; the columns are
+    // numeric(6,2) and numeric(3,1). The performance dashboard derives its
+    // estimated acute:chronic load from training_load.
+    training_load: roundOrNull(firstNum(activity, ['activityTrainingLoad']), 2),
+    aerobic_training_effect: roundOrNull(
+      firstNum(activity, ['aerobicTrainingEffect']),
+      1
+    ),
+    anaerobic_training_effect: roundOrNull(
+      firstNum(activity, ['anaerobicTrainingEffect']),
+      1
+    ),
     moving_time_seconds: movingTimeSeconds,
     elapsed_time_seconds: elapsedTimeSeconds,
     resting_calories: restingCalories,
