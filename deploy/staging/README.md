@@ -27,7 +27,16 @@ behind your reverse proxy and set that URL, e.g. in Caddy:
 reverse_proxy @fitness_next sparky-next-next-frontend-1:80
 ```
 
-(the proxy container must share a Docker network with `next-frontend`).
+(the proxy container must share a Docker network with `next-frontend`;
+`docker-compose.proxy.yml` joins it to `PROXY_NETWORK`, default
+`proxy_health`, under the alias `sparky-next-frontend`):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+```
+
+Sign-up is open until you set `SPARKY_FITNESS_DISABLE_SIGNUP=true` in `.env`
+and recreate `next-server`; do that after creating your account.
 
 Images default to `sparkyfitness-server:personal-rc` and
 `sparkyfitness-frontend:personal-rc`; override with `SERVER_IMAGE` /

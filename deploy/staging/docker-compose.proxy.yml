@@ -1,0 +1,14 @@
+# Optional: put the staging frontend on an existing reverse-proxy network so
+# the proxy can reach it by the alias below. Use together with the base file:
+#   docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+services:
+  next-frontend:
+    networks:
+      default: {}
+      proxy:
+        aliases: [sparky-next-frontend]
+
+networks:
+  proxy:
+    name: ${PROXY_NETWORK:-proxy_health}
+    external: true
