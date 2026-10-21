@@ -1,6 +1,6 @@
 {
   "name": "sparkyfitnessserver",
-  "version": "1.8.3",
+  "version": "1.8.4",
   "main": "SparkyFitnessServer.js",
   "type": "module",
   "scripts": {
