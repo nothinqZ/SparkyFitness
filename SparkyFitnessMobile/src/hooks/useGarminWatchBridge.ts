@@ -211,7 +211,10 @@ export async function finishFromGarmin(
  */
 export function useGarminWatchBridge(
   start: (args: StartLiveWorkoutArgs) => Promise<void>,
-  onWatchFinished: (celebration: WorkoutCelebration | null) => void
+  onWatchFinished: (
+    celebration: WorkoutCelebration | null,
+    sessionId: string
+  ) => void
 ): void {
   const { t } = useTranslation();
   const { run: runStart } = useWatchPresetStarter(start);
@@ -321,7 +324,9 @@ export function useGarminWatchBridge(
         return;
       }
       const celebration = await finishFromGarmin(message.sid);
-      if (celebration !== undefined) onFinishedRef.current(celebration);
+      if (celebration !== undefined) {
+        onFinishedRef.current(celebration, message.sid);
+      }
     };
 
     const handleUrl = async (url: string | null): Promise<void> => {

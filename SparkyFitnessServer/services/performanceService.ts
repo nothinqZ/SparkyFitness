@@ -6,7 +6,7 @@ import {
   isoWeekStart,
   movingAverage,
   paceSecondsPerKm,
-  predictRaceTimes,
+  predictRaceTimesRiegel,
   recoveryEstimate,
   sleepConsistency,
   todayInZone,
@@ -224,7 +224,7 @@ async function getOverview(
     durationMinutes: Number(r.duration_minutes),
     avgHeartRate: num(r.avg_heart_rate),
   }));
-  const estimatedPredictions = predictRaceTimes(runs);
+  const estimatedPredictions = predictRaceTimesRiegel(runs);
   const latestDevicePrediction = [...metricRows]
     .reverse()
     .find(

@@ -459,6 +459,127 @@ describe('workoutPlanTemplateService', () => {
     });
   });
 
+  describe('updateWorkoutPlanTemplate - logged workouts (#2677)', () => {
+    const storedPlan = (
+      entry_mode: 'prompt' | 'prefill',
+      schedule_type: 'weekly' | 'sequential' = 'weekly'
+    ) => ({
+      id: TEMPLATE_ID,
+      user_id: USER_ID,
+      plan_name: 'Existing Plan',
+      is_active: true,
+      schedule_type,
+      entry_mode,
+      assignments: [],
+    });
+
+    beforeEach(() => {
+      vi.mocked(
+        workoutPlanTemplateRepository.getWorkoutPlanTemplateOwnerId
+      ).mockResolvedValue(USER_ID);
+    });
+
+    it.each([
+      ['renaming', { plan_name: 'Renamed Plan', is_active: true }],
+      ['deactivating', { plan_name: 'Existing Plan', is_active: false }],
+    ])(
+      '%s a weekly prompt plan does not delete entries logged from it',
+      async (_label, updateData) => {
+        vi.mocked(
+          workoutPlanTemplateRepository.getWorkoutPlanTemplateById
+        ).mockResolvedValue(storedPlan('prompt'));
+        vi.mocked(
+          workoutPlanTemplateRepository.updateWorkoutPlanTemplate
+        ).mockResolvedValue({
+          ...storedPlan('prompt'),
+          ...updateData,
+        });
+
+        await workoutPlanTemplateService.updateWorkoutPlanTemplate(
+          USER_ID,
+          TEMPLATE_ID,
+          updateData
+        );
+
+        expect(
+          exerciseRepository.deleteExerciseEntriesByTemplateId
+        ).not.toHaveBeenCalled();
+        expect(
+          exerciseRepository.createExerciseEntriesFromTemplate
+        ).not.toHaveBeenCalled();
+      }
+    );
+
+    it('updating a sequential plan does not delete entries logged from it', async () => {
+      vi.mocked(
+        workoutPlanTemplateRepository.getWorkoutPlanTemplateById
+      ).mockResolvedValue(storedPlan('prompt', 'sequential'));
+      vi.mocked(
+        workoutPlanTemplateRepository.updateWorkoutPlanTemplate
+      ).mockResolvedValue({
+        ...storedPlan('prompt', 'sequential'),
+        plan_name: 'Renamed Plan',
+      });
+
+      await workoutPlanTemplateService.updateWorkoutPlanTemplate(
+        USER_ID,
+        TEMPLATE_ID,
+        { plan_name: 'Renamed Plan' }
+      );
+
+      expect(
+        exerciseRepository.deleteExerciseEntriesByTemplateId
+      ).not.toHaveBeenCalled();
+    });
+
+    it('updating a weekly prefill plan regenerates its generated entries', async () => {
+      vi.mocked(
+        workoutPlanTemplateRepository.getWorkoutPlanTemplateById
+      ).mockResolvedValue(storedPlan('prefill'));
+      vi.mocked(
+        workoutPlanTemplateRepository.updateWorkoutPlanTemplate
+      ).mockResolvedValue({
+        ...storedPlan('prefill'),
+        plan_name: 'Renamed Plan',
+      });
+
+      await workoutPlanTemplateService.updateWorkoutPlanTemplate(
+        USER_ID,
+        TEMPLATE_ID,
+        { plan_name: 'Renamed Plan', is_active: true }
+      );
+
+      expect(
+        exerciseRepository.deleteExerciseEntriesByTemplateId
+      ).toHaveBeenCalledWith(TEMPLATE_ID, USER_ID, '2026-09-10');
+      expect(
+        exerciseRepository.createExerciseEntriesFromTemplate
+      ).toHaveBeenCalledWith(TEMPLATE_ID, USER_ID, '2026-09-10');
+    });
+
+    it('switching a prefill plan to prompt still removes the entries it generated', async () => {
+      vi.mocked(
+        workoutPlanTemplateRepository.getWorkoutPlanTemplateById
+      ).mockResolvedValue(storedPlan('prefill'));
+      vi.mocked(
+        workoutPlanTemplateRepository.updateWorkoutPlanTemplate
+      ).mockResolvedValue(storedPlan('prompt'));
+
+      await workoutPlanTemplateService.updateWorkoutPlanTemplate(
+        USER_ID,
+        TEMPLATE_ID,
+        { plan_name: 'Existing Plan', is_active: true, entry_mode: 'prompt' }
+      );
+
+      expect(
+        exerciseRepository.deleteExerciseEntriesByTemplateId
+      ).toHaveBeenCalledWith(TEMPLATE_ID, USER_ID, '2026-09-10');
+      expect(
+        exerciseRepository.createExerciseEntriesFromTemplate
+      ).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getActiveWorkoutPlanForDate', () => {
     it('delegates to repository getActiveWorkoutPlanForDate', async () => {
       const mockActive = [

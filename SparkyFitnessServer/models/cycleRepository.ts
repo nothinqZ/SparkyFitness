@@ -1,9 +1,11 @@
+import { preferredSleepClause } from './sleepSourcePolicy.js';
 import { getClient } from '../db/poolManager.js';
 import type {
   CreateTestEntryBody,
   UpsertCycleSettingsBody,
   UpsertDailyLogBody,
 } from '../schemas/cycleSchemas.js';
+import { DAILY_MOOD_VALUE_SQL } from './moodRepository.js';
 import { localDateToDay, addDays } from '@workspace/shared';
 import type { DerivedCycle } from '@workspace/shared';
 
@@ -634,13 +636,16 @@ async function getCorrelationSources(userId: string) {
         [userId]
       ),
       client.query(
-        `SELECT entry_date, mood_value AS value FROM mood_entries
-         WHERE user_id = $1 ORDER BY entry_date ASC`,
+        `SELECT entry_date, ${DAILY_MOOD_VALUE_SQL} AS value FROM mood_entries
+         WHERE user_id = $1
+         GROUP BY entry_date
+         HAVING ${DAILY_MOOD_VALUE_SQL} IS NOT NULL
+         ORDER BY entry_date ASC`,
         [userId]
       ),
       client.query(
         `SELECT entry_date, ROUND(duration_in_seconds / 3600.0, 2) AS value
-         FROM sleep_entries WHERE user_id = $1 ORDER BY entry_date ASC`,
+         FROM sleep_entries se WHERE user_id = $1 AND ${preferredSleepClause('se')} ORDER BY entry_date ASC`,
         [userId]
       ),
       client.query(

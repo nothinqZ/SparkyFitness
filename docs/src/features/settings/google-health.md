@@ -70,7 +70,7 @@ SparkyFitness pulls the following data from Google Health:
 
 - **Activity**: Steps, Active Zone Minutes (fat burn / cardio / peak), Activity Minutes (sedentary / lightly / moderately / very active), Distance, Floors
 - **Health metrics**: Resting heart rate, Heart rate variability (HRV), Blood oxygen (SpO2), Respiratory rate, Skin temperature variation, Body fat percentage, VO2 Max, Daily calories, Weight
-- **Sleep**: Sleep sessions with stage breakdown (light, deep, REM, awake)
+- **Sleep**: Sleep sessions with stage breakdown (light, deep, REM, awake). Overnight HRV and resting heart rate also appear on each night's sleep entry.
 - **Exercise**: Workouts logged in Google Health, including duration and calories
 
 ---

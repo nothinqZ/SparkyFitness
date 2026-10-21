@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { TimeInput } from '@/components/ui/TimeInput';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -769,7 +770,14 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
     // Resolve any un-persisted foods (e.g. from photo estimation) before saving
     const resolvedFoods: MealFood[] = [];
     for (const mf of mealFoods) {
-      if (mf.item_type === 'meal' || mf.child_meal_id || mf.food_id) {
+      if (
+        mf.item_type === 'meal' ||
+        mf.child_meal_id ||
+        mf.food_id ||
+        (source === 'food-diary' && foodEntryId)
+      ) {
+        // Logged ingredients already carry their nutrition snapshot. Editing
+        // history must not recreate a library food whose link was deleted.
         resolvedFoods.push(mf);
         continue;
       }
@@ -1236,7 +1244,11 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
           ) : (
             <>
               <Label htmlFor="totalAmount">
-                {t('mealBuilder.totalAmount', 'Total Amount')} ({servingUnit})
+                {t(
+                  'mealBuilder.totalAmount2',
+                  'Total Amount ({{servingUnit}})',
+                  { servingUnit }
+                )}
               </Label>
               <Input
                 id="totalAmount"
@@ -1288,7 +1300,7 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
             }}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Unit" />
+              <SelectValue placeholder={t('mealBuilder.unit', 'Unit')} />
             </SelectTrigger>
             <SelectContent>
               {MEAL_SERVING_UNITS.map((unit) => (
@@ -1306,8 +1318,11 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="servingSize">
-              {t('mealBuilder.defaultServingSize', 'Default Serving Size')} (
-              {servingUnit})
+              {t(
+                'mealBuilder.defaultServingSize2',
+                'Default Serving Size ({{servingUnit}})',
+                { servingUnit }
+              )}
             </Label>
             <Input
               id="servingSize"
@@ -1534,8 +1549,11 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
                 ) : (
                   <>
                     <Label htmlFor="totalAmount">
-                      {t('mealBuilder.totalDishAmount', 'Total Dish Amount')} (
-                      {servingUnit})
+                      {t(
+                        'mealBuilder.totalDishAmount2',
+                        'Total Dish Amount ({{servingUnit}})',
+                        { servingUnit }
+                      )}
                     </Label>
                     <Input
                       id="totalAmount"
@@ -1574,7 +1592,7 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Unit" />
+                    <SelectValue placeholder={t('mealBuilder.unit', 'Unit')} />
                   </SelectTrigger>
                   <SelectContent>
                     {MEAL_SERVING_UNITS.map((unit) => (
@@ -1592,8 +1610,11 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="consumedQuantity">
-                  {t('mealBuilder.consumedQuantity', 'Quantity Consumed')} (
-                  {servingUnit})
+                  {t(
+                    'mealBuilder.quantityConsumed',
+                    'Quantity Consumed ({{servingUnit}})',
+                    { servingUnit }
+                  )}
                 </Label>
                 <Input
                   id="consumedQuantity"
@@ -1613,7 +1634,7 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="entryTime">
+                  <Label id="entryTime-label">
                     {t('mealBuilder.entryTimeOptional', {
                       defaultValue: 'Time (optional)',
                     })}
@@ -1649,11 +1670,11 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
                     </button>
                   </div>
                 </div>
-                <Input
+                <TimeInput
                   id="entryTime"
-                  type="time"
+                  aria-labelledby="entryTime-label"
                   value={entryTime}
-                  onChange={(e) => setEntryTime(e.target.value)}
+                  onChange={setEntryTime}
                 />
               </div>
             </div>

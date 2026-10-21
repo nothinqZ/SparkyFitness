@@ -31,6 +31,7 @@ export interface ProviderSyncConfig {
 export const PROVIDER_SYNC_CONFIGS: readonly ProviderSyncConfig[] = [
   {
     name: 'Withings',
+    cronExpression: '12 * * * *',
     types: ['withings'],
     sync: async (p) => {
       await withingsServiceCentral.syncWithingsData(p.user_id, 'scheduled');
@@ -39,6 +40,7 @@ export const PROVIDER_SYNC_CONFIGS: readonly ProviderSyncConfig[] = [
   },
   {
     name: 'Garmin',
+    cronExpression: '7 * * * *',
     types: ['garmin'],
     sync: async (p) => {
       const result = await garminService.syncGarminData(p.user_id, 'scheduled');
@@ -58,6 +60,7 @@ export const PROVIDER_SYNC_CONFIGS: readonly ProviderSyncConfig[] = [
   },
   {
     name: 'Fitbit',
+    cronExpression: '17 * * * *',
     types: ['fitbit'],
     sync: async (p) => {
       await fitbitService.syncFitbitData(p.user_id, 'scheduled');
@@ -66,6 +69,7 @@ export const PROVIDER_SYNC_CONFIGS: readonly ProviderSyncConfig[] = [
   },
   {
     name: 'Oura',
+    cronExpression: '22 * * * *',
     types: ['oura'],
     sync: async (p) => {
       await ouraService.syncOuraData(p.user_id, 'scheduled');
@@ -74,6 +78,7 @@ export const PROVIDER_SYNC_CONFIGS: readonly ProviderSyncConfig[] = [
   },
   {
     name: 'Strava',
+    cronExpression: '27 * * * *',
     types: ['strava'],
     sync: async (p) => {
       await stravaService.syncStravaData(p.user_id, 'scheduled');
@@ -82,6 +87,7 @@ export const PROVIDER_SYNC_CONFIGS: readonly ProviderSyncConfig[] = [
   },
   {
     name: 'Polar',
+    cronExpression: '32 * * * *',
     types: ['polar'],
     sync: async (p) => {
       await polarService.syncPolarData(p.user_id, 'scheduled', p.id);
@@ -90,6 +96,7 @@ export const PROVIDER_SYNC_CONFIGS: readonly ProviderSyncConfig[] = [
   },
   {
     name: 'COROS',
+    cronExpression: '34 * * * *',
     types: ['coros_mcp'],
     sync: async (p) => {
       await corosService.syncCorosData(p.user_id, 'scheduled', p.id);
@@ -98,6 +105,7 @@ export const PROVIDER_SYNC_CONFIGS: readonly ProviderSyncConfig[] = [
   },
   {
     name: 'Google Health',
+    cronExpression: '37 * * * *',
     types: ['googlehealth'],
     sync: async (p) => {
       await googleHealthService.syncGoogleHealthData(p.user_id, 'scheduled');
@@ -106,6 +114,7 @@ export const PROVIDER_SYNC_CONFIGS: readonly ProviderSyncConfig[] = [
   },
   {
     name: 'Hevy',
+    cronExpression: '42 * * * *',
     types: ['hevy'],
     sync: async (p) => {
       await hevyService.syncHevyData(p.user_id, p.user_id, false, p.id);
@@ -113,6 +122,7 @@ export const PROVIDER_SYNC_CONFIGS: readonly ProviderSyncConfig[] = [
   },
   {
     name: 'Liftosaur',
+    cronExpression: '47 * * * *',
     types: ['liftosaur'],
     sync: async (p) => {
       await liftosaurService.syncLiftosaurData(

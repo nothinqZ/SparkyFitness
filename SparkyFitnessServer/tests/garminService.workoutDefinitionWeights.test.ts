@@ -85,11 +85,14 @@ describe('processGarminWorkoutDefinition set weights', () => {
         category: 'strength',
       }
     );
+    // No preset with that name yet: the import creates one and fills it.
+    // An existing preset (a user's training template) is never appended to.
     vi.mocked(workoutPresetRepository.getWorkoutPresetByName).mockResolvedValue(
-      {
-        id: 7,
-      }
+      null as never
     );
+    vi.mocked(workoutPresetRepository.createWorkoutPreset).mockResolvedValue({
+      id: 7,
+    } as never);
   });
 
   it('converts pound-denominated step weights to kg', async () => {
@@ -105,5 +108,17 @@ describe('processGarminWorkoutDefinition set weights', () => {
   it('treats a missing weightUnit as kilograms rather than pounds', async () => {
     await processGarminWorkoutDefinition(UID, buildWorkoutData(undefined));
     expect(capturedSetWeight()).toBe(100);
+  });
+  it('never appends imported exercises to an existing preset', async () => {
+    vi.mocked(workoutPresetRepository.getWorkoutPresetByName).mockResolvedValue(
+      {
+        id: 7,
+      } as never
+    );
+    await processGarminWorkoutDefinition(UID, buildWorkoutData('kilogram'));
+    expect(
+      workoutPresetRepository.addExerciseToWorkoutPreset
+    ).not.toHaveBeenCalled();
+    expect(workoutPresetRepository.createWorkoutPreset).not.toHaveBeenCalled();
   });
 });

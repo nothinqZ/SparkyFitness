@@ -10,6 +10,7 @@ import {
 import { Check, Sparkles, Clock, CalendarDays, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { TimeInput } from '@/components/ui/TimeInput';
 import { Label } from '@/components/ui/label';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
@@ -542,7 +543,7 @@ const EditFoodEntryDialog = ({
 
                 <div className="col-span-4 space-y-1 max-w-[280px]">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="entryTime">
+                    <Label id="entryTime-label">
                       {t('editFoodEntry.timeOptional', 'Time (optional)')}
                     </Label>
                     <div className="flex items-center gap-1.5">
@@ -597,11 +598,11 @@ const EditFoodEntryDialog = ({
                       })()}
                     </div>
                   </div>
-                  <Input
+                  <TimeInput
                     id="entryTime"
-                    type="time"
+                    aria-labelledby="entryTime-label"
                     value={entryTime}
-                    onChange={(e) => setEntryTime(e.target.value)}
+                    onChange={setEntryTime}
                   />
                 </div>
               </div>
@@ -631,7 +632,7 @@ const EditFoodEntryDialog = ({
                     <div>
                       <Label htmlFor="conversionFactor">
                         1 {pendingUnit.trim()} ={' '}
-                        {conversionBaseVariant?.serving_unit}
+                        <span>{conversionBaseVariant?.serving_unit}</span>
                       </Label>
                       <Input
                         id="conversionFactor"
@@ -682,7 +683,7 @@ const EditFoodEntryDialog = ({
                     <div>
                       <Label htmlFor="conversionFactor">
                         1 {pendingUnit} = ?{' '}
-                        {conversionBaseVariant?.serving_unit}
+                        <span>{conversionBaseVariant?.serving_unit}</span>
                       </Label>
                       <Input
                         id="conversionFactor"

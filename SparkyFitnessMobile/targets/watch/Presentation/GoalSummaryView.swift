@@ -26,7 +26,7 @@ struct GoalSummaryView: View {
                 headlineRow
                 macroRows
                 if nutrition == nil {
-                    Text("Open SparkyFitness on your phone to sync today's numbers.")
+                    Text(String(localized: "watch.goals.openPhoneToSync", defaultValue: "Open SparkyFitness on your phone to sync today's numbers."))
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -243,6 +243,7 @@ enum GoalPalette {
     static let fat = Color(red: 0.541, green: 0.761, blue: 0.855)
     static let protein = Color(red: 0.859, green: 0.690, blue: 0.435)
     static let water = Color.cyan
+    static let medication = Color.mint
 
     /// Colours for the rows past the three macros, in turn. Picked to stay
     /// apart from the macro colours and from each other on a black face.

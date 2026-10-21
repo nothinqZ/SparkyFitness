@@ -9,6 +9,10 @@ import activityDetailsRepository from './activityDetailsRepository.js';
 import * as workoutTelemetryRepository from './workoutTelemetryRepository.js';
 import { bodyWeightJoinSql } from '../utils/exerciseLoadSql.js';
 import { assertSetWeightSign } from '../utils/setWeightSign.js';
+import {
+  preferredExerciseClause,
+  visibleWorkoutClause,
+} from './exerciseSourcePolicy.js';
 /**
  * Updates a daily calorie import, retaining entries created against shared exercises.
  * A matching exercise takes precedence; legacy matches require the same source.
@@ -538,7 +542,14 @@ async function applyWatchTelemetryAtomically(
   userId: string,
   actingUserId: string,
   proposed: WatchTelemetryFields,
-  zones: WatchTelemetryZoneSpec[] | null
+  zones: WatchTelemetryZoneSpec[] | null,
+  /**
+   * Runs before COMMIT, while this entry's row lock is still held, and only
+   * when the heart-rate snapshot was accepted. The series write belongs here:
+   * doing it after COMMIT let an older flush store samples the lock had
+   * already rejected, or land them after a newer flush.
+   */
+  onHrAccepted?: () => Promise<void>
 ): Promise<void> {
   const client = await getClient(userId, actingUserId);
   try {
@@ -587,6 +598,9 @@ async function applyWatchTelemetryAtomically(
             seconds_in_zone: zone.seconds_in_zone,
           }))
         );
+      }
+      if (!skipHr && onHrAccepted) {
+        await onHrAccepted();
       }
       await client.query('COMMIT');
     } catch (error) {
@@ -1499,6 +1513,7 @@ async function getExerciseEntriesByDate(userId: any, selectedDate: any) {
           ee.avg_heart_rate
         FROM exercise_entries ee
         WHERE ee.user_id = $1 AND ee.entry_date = $2
+          AND ${visibleWorkoutClause('ee')}
         ORDER BY ee.sort_order ASC, ee.created_at ASC`,
       [userId, selectedDate]
     );
@@ -1602,7 +1617,6 @@ async function getExerciseEntriesByDate(userId: any, selectedDate: any) {
         preset.exercises.sort(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (a: any, b: any) =>
-            compareByEntryTime(a.entry_time, b.entry_time) ||
             (a.sort_order || 0) - (b.sort_order || 0) ||
             // @ts-expect-error TS(2362): The left-hand side of an arithmetic operation must... Remove this comment to see the full error message
             new Date(a.created_at) - new Date(b.created_at)
@@ -1721,6 +1735,7 @@ async function getExerciseProgressData(
        WHERE ee.user_id = $1
          AND ee.exercise_id = $2
          AND ee.entry_date BETWEEN $3 AND $4
+         AND ${visibleWorkoutClause('ee')}
        ORDER BY ee.entry_date ASC`,
       [userId, exerciseId, startDate, endDate]
     );
@@ -1754,6 +1769,7 @@ async function getExerciseHistory(userId: any, exerciseId: any, limit = 5) {
        FROM exercise_entries ee
        WHERE ee.user_id = $1
          AND ee.exercise_id = $2
+         AND ${visibleWorkoutClause('ee')}
        ORDER BY ee.entry_date DESC, ee.created_at DESC
        LIMIT $3`,
       [userId, exerciseId, limit]
@@ -2034,8 +2050,9 @@ async function getDailyExerciseTotalsRange(
               SUM(COALESCE(calories_burned, 0)) AS calories_burned,
               SUM(COALESCE(distance, 0)) AS distance,
               SUM(COALESCE(steps, 0)) AS steps
-       FROM exercise_entries
-       WHERE user_id = $1 AND entry_date BETWEEN $2 AND $3
+       FROM exercise_entries ee
+       WHERE ee.user_id = $1 AND ee.entry_date BETWEEN $2 AND $3
+         AND ${visibleWorkoutClause('ee')}
        GROUP BY entry_date
        ORDER BY entry_date ASC`,
       [userId, startDate, endDate]
@@ -2120,8 +2137,9 @@ async function getDailyExerciseCalorieSplitRange(
                 WHERE exercise_name IS DISTINCT FROM 'Active Calories'
                    OR exercise_preset_entry_id IS NOT NULL), 0)::float8 AS other_calories,
               COALESCE(SUM(steps), 0)::int AS activity_steps
-       FROM exercise_entries
-       WHERE user_id = $1 AND entry_date BETWEEN $2 AND $3
+       FROM exercise_entries ee
+       WHERE ee.user_id = $1 AND ee.entry_date BETWEEN $2 AND $3
+         AND ${preferredExerciseClause('ee')}
        GROUP BY entry_date
        ORDER BY entry_date ASC`,
       [userId, startDate, endDate]
@@ -2146,6 +2164,7 @@ async function getExerciseDiaryRange(
        FROM exercise_entries ee
        LEFT JOIN exercises e ON e.id = ee.exercise_id
        WHERE ee.user_id = $1 AND ee.entry_date BETWEEN $2 AND $3
+         AND ${visibleWorkoutClause('ee')}
        ORDER BY ee.entry_date ASC, ee.created_at ASC`,
       [userId, startDate, endDate]
     );
@@ -2177,6 +2196,7 @@ async function getRecentExerciseEntries(userId: string, limit: number) {
        FROM exercise_entries ee
        LEFT JOIN exercises e ON e.id = ee.exercise_id
        WHERE ee.user_id = $1
+         AND ${visibleWorkoutClause('ee')}
        ORDER BY ee.entry_date DESC, ee.created_at DESC
        LIMIT $2`,
       [userId, limit]

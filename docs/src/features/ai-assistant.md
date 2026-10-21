@@ -15,11 +15,35 @@
 - **Metadata Storage**: Stores structured data like food options, exercise suggestions within chat history
 - **Settings**: Direct access to AI service configuration
 
+### Voice input on web and mobile
+
+In **Ask Sparky** on the web, Android, or iOS, tap the microphone, dictate a message, then stop recording. Review or edit the recognized text and tap **Send**. Dictation does not automatically send messages or add food to your diary; the existing chat handles your request after you send it.
+
+Open **Settings → Developer & Integrations → AI Service Settings → Voice input** on the web, or **Settings → Voice settings** on mobile. The server stores these settings for both clients; reopening the screen or returning to the app/browser refreshes changes made elsewhere.
+
+- **Voice input On/Off:** turning it off hides the microphone without clearing your selected model. Voice input is on by default, using System recognition.
+- **System recognition (default):** uses the device or browser speech recognizer without a Sparky AI transcription charge. Microphone/speech permission is required. Availability, languages, offline support, and whether audio is processed by a cloud service depend on your device or browser. Some browsers and embedded webviews do not support this mode; the chat offers Voice settings, never an automatic switch to AI.
+- **Optional AI transcription:** first enable audio input on a compatible configuration in the web app's AI Service Settings. Under Voice input, choose **AI transcription**, then explicitly select a **Voice model**. A compatible Chat configuration is suggested first, not automatically selected. Provider charges may apply. Voice is independent of the **Chat** and **Vision** selections; choose **System (default)** to return to system recognition.
+- **Supported AI transports:** Google models accepting inline audio, or OpenAI, Mistral, and compatible `/audio/transcriptions` endpoints. Choose a transcription-capable model, not an ordinary text-chat model. OpenAI-compatible/custom endpoints can omit the API key when the server does not require one.
+- **Privacy and limits:** AI mode sends the recording through your SparkyFitness server to the selected provider. Uploads are limited to 10 MB; the server buffers audio in memory and does not save audio in chat history. Temporary device recordings are deleted after completion or cancellation; browser recordings stay in memory and microphone tracks are stopped. Provider-side retention follows that provider's policy.
+- **Foreground only:** leaving the chat, switching browser tabs, backgrounding the app, disabling voice, or changing recognition mode cancels capture/transcription. The web also supports Cancel and Escape. Sending and editing are temporarily disabled during capture/transcription so a late result cannot overwrite another message. Failed recognition leaves the existing draft intact.
+- **Browser requirements:** microphone recording requires HTTPS (or localhost for development), microphone permission, and a supported MediaRecorder format. WebM/Opus, MP4, and Ogg/Opus are supported when offered by the browser. A missing recognizer or denied permission never enables a paid provider automatically.
+
+AI transcription requires an updated client and server, with the database migrations applied. Native microphone/speech-recognition dependencies require a rebuilt mobile app, not just an over-the-air JavaScript update.
+
 ### Food Integration
 - **Auto-Logging**: Directly add recognized foods to diary with confirmation
 - **Nutrition Confirmation**: Review and edit AI suggestions before logging
 - **Meal Context**: Understand meal timing and context for accurate logging
 - **Brand Recognition**: Identify specific food brands and products
+
+## Food Preferences and Saved Tasks
+
+The web chat's **Food preferences and tasks** panel shows lasting food preferences and saved work. Tell Sparky explicitly what to remember, or edit and forget preferences in the panel. A choice for one meal does not replace a lasting preference. These preferences are stored separately from conversation history.
+
+Multi-step food tasks keep their ingredient selections, portion variants, source evidence and next step. Ingredients that still need matching remain in the draft with incomplete nutrition. Saving a draft does not publish a recipe or add food to the diary. Select a task to inspect its checkpoint and operation history, cancel remaining work, or resume it in chat. Resume does not start a background job.
+
+This information belongs to the signed-in person and is not shared with family diary viewers.
 
 ## Troubleshooting AI Providers
 

@@ -100,6 +100,8 @@ export interface AggregatedSleepSession extends RecordTimezoneMetadata {
   awake_sleep_seconds: number;
   stage_events: SleepStageEvent[];
   sleep_score?: number;
+  avg_overnight_hrv?: number;
+  resting_heart_rate?: number;
 }
 
 /** Exercise set within a session (matches server API spec) */

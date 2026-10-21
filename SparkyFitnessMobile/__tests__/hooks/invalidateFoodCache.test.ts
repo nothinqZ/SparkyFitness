@@ -4,6 +4,7 @@ import {
   caffeineActiveRootQueryKey,
   dailySummaryQueryKey,
   dailySummaryRootQueryKey,
+  foodEntriesRangeRootQueryKey,
   foodsQueryKey,
   waterIntakeLogQueryKey,
 } from '../../src/hooks/queryKeys';
@@ -60,6 +61,22 @@ describe('invalidateFoodCache', () => {
     });
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: [...foodsQueryKey],
+    });
+
+    invalidateSpy.mockRestore();
+  });
+
+  test.each([
+    ['with an entry date', '2026-09-18'],
+    ['without one', undefined],
+  ])('invalidates every cached food-entry range %s', (_label, entryDate) => {
+    const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    invalidateFoodCache(queryClient, entryDate);
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: foodEntriesRangeRootQueryKey,
+      refetchType: 'all',
     });
 
     invalidateSpy.mockRestore();

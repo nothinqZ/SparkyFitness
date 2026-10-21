@@ -51,6 +51,10 @@ BEGIN
     'watch_session_imports',
     'watch_pairing_requests',
     'watch_devices',
+    'run_programs',
+    'shoes',
+    'custom_run_programs',
+    'routes',
     'onboarding_data',
     'onboarding_status',
     'openfoodfacts_product_read_rate_limit',
@@ -58,6 +62,9 @@ BEGIN
     'profiles',
     'rate_limit',
     'sparky_chat_history',
+    'food_assistant_preferences',
+    'food_assistant_tasks',
+    'food_assistant_operations',
     'admin_activity_logs',
     'api_key',
     'user_goals',
@@ -115,6 +122,7 @@ BEGIN
     'passkey_registration_tickets',
     'exercise_entry_laps',
     'exercise_entry_gps_points',
+    'exercise_entry_distance_series',
     'exercise_entry_hr_zones',
     'workout_feedback',
     'health_metric_samples',
@@ -571,7 +579,9 @@ END;
 $$;
 
 -- Step 5: Apply policies to all tables.
--- Custom policy for ai_service_settings to support admin-global + user-owned settings
+-- Custom policy for ai_service_settings to support admin-global + user-owned settings.
+-- This also protects supports_audio_input and voice-provider credentials: a
+-- transcription request must resolve settings under the authenticated actor.
 -- Drop ALL possible old policy names before recreating
 DROP POLICY IF EXISTS owner_policy ON public.ai_service_settings;
 DROP POLICY IF EXISTS select_policy ON public.ai_service_settings;
@@ -619,12 +629,18 @@ SELECT create_owner_policy('watch_session_imports');
 -- policy keeps every unclaimed row invisible to the app role.
 SELECT create_owner_policy('watch_pairing_requests');
 SELECT create_owner_policy('watch_devices');
+SELECT create_owner_policy('food_assistant_preferences');
+SELECT create_owner_policy('food_assistant_tasks');
+SELECT create_owner_policy('food_assistant_operations');
 
 -- Profiles: delegates can read (with any meaningful permission) but only owner can write.
 -- Delegates do not need to modify another user's profile to manage their diary.
 CREATE POLICY select_policy ON public.profiles FOR SELECT TO PUBLIC USING (has_profile_read_access(id));
 CREATE POLICY modify_policy ON public.profiles FOR ALL TO PUBLIC USING (authenticated_user_id() = id) WITH CHECK (authenticated_user_id() = id);
 
+-- voice_input_enabled and active_voice_ai_service_id follow these existing
+-- owner-write/delegate-read preference policies. Reading
+-- a provider selection does not grant access to its private ai_service_settings row.
 CREATE POLICY select_policy ON public.user_preferences FOR SELECT TO PUBLIC USING (has_profile_read_access(user_id));
 CREATE POLICY modify_policy ON public.user_preferences FOR ALL TO PUBLIC
 USING (authenticated_user_id() = user_id)
@@ -681,6 +697,8 @@ SELECT create_checkin_policy('check_in_photos');
 SELECT create_checkin_policy('custom_categories');
 SELECT create_checkin_policy('custom_measurements');
 SELECT create_diary_policy('exercise_entries');
+-- Running shoes belong to the exercise diary, so diary delegates manage them.
+SELECT create_diary_policy('shoes');
 -- Custom policy for exercise_entries to allow access if linked to an owned exercise_preset_entry
 CREATE POLICY select_exercise_preset_entry_linked_policy ON public.exercise_entries FOR SELECT TO PUBLIC
 USING (
@@ -754,6 +772,9 @@ SELECT create_owner_policy('pregnancy_contractions');
 SELECT create_owner_policy('pregnancy_photos');
 SELECT create_owner_policy('pregnancy_checklist_state');
 SELECT create_owner_policy('health_appointments');
+SELECT create_owner_policy('run_programs');
+SELECT create_owner_policy('custom_run_programs');
+SELECT create_owner_policy('routes');
 
 -- User-defined mood tags. Mood is check-in data (mood_entries uses the check-in
 -- policy), and custom check-in definitions like custom_categories are shared with
@@ -778,6 +799,7 @@ WITH CHECK (EXISTS (SELECT 1 FROM public.exercise_entries ee WHERE ee.id = exerc
 
 SELECT create_diary_policy('exercise_entry_laps');
 SELECT create_diary_policy('exercise_entry_gps_points');
+SELECT create_diary_policy('exercise_entry_distance_series');
 SELECT create_diary_policy('exercise_entry_hr_zones');
 
 SELECT create_checkin_policy('health_metric_samples');
@@ -849,7 +871,8 @@ CREATE POLICY insert_policy ON public.food_entries FOR INSERT TO PUBLIC
 WITH CHECK (
   has_diary_access(user_id) AND (
     (food_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.foods f WHERE f.id = food_entries.food_id)) OR
-    (meal_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.meals m WHERE m.id = food_entries.meal_id))
+    (meal_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.meals m WHERE m.id = food_entries.meal_id)) OR
+    (food_id IS NULL AND meal_id IS NULL AND variant_id IS NULL)
   )
 );
 CREATE POLICY update_policy ON public.food_entries FOR UPDATE TO PUBLIC

@@ -137,7 +137,7 @@ struct CheckInEntryView: View {
         HStack(spacing: 4) {
             Text(CheckInDate.headerLabel(for: CheckInDate.today()))
             if store.isReplacingToday {
-                Text("· replacing").foregroundStyle(.orange)
+                Text(String(localized: "watch.checkin.replacing", defaultValue: "· replacing")).foregroundStyle(.orange)
             }
         }
         .font(.caption2)
@@ -165,7 +165,7 @@ struct CheckInEntryView: View {
     @ViewBuilder
     private var deltaLine: some View {
         if let delta = weightDelta, active == .weight {
-            Text("\(String(format: "%+.1f", delta)) \(unit.suffix) since last")
+            Text(String(localized: "watch.checkin.sinceLast", defaultValue: "\(String(format: "%+.1f", delta)) \(unit.suffix) since last"))
                 .font(weightLooksWrong ? .footnote.bold() : .caption2)
                 .foregroundStyle(weightLooksWrong ? .orange : .secondary)
                 .animation(.snappy, value: weightLooksWrong)
@@ -218,7 +218,7 @@ struct CheckInEntryView: View {
             // field rather than sending null, so a previously recorded value for
             // the day is left intact rather than erased by the upsert.
             if active == .bodyFat {
-                Button("Skip body fat") {
+                Button(String(localized: "watch.checkin.skipBodyFat", defaultValue: "Skip body fat")) {
                     bodyFatSkipped = true
                     save()
                 }
@@ -353,7 +353,7 @@ struct TypedValueEntryView: View {
             TextField("0.0", text: $text)
                 .font(.title3)
                 .multilineTextAlignment(.center)
-            Button("Set") {
+            Button(String(localized: "watch.common.set", defaultValue: "Set")) {
                 guard let parsed else { return }
                 Haptics.tap()
                 onCommit(parsed)

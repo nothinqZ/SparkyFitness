@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { addDays, buildWorkoutHeartRateSeries } from '@workspace/shared';
 import {
   fetchExerciseEntry,
+  fetchExerciseEntryDistanceSeries,
   fetchHeartRateSamples,
   fetchWorkoutGpsPoints,
   fetchWorkoutHrZones,
@@ -14,6 +15,14 @@ import {
 import { usePreferences } from './usePreferences';
 import { getDeviceTimezone } from '../utils/dateUtils';
 import { gpsHeartRateSeries, heartRateZoneRows } from '../utils/cardioSession';
+
+/** The stored GPS track of one workout; shared by the session and share screens. */
+export function useWorkoutRoute(exerciseEntryId: string) {
+  return useQuery({
+    queryKey: cardioSessionDetailQueryKey('gps', exerciseEntryId),
+    queryFn: () => fetchWorkoutGpsPoints(exerciseEntryId),
+  });
+}
 
 /**
  * Route, heart rate, and heart-rate zones for one cardio session.
@@ -29,9 +38,13 @@ export function useCardioSessionDetail(
   const { preferences } = usePreferences();
   const timezone = preferences?.timezone || getDeviceTimezone();
 
-  const gpsQuery = useQuery({
-    queryKey: cardioSessionDetailQueryKey('gps', exerciseEntryId),
-    queryFn: () => fetchWorkoutGpsPoints(exerciseEntryId),
+  const gpsQuery = useWorkoutRoute(exerciseEntryId);
+  // An indoor session has no route; its pace comes from the distance series
+  // the watch recorded, when there is one.
+  const distanceQuery = useQuery({
+    queryKey: cardioSessionDetailQueryKey('distanceSeries', exerciseEntryId),
+    queryFn: () => fetchExerciseEntryDistanceSeries(exerciseEntryId),
+    enabled: gpsQuery.isSuccess && (gpsQuery.data?.points ?? []).length === 0,
   });
   const zonesQuery = useQuery({
     queryKey: cardioSessionDetailQueryKey('hrZones', exerciseEntryId),
@@ -87,6 +100,7 @@ export function useCardioSessionDetail(
 
   return {
     route: trackpoints,
+    distanceSeries: distanceQuery.data ?? null,
     heartRate,
     zones,
     isRouteLoading: gpsQuery.isLoading,

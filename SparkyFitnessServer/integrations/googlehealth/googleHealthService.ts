@@ -1088,7 +1088,8 @@ async function fetchVO2Max(
 }
 
 // Activity Minutes breakdown — matches Fitbit's minutesSedentary/LightlyActive/FairlyActive/VeryActive
-// Google data type: activity-level (session segments, aggregated per day in processor)
+// Google data types: active-minutes and sedentary-period (dailyRollup). One list holds
+// both; each point carries its own payload key (activeMinutes / sedentaryPeriod).
 async function fetchActivityMinutes(
   userId: string,
   startDate: string,
@@ -1098,12 +1099,24 @@ async function fetchActivityMinutes(
   const accessToken =
     providedToken || ((await getValidAccessToken(userId)) as string);
   try {
-    return await fetchDataPointsRange(
+    const activeMinutes = await fetchDailyRollupRange(
       accessToken,
-      'activity-level',
+      'active-minutes',
       startDate,
       endDate
     );
+    const sedentaryPeriod = await fetchDailyRollupRange(
+      accessToken,
+      'sedentary-period',
+      startDate,
+      endDate
+    );
+    return {
+      rollupDataPoints: [
+        ...activeMinutes.rollupDataPoints,
+        ...sedentaryPeriod.rollupDataPoints,
+      ],
+    };
   } catch (error) {
     log(
       'error',

@@ -1,8 +1,8 @@
 import {
   checkInMeasurementsMutatorSchema,
   checkInMeasurementsSchema,
-} from "../database/CheckInMeasurements.zod.ts";
-import { z } from "zod";
+} from '../database/CheckInMeasurements.zod.ts';
+import { z } from 'zod';
 
 export const checkInMeasurementsResponseSchema = checkInMeasurementsSchema
   .extend({

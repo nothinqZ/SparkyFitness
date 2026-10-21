@@ -10,7 +10,7 @@ const HEIGHT = 220;
 const MARKER_CENTER = { x: 0.5, y: 0.5 };
 
 interface RouteTileMapProps {
-  points: readonly GpsTrackPoint[];
+  points: readonly Pick<GpsTrackPoint, 'lat' | 'lon'>[];
   accessibilityLabel: string;
 }
 

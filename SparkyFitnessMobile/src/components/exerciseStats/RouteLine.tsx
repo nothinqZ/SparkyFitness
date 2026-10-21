@@ -8,7 +8,7 @@ import { projectRoute } from '../../utils/cardioSession';
 const HEIGHT = 220;
 
 interface RouteLineProps {
-  points: readonly GpsTrackPoint[];
+  points: readonly Pick<GpsTrackPoint, 'lat' | 'lon'>[];
   accessibilityLabel: string;
 }
 

@@ -8,7 +8,7 @@
 //   "estimated"  - computed here by the formulas below
 // Formulas and their limits are documented in docs/src/features/performance-analytics.md.
 
-export type Provenance = "measured" | "device" | "estimated";
+export type Provenance = 'measured' | 'device' | 'estimated';
 
 export interface DatedValue {
   date: string; // YYYY-MM-DD
@@ -55,7 +55,7 @@ export interface RunRow {
 
 /** Seconds per km, or null for a run without distance or time. */
 export function paceSecondsPerKm(
-  run: Pick<RunRow, "distanceKm" | "durationMinutes">,
+  run: Pick<RunRow, 'distanceKm' | 'durationMinutes'>
 ): number | null {
   if (!(run.distanceKm > 0) || !(run.durationMinutes > 0)) return null;
   return (run.durationMinutes * 60) / run.distanceKm;
@@ -82,7 +82,7 @@ export interface WeeklyRunSummary {
  * are included with zeros, so a chart shows breaks as breaks.
  */
 export function weeklyRunSummaries(
-  runs: readonly RunRow[],
+  runs: readonly RunRow[]
 ): WeeklyRunSummary[] {
   const valid = runs.filter((r) => r.distanceKm > 0 && r.durationMinutes > 0);
   if (!valid.length) return [];
@@ -126,18 +126,18 @@ export function riegelPredictSeconds(
   distanceKm: number,
   timeSeconds: number,
   targetKm: number,
-  exponent = 1.06,
+  exponent = 1.06
 ): number {
   return timeSeconds * (targetKm / distanceKm) ** exponent;
 }
 
 export const RACE_DISTANCES_KM = {
-  "5k": 5,
-  "10k": 10,
+  '5k': 5,
+  '10k': 10,
   half_marathon: 21.0975,
   marathon: 42.195,
 } as const;
-export type RaceDistance = keyof typeof RACE_DISTANCES_KM;
+export type PerformanceRaceDistance = keyof typeof RACE_DISTANCES_KM;
 
 /** Shortest runs used for predictions: shorter efforts extrapolate badly. */
 export const MIN_PREDICTION_RUN_KM = 3;
@@ -147,21 +147,21 @@ export const MIN_PREDICTION_RUN_KM = 3;
  * Only runs of at least MIN_PREDICTION_RUN_KM count; returns null per target
  * when there is no such run.
  */
-export function predictRaceTimes(
-  runs: readonly RunRow[],
+export function predictRaceTimesRiegel(
+  runs: readonly RunRow[]
 ): Record<
-  RaceDistance,
+  PerformanceRaceDistance,
   { seconds: number; basedOn: { date: string; distanceKm: number } } | null
 > {
   const eligible = runs.filter(
-    (r) => r.distanceKm >= MIN_PREDICTION_RUN_KM && r.durationMinutes > 0,
+    (r) => r.distanceKm >= MIN_PREDICTION_RUN_KM && r.durationMinutes > 0
   );
   const result = {} as Record<
-    RaceDistance,
+    PerformanceRaceDistance,
     { seconds: number; basedOn: { date: string; distanceKm: number } } | null
   >;
   for (const [key, km] of Object.entries(RACE_DISTANCES_KM) as [
-    RaceDistance,
+    PerformanceRaceDistance,
     number,
   ][]) {
     let best: {
@@ -172,7 +172,7 @@ export function predictRaceTimes(
       const seconds = riegelPredictSeconds(
         r.distanceKm,
         r.durationMinutes * 60,
-        km,
+        km
       );
       if (!best || seconds < best.seconds) {
         best = {
@@ -207,7 +207,7 @@ export interface LoadPoint {
 export function acuteChronicLoad(
   loads: readonly DatedValue[],
   from: string,
-  to: string,
+  to: string
 ): LoadPoint[] {
   const perDay = new Map<number, number>();
   for (const l of loads) {
@@ -239,15 +239,15 @@ export function acuteChronicLoad(
   return out;
 }
 
-export type LoadZone = "low" | "optimal" | "high" | "very_high";
+export type LoadZone = 'low' | 'optimal' | 'high' | 'very_high';
 
 /** Commonly cited ACWR bands (Gabbett 2016): <0.8, 0.8–1.3, 1.3–1.5, >1.5. */
 export function classifyAcwr(ratio: number | null): LoadZone | null {
   if (ratio === null) return null;
-  if (ratio < 0.8) return "low";
-  if (ratio <= 1.3) return "optimal";
-  if (ratio <= 1.5) return "high";
-  return "very_high";
+  if (ratio < 0.8) return 'low';
+  if (ratio <= 1.3) return 'optimal';
+  if (ratio <= 1.5) return 'high';
+  return 'very_high';
 }
 
 // --- Recovery ------------------------------------------------------------------
@@ -260,7 +260,7 @@ export interface BaselineStatus {
   baselineStdDev: number | null;
   /** (recent - baseline) / sd; null without enough history (14 values). */
   zScore: number | null;
-  status: "below" | "within" | "above" | "insufficient_data";
+  status: 'below' | 'within' | 'above' | 'insufficient_data';
 }
 
 /**
@@ -270,7 +270,7 @@ export interface BaselineStatus {
  */
 export function baselineStatus(
   series: readonly DatedValue[],
-  asOf: string,
+  asOf: string
 ): BaselineStatus {
   const end = dayIndex(asOf);
   const recent: number[] = [];
@@ -296,7 +296,7 @@ export function baselineStatus(
       baseline: b === null ? null : round(b),
       baselineStdDev: sd === null ? null : round(sd),
       zScore: null,
-      status: "insufficient_data",
+      status: 'insufficient_data',
     };
   }
   const z = sd > 0 ? (r - b) / sd : 0;
@@ -305,7 +305,7 @@ export function baselineStatus(
     baseline: round(b),
     baselineStdDev: round(sd),
     zScore: round(z, 2),
-    status: z < -1 ? "below" : z > 1 ? "above" : "within",
+    status: z < -1 ? 'below' : z > 1 ? 'above' : 'within',
   };
 }
 
@@ -322,19 +322,19 @@ export interface SleepRow {
  * 23:30 and 00:30 are one hour apart rather than 23. Lower is more regular;
  * under ~30 minutes is commonly considered consistent.
  */
-export function sleepConsistency(rows: readonly SleepRow[], timeZone = "UTC") {
+export function sleepConsistency(rows: readonly SleepRow[], timeZone = 'UTC') {
   const minutes: number[] = [];
   const durations: number[] = [];
-  const fmt = new Intl.DateTimeFormat("en-GB", {
+  const fmt = new Intl.DateTimeFormat('en-GB', {
     timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
   });
   for (const r of rows) {
     const t = Date.parse(r.bedtime);
     if (Number.isNaN(t)) continue;
-    const [h, m] = fmt.format(new Date(t)).split(":").map(Number);
+    const [h, m] = fmt.format(new Date(t)).split(':').map(Number);
     minutes.push(h! * 60 + m!);
     const slept = r.timeAsleepSeconds ?? r.durationSeconds;
     if (slept > 0) durations.push(slept / 3600);
@@ -383,15 +383,15 @@ export function recoveryEstimate(input: {
   const clamp = (v: number) => Math.max(0, Math.min(100, v));
   const components: Record<string, number> = {};
   if (input.hrv?.zScore != null)
-    components["hrv"] = clamp(50 + 20 * input.hrv.zScore);
+    components['hrv'] = clamp(50 + 20 * input.hrv.zScore);
   if (input.restingHr?.zScore != null)
-    components["restingHr"] = clamp(50 - 20 * input.restingHr.zScore);
+    components['restingHr'] = clamp(50 - 20 * input.restingHr.zScore);
   if (input.lastNightSleepHours != null && input.lastNightSleepHours > 0) {
-    components["sleep"] = clamp((input.lastNightSleepHours / 8) * 100);
+    components['sleep'] = clamp((input.lastNightSleepHours / 8) * 100);
   }
   if (input.acwr != null) {
     const r = input.acwr;
-    components["load"] =
+    components['load'] =
       r >= 0.8 && r <= 1.3
         ? 100
         : r < 0.8
@@ -401,7 +401,7 @@ export function recoveryEstimate(input: {
   const values = Object.values(components);
   if (values.length < 2) return null;
   const rounded = Object.fromEntries(
-    Object.entries(components).map(([k, v]) => [k, Math.round(v)]),
+    Object.entries(components).map(([k, v]) => [k, Math.round(v)])
   );
   return { score: Math.round(mean(values)!), components: rounded };
 }
@@ -431,7 +431,7 @@ export function weeklyTrend(series: readonly DatedValue[]): number | null {
 /** Trailing moving average over `window` calendar days (inclusive). */
 export function movingAverage(
   series: readonly DatedValue[],
-  window = 7,
+  window = 7
 ): DatedValue[] {
   const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date));
   return sorted.map((p) => {

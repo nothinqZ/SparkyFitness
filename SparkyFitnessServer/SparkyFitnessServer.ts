@@ -46,6 +46,7 @@ import dashboardLayoutRoutes from './routes/dashboardLayoutRoutes.js';
 import nutrientDisplayPreferenceRoutes from './routes/nutrientDisplayPreferenceRoutes.js';
 import nutrientGoalPreferenceRoutes from './routes/nutrientGoalPreferenceRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
+import foodAssistantRoutes from './routes/v2/foodAssistantRoutes.js';
 import measurementRoutes from './routes/measurementRoutes.js';
 import checkInPhotoRoutes from './routes/checkInPhotoRoutes.js';
 import goalRoutes from './routes/goalRoutes.js';
@@ -99,6 +100,9 @@ import mindfulnessRoutesV2 from './routes/v2/mindfulnessRoutes.js';
 import performanceRoutesV2 from './routes/v2/performanceRoutes.js';
 import watchPairingRoutesV2 from './routes/v2/watchPairingRoutes.js';
 import watchSyncRoutesV2 from './routes/v2/watchSyncRoutes.js';
+import runProgramRoutesV2 from './routes/v2/runProgramRoutes.js';
+import shoeRoutesV2 from './routes/v2/shoeRoutes.js';
+import routeRoutesV2 from './routes/v2/routeRoutes.js';
 import backupRoutes from './routes/backupRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
 import reviewRoutes from './routes/reviewRoutes.js';
@@ -111,7 +115,10 @@ import mealTypeRoutes from './routes/mealTypeRoutes.js';
 import swaggerUi from 'swagger-ui-express';
 import redoc from 'redoc-express';
 import swaggerSpecs from './config/swagger.js';
-import { createCorsOriginChecker } from './utils/corsHelper.js';
+import {
+  createCorsOriginChecker,
+  CORS_ALLOWED_HEADERS,
+} from './utils/corsHelper.js';
 import authModule from './auth.js';
 import { toNodeHandler } from 'better-auth/node';
 import freeExerciseDBService from './integrations/freeexercisedb/FreeExerciseDBService.js';
@@ -223,19 +230,7 @@ app.use(
         callback(null, {
           origin: allowed,
           methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-          allowedHeaders: [
-            'Content-Type',
-            'Authorization',
-            'x-provider-id',
-            'x-api-key',
-            'x-client-id',
-            'x-requested-with',
-            // MCP StreamableHTTP headers; browser clients fail CORS preflight
-            // without them.
-            'mcp-protocol-version',
-            'mcp-session-id',
-            'last-event-id',
-          ],
+          allowedHeaders: CORS_ALLOWED_HEADERS,
           exposedHeaders: ['mcp-session-id'],
           credentials: true,
           maxAge: 86400,
@@ -730,6 +725,7 @@ app.get('/api/ping', (_req, res) =>
 );
 // Mounting all API routes
 app.use('/api/chat', chatRoutes);
+app.use('/api/v2/food-assistant', foodAssistantRoutes);
 app.use('/api/ai', aiUnitConversionRoutes);
 app.use('/api/foods', foodRoutes);
 app.use('/api/favorites', favoritesRoutes);
@@ -805,6 +801,9 @@ app.use('/api/v2/performance', performanceRoutesV2);
 // while the watch router authenticates everything it sees.
 app.use('/api/v2/watch/pairing', watchPairingRoutesV2);
 app.use('/api/v2/watch', watchSyncRoutesV2);
+app.use('/api/v2/run-program', runProgramRoutesV2);
+app.use('/api/v2/shoes', shoeRoutesV2);
+app.use('/api/v2/routes', routeRoutesV2);
 app.use('/api/workout-presets', workoutPresetRoutes);
 app.use('/api/workout-plan-templates', workoutPlanTemplateRoutes);
 app.use('/api/review', reviewRoutes);

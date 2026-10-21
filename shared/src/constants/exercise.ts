@@ -1,4 +1,4 @@
-import { isIgnoredEquipment, normalizeEquipment } from "./exerciseTaxonomy.ts";
+import { isIgnoredEquipment, normalizeEquipment } from './exerciseTaxonomy.ts';
 
 /**
  * Exercise modality selects which per-set editor clients render
@@ -21,20 +21,20 @@ import { isIgnoredEquipment, normalizeEquipment } from "./exerciseTaxonomy.ts";
  *   table for multi-set entries
  */
 export const EXERCISE_MODALITIES = [
-  "weight_reps",
-  "reps_only",
-  "bodyweight_reps",
-  "weight_duration",
-  "weight_distance",
-  "duration",
-  "duration_distance",
+  'weight_reps',
+  'reps_only',
+  'bodyweight_reps',
+  'weight_duration',
+  'weight_distance',
+  'duration',
+  'duration_distance',
 ] as const;
 
 export type ExerciseModality = (typeof EXERCISE_MODALITIES)[number];
 
 export function isExerciseModality(value: unknown): value is ExerciseModality {
   return (
-    typeof value === "string" &&
+    typeof value === 'string' &&
     (EXERCISE_MODALITIES as readonly string[]).includes(value)
   );
 }
@@ -45,17 +45,17 @@ export function isExerciseModality(value: unknown): value is ExerciseModality {
  * (holds are duration-like but never cardio).
  */
 export function isCardioModality(modality: ExerciseModality): boolean {
-  return modality === "duration_distance";
+  return modality === 'duration_distance';
 }
 
 /** Loaded holds: a weight and a duration per set, no reps. */
 export function isWeightDurationModality(modality: ExerciseModality): boolean {
-  return modality === "weight_duration";
+  return modality === 'weight_duration';
 }
 
 /** Carries and sled work: a weight and a distance per set, no reps. */
 export function isWeightDistanceModality(modality: ExerciseModality): boolean {
-  return modality === "weight_distance";
+  return modality === 'weight_distance';
 }
 
 /**
@@ -65,15 +65,15 @@ export function isWeightDistanceModality(modality: ExerciseModality): boolean {
  */
 export function modalityRecordsReps(modality: ExerciseModality): boolean {
   return (
-    modality === "weight_reps" ||
-    modality === "reps_only" ||
-    modality === "bodyweight_reps"
+    modality === 'weight_reps' ||
+    modality === 'reps_only' ||
+    modality === 'bodyweight_reps'
   );
 }
 
 /** Whether sets of this modality carry a signed added/assisting weight. */
 export function isBodyweightModality(modality: ExerciseModality): boolean {
-  return modality === "bodyweight_reps";
+  return modality === 'bodyweight_reps';
 }
 
 /**
@@ -90,30 +90,30 @@ export function isBodyweightModality(modality: ExerciseModality): boolean {
  */
 export function deriveExerciseModality(
   category: string | null | undefined,
-  equipment?: readonly (string | null | undefined)[] | string | null,
+  equipment?: readonly (string | null | undefined)[] | string | null
 ): ExerciseModality {
   const normalized = category?.trim().toLowerCase();
-  if (normalized === "cardio") return "duration_distance";
-  if (normalized === "isometric" || normalized === "isometrics")
-    return "duration";
-  if (isBodyweightOnlyEquipment(equipment)) return "bodyweight_reps";
-  return "weight_reps";
+  if (normalized === 'cardio') return 'duration_distance';
+  if (normalized === 'isometric' || normalized === 'isometrics')
+    return 'duration';
+  if (isBodyweightOnlyEquipment(equipment)) return 'bodyweight_reps';
+  return 'weight_reps';
 }
 
 function isBodyweightOnlyEquipment(
-  equipment: readonly (string | null | undefined)[] | string | null | undefined,
+  equipment: readonly (string | null | undefined)[] | string | null | undefined
 ): boolean {
   const values =
-    typeof equipment === "string" ? [equipment] : (equipment ?? []);
+    typeof equipment === 'string' ? [equipment] : (equipment ?? []);
   const present = values.filter(
     (value): value is string =>
-      value != null && value.trim() !== "" && !isIgnoredEquipment(value),
+      value != null && value.trim() !== '' && !isIgnoredEquipment(value)
   );
   // An unknown name is not "no equipment". Dropping it would leave "body
   // only" and mark a loaded custom attachment as bodyweight.
   return (
     present.length > 0 &&
-    present.every((value) => normalizeEquipment(value) === "body only")
+    present.every((value) => normalizeEquipment(value) === 'body only')
   );
 }
 
@@ -126,7 +126,7 @@ function isBodyweightOnlyEquipment(
 export function resolveExerciseModality(
   modality: string | null | undefined,
   category: string | null | undefined,
-  equipment?: readonly (string | null | undefined)[] | string | null,
+  equipment?: readonly (string | null | undefined)[] | string | null
 ): ExerciseModality {
   return isExerciseModality(modality)
     ? modality
@@ -137,10 +137,10 @@ export function resolveExerciseModality(
 // `sparky watch` sessions come from the Connect IQ app (WatchSync.api.zod.ts);
 // they are logged by the user set by set, so they stay editable like manual ones.
 const EDITABLE_SOURCES = new Set([
-  "manual",
-  "sparky",
-  "workout plan",
-  "sparky watch",
+  'manual',
+  'sparky',
+  'workout plan',
+  'sparky watch',
 ]);
 
 function normalizeSource(source: string | null | undefined): string | null {
@@ -156,7 +156,7 @@ function normalizeSource(source: string | null | undefined): string | null {
  * Garmin, Strava, etc.).
  */
 export function canEditGroupedWorkout(
-  source: string | null | undefined,
+  source: string | null | undefined
 ): boolean {
   const normalized = normalizeSource(source);
   if (normalized == null) {

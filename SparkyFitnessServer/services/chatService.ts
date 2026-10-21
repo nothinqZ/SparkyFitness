@@ -38,6 +38,7 @@ import {
   ChatToolCategorySlug,
   CHAT_TOOL_CATEGORY_SLUGS,
   isChatToolCategorySlug,
+  isGpt6Model,
 } from '@workspace/shared';
 
 interface ChatMessagePart {
@@ -75,7 +76,7 @@ import {
   stepCountIs,
   hasToolCall,
 } from 'ai';
-import type { JSONValue, LanguageModelUsage, UIMessageChunk } from 'ai';
+import type { JSONValue, LanguageModelUsage, UIMessageChunk, Tool } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
@@ -174,6 +175,21 @@ async function handleAiServiceSettings(
             {
               active_ai_service_id: null,
             }
+          );
+        }
+      }
+
+      // Removing audio eligibility from the selected Voice configuration must
+      // immediately restore free System recognition on mobile. Otherwise the
+      // stale pointer would keep uploading audio only for the server guard to
+      // reject it.
+      if (serviceData.supports_audio_input === false) {
+        const currentPrefs =
+          await preferenceRepository.getUserPreferences(authenticatedUserId);
+        if (currentPrefs?.active_voice_ai_service_id === result.id) {
+          await preferenceRepository.updateUserPreferences(
+            authenticatedUserId,
+            { active_voice_ai_service_id: null }
           );
         }
       }
@@ -522,7 +538,9 @@ async function prepareChatContext(
   categoriesAreManual = false,
   serviceSystemPrompt?: string | null,
   latestImageDataUrl?: string | null,
-  serviceConfigId?: string | null
+  serviceConfigId?: string | null,
+  foodResearchTool?: Tool,
+  latestUserText?: string
 ) {
   const { chatTz, customCategoriesList } =
     await chatContextInputsCache.getOrLoad(authenticatedUserId, async () => {
@@ -584,6 +602,8 @@ async function prepareChatContext(
     foodPhotoEstimateSink,
     latestImageDataUrl,
     serviceConfigId,
+    foodResearchTool,
+    latestUserText,
   };
 
   if (categoriesAreManual) {
@@ -815,10 +835,23 @@ const RETENTION_24H_MODEL_PREFIXES = [
 // reasoning-model IDs otherwise convert Sparky's system prompt to `developer`,
 // which older compatible gateways may not recognize as system instructions.
 // (Anthropic caches on the tools — see ai/tools/index.ts; Gemini auto-caches.)
+function buildFoodResearchTool(
+  serviceType: string,
+  modelName: string,
+  apiKey?: string | null
+) {
+  return serviceType === 'openai' && isGpt6Model(modelName)
+    ? createOpenAI({ apiKey: apiKey ?? undefined }).tools.webSearch({
+        searchContextSize: 'high',
+      })
+    : undefined;
+}
+
 export function buildChatProviderOptions(
   serviceType: string,
   userId: string,
-  modelName: string
+  modelName: string,
+  reasoningEffort: 'low' | 'medium' | 'high' | 'xhigh' | 'max' = 'medium'
 ): Record<string, Record<string, JSONValue>> | undefined {
   if (serviceType === 'openai_compatible') {
     return { openai: { systemMessageMode: 'system' } };
@@ -827,6 +860,11 @@ export function buildChatProviderOptions(
   const openai: Record<string, JSONValue> = {
     promptCacheKey: `sparky-chat-${userId}`,
   };
+  if (isGpt6Model(modelName)) {
+    openai.reasoningEffort = reasoningEffort;
+    openai.promptCacheOptions = { ttl: '30m' };
+    openai.store = false;
+  }
   if (RETENTION_24H_MODEL_PREFIXES.some((p) => modelName.startsWith(p))) {
     openai.promptCacheRetention = '24h';
   }
@@ -2049,13 +2087,25 @@ async function processChatMessage(
       categoriesAreManual,
       aiService.system_prompt,
       latestImageDataUrl,
-      aiService.id
+      aiService.id,
+      buildFoodResearchTool(
+        aiService.service_type,
+        modelName,
+        aiService.api_key
+      ),
+      extractMessageText(
+        [...messages].reverse().find((message) => message.role === 'user') ?? {
+          role: 'user',
+          content: '',
+        }
+      )
     );
 
     const chatProviderOptions = buildChatProviderOptions(
       aiService.service_type,
       authenticatedUserId,
-      modelName
+      modelName,
+      aiService.reasoning_effort
     );
 
     // Map conversation history messages to CoreMessage format, then apply the
@@ -2154,38 +2204,15 @@ async function processChatMessage(
 
     let finalContent = result.text.trim();
     if (!finalContent) {
-      if (executedToolsList.length > 0) {
-        const lastTool = executedToolsList[executedToolsList.length - 1];
-        if (lastTool.name === 'sparky_manage_food') {
-          if (lastTool.args?.action === 'log_water') {
-            finalContent = "I've logged your water intake.";
-          } else {
-            finalContent = "I've logged that food for you.";
-          }
-        } else if (lastTool.name === 'sparky_manage_exercise') {
-          finalContent = "I've logged your exercise.";
-        } else if (lastTool.name === 'sparky_manage_checkin') {
-          if (lastTool.args?.action === 'log_mood') {
-            finalContent = "I've recorded your mood.";
-          } else if (lastTool.args?.action === 'log_sleep') {
-            finalContent = "I've logged your sleep.";
-          } else if (lastTool.args?.action === 'log_biometrics') {
-            finalContent = "I've updated your biometrics.";
-          } else if (lastTool.args?.action === 'log_fasting') {
-            finalContent = "I've logged your fasting window.";
-          } else {
-            finalContent = "I've updated your wellness diary.";
-          }
-        } else {
-          finalContent = "I've recorded that for you!";
-        }
-        log(
-          'info',
-          `[chat] LLM returned empty text; generated generic fallback confirmation: "${finalContent}"`
-        );
-      } else {
-        finalContent = EMPTY_RESPONSE_ERROR_TEXT;
-      }
+      // A tool call can fail or only search. Its name never proves a write.
+      // Preserve the actual result instead of claiming a food was logged.
+      log('debug', 'No assistant reply text; tool result metadata:', {
+        toolNames: executedToolsList.map((tool) => tool.name),
+        resultCount: toolOutputs.length,
+      });
+      finalContent = executedToolsList.length
+        ? EMPTY_TOOL_RESPONSE_TEXT
+        : EMPTY_RESPONSE_ERROR_TEXT;
     }
 
     if (finalContent) {
@@ -2459,6 +2486,8 @@ async function testAiServiceConnection(
   }
   return { ok: true };
 }
+const EMPTY_TOOL_RESPONSE_TEXT =
+  'Tools ran, but the AI service returned no summary. Check your diary and saved changes before retrying.';
 const EMPTY_RESPONSE_ERROR_TEXT =
   'The AI service returned an empty response. Please try again.';
 
@@ -2593,13 +2622,25 @@ async function processChatMessageStream(
       categoriesAreManual,
       aiService.system_prompt,
       latestImageDataUrl,
-      aiService.id
+      aiService.id,
+      buildFoodResearchTool(
+        aiService.service_type,
+        modelName,
+        aiService.api_key
+      ),
+      extractMessageText(
+        [...messages].reverse().find((message) => message.role === 'user') ?? {
+          role: 'user',
+          content: '',
+        }
+      )
     );
 
     const chatProviderOptions = buildChatProviderOptions(
       aiService.service_type,
       authenticatedUserId,
-      modelName
+      modelName,
+      aiService.reasoning_effort
     );
 
     // Map client messages to CoreMessage format, then apply the shared
@@ -2675,6 +2716,7 @@ async function processChatMessageStream(
         usage,
         totalUsage,
         toolCalls,
+        sources,
       }) => {
         const observedUsage = totalUsage ?? usage;
         log(
@@ -2732,6 +2774,15 @@ async function processChatMessageStream(
 
         const assistantParts: Record<string, unknown>[] = [];
         if (text.trim()) assistantParts.push({ type: 'text', text });
+        for (const source of sources ?? []) {
+          if (source.sourceType === 'url')
+            assistantParts.push({
+              type: 'source-url',
+              sourceId: source.id,
+              url: source.url,
+              title: source.title,
+            });
+        }
         if (capturedEstimate) {
           assistantParts.push({
             type: FOOD_PHOTO_ESTIMATE_PART_TYPE,
@@ -2772,6 +2823,7 @@ async function processChatMessageStream(
     return {
       stream: withEmptyCompletionGuard(
         result.toUIMessageStream({
+          sendSources: true,
           messageMetadata: ({ part }) =>
             part.type === 'finish'
               ? mapUsageToMetadata(part.totalUsage)

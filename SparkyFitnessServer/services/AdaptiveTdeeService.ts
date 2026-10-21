@@ -14,7 +14,10 @@ import {
   ADAPTIVE_TDEE_CLAMP_KCAL,
   isUsableMeasuredBmr,
 } from '@workspace/shared';
-const tdeeCache = new NodeCache({ stdTTL: 3600 }); // 1 hour cache
+// Synced and imported measurements do not call clearUserTdeeCache, so the TTL
+// bounds how long a stale result is served after a sync.
+const TDEE_CACHE_TTL_SECONDS = 300;
+const tdeeCache = new NodeCache({ stdTTL: TDEE_CACHE_TTL_SECONDS });
 interface UserProfile {
   date_of_birth?: string | null;
   gender?: string | null;

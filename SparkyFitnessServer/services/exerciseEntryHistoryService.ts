@@ -15,6 +15,10 @@ import {
 import { getClient } from '../db/poolManager.js';
 import { log } from '../config/logging.js';
 import { EXERCISE_ENTRY_TELEMETRY_COLUMNS } from '../models/exerciseEntry.js';
+import {
+  preferredExerciseClause,
+  visibleWorkoutClause,
+} from '../models/exerciseSourcePolicy.js';
 
 /** Convert a pg date value to a YYYY-MM-DD string, or return null. */
 function _dateToString(value: unknown): string | null {
@@ -194,9 +198,10 @@ async function countExerciseEntrySessions(
            WHERE ce.exercise_preset_entry_id = epe.id AND ce.exercise_id = $2
          ))
        UNION ALL
-       SELECT id FROM exercise_entries
-       WHERE user_id = $1 AND exercise_preset_entry_id IS NULL
-         AND ($2::uuid IS NULL OR exercise_id = $2)
+       SELECT ee.id FROM exercise_entries ee
+       WHERE ee.user_id = $1 AND ee.exercise_preset_entry_id IS NULL
+         AND ($2::uuid IS NULL OR ee.exercise_id = $2)
+         AND ${visibleWorkoutClause('ee')}
      )
      SELECT COUNT(*)::int AS count FROM sessions`,
     [userId, exerciseId]
@@ -224,10 +229,11 @@ async function getExerciseEntryHistorySessions(
            WHERE ce.exercise_preset_entry_id = epe.id AND ce.exercise_id = $4
          ))
        UNION ALL
-       SELECT id, entry_date, created_at, 'individual' AS session_type
-       FROM exercise_entries
-       WHERE user_id = $1 AND exercise_preset_entry_id IS NULL
-         AND ($4::uuid IS NULL OR exercise_id = $4)
+       SELECT ee.id, ee.entry_date, ee.created_at, 'individual' AS session_type
+       FROM exercise_entries ee
+       WHERE ee.user_id = $1 AND ee.exercise_preset_entry_id IS NULL
+         AND ($4::uuid IS NULL OR ee.exercise_id = $4)
+         AND ${visibleWorkoutClause('ee')}
      )
      SELECT id, entry_date, created_at, session_type
      FROM sessions ORDER BY entry_date DESC, created_at DESC
@@ -295,7 +301,7 @@ async function getExerciseEntryHistorySessions(
           `SELECT ee.*, ${SETS_SUBQUERY}
            FROM exercise_entries ee
            WHERE ee.exercise_preset_entry_id = ANY($1::uuid[])
-           ORDER BY ee.entry_time ASC NULLS LAST, ee.sort_order ASC, ee.created_at ASC`,
+           ORDER BY ee.sort_order ASC, ee.created_at ASC`,
           [presetIds]
         )
         .then((r: { rows: Record<string, unknown>[] }) => {
@@ -494,14 +500,16 @@ export async function getExerciseEntryHistory(
  */
 export async function getExerciseEntriesByDateV2(
   targetUserId: string,
-  selectedDate: string
+  selectedDate: string,
+  includeDailySummaryRows = false
 ): Promise<ExerciseSessionResponse[]> {
   const client = await getClient(targetUserId);
   try {
     return await _getExerciseEntriesByDateWithClient(
       client,
       targetUserId,
-      selectedDate
+      selectedDate,
+      includeDailySummaryRows
     );
   } catch (error) {
     log('error', 'Error fetching v2 exercise entries by date:', error);
@@ -515,7 +523,8 @@ async function _getExerciseEntriesByDateWithClient(
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   client: { query: Function },
   userId: string,
-  selectedDate: string
+  selectedDate: string,
+  includeDailySummaryRows: boolean
 ): Promise<ExerciseSessionResponse[]> {
   // Fetch preset entries and all exercise entries for the date in parallel
   const [presetResult, entriesResult] = await Promise.all([
@@ -530,7 +539,8 @@ async function _getExerciseEntriesByDateWithClient(
       `SELECT ee.*, ${SETS_SUBQUERY}
        FROM exercise_entries ee
        WHERE ee.user_id = $1 AND ee.entry_date = $2
-       ORDER BY ee.entry_time ASC NULLS LAST, ee.sort_order ASC, ee.created_at ASC`,
+         AND ${includeDailySummaryRows ? preferredExerciseClause('ee') : visibleWorkoutClause('ee')}
+       ORDER BY ee.sort_order ASC, ee.created_at ASC`,
       [userId, selectedDate]
     ),
   ]);
@@ -772,12 +782,15 @@ export async function getGroupedExerciseSessionByIdWithClient(
     return null;
   }
 
+  // Children follow the workout's own order (sort_order), never entry_time: a
+  // live session stamps entry_time when an exercise's first set is logged, so
+  // logging out of order would otherwise reorder the workout on every save.
   const [childEntriesResult, presetActivityResult] = await Promise.all([
     client.query(
       `SELECT ee.*, ${SETS_SUBQUERY}
        FROM exercise_entries ee
        WHERE ee.user_id = $1 AND ee.exercise_preset_entry_id = $2
-       ORDER BY ee.entry_time ASC NULLS LAST, ee.sort_order ASC, ee.created_at ASC
+       ORDER BY ee.sort_order ASC, ee.created_at ASC
        ${lockExerciseEntries ? 'FOR UPDATE OF ee' : ''}`,
       [targetUserId, presetEntryId]
     ),

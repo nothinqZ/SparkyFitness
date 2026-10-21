@@ -1816,7 +1816,38 @@ describe('enrichExerciseSessions', () => {
     );
   });
 
-  test('keeps the legacy total fallback when basal consumes the total', async () => {
+  test.each([75, 80])(
+    'preserves zero active energy for 75 kcal total and basal %s within the resting-rate cap',
+    async (basal) => {
+      mockAggregateRecord.mockImplementation(
+        ({ recordType }: { recordType: string }) => {
+          if (recordType === 'ActiveCaloriesBurned') {
+            return Promise.resolve({
+              ACTIVE_CALORIES_TOTAL: { inKilocalories: 0 },
+            });
+          }
+          if (recordType === 'TotalCaloriesBurned') {
+            return Promise.resolve({ ENERGY_TOTAL: { inKilocalories: 75 } });
+          }
+          if (recordType === 'BasalMetabolicRate') {
+            return Promise.resolve({
+              BASAL_CALORIES_TOTAL: { inKilocalories: basal },
+            });
+          }
+          return Promise.resolve({});
+        }
+      );
+
+      const result = await enrichExerciseSessions(
+        [makeSession({ exerciseType: 70 })],
+        createTelemetryRunContext()
+      );
+
+      expect(result[0]).toMatchObject({ energy: { inKilocalories: 0 } });
+    }
+  );
+
+  test('keeps the legacy total fallback when basal exceeds the resting-rate cap', async () => {
     mockAggregateRecord.mockImplementation(
       ({ recordType }: { recordType: string }) => {
         if (recordType === 'ActiveCaloriesBurned') {

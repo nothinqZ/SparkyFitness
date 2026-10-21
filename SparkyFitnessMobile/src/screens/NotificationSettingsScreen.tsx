@@ -19,8 +19,10 @@ import {
   setRestTimerNotificationsEnabled,
 } from '../services/notifications';
 import {
+  MEDICATION_REMINDER_SNOOZE_OPTIONS,
   WATER_REMINDER_INTERVAL_OPTIONS,
   useAppPreferencesStore,
+  type MedicationReminderSnoozeMinutes,
   type WaterReminderIntervalHours,
 } from '../stores/appPreferencesStore';
 import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
@@ -31,6 +33,7 @@ import { isValidReminderWindow } from '../utils/hydrationReminder';
 import type { RootStackScreenProps } from '../types/navigation';
 
 type IntervalKey = `${WaterReminderIntervalHours}`;
+type SnoozeMinutesKey = `${MedicationReminderSnoozeMinutes}`;
 
 type NotificationSettingsScreenProps =
   RootStackScreenProps<'NotificationSettings'>;
@@ -76,6 +79,12 @@ const NotificationSettingsScreen: React.FC<
   );
   const setMedicationReminderConsolidate = useAppPreferencesStore(
     (s) => s.setMedicationReminderConsolidate
+  );
+  const medicationReminderSnoozeMinutes = useAppPreferencesStore(
+    (s) => s.medicationReminderSnoozeMinutes
+  );
+  const setMedicationReminderSnoozeMinutes = useAppPreferencesStore(
+    (s) => s.setMedicationReminderSnoozeMinutes
   );
   const waterReminderEnabled = useAppPreferencesStore(
     (s) => s.waterReminderEnabled
@@ -206,6 +215,18 @@ const NotificationSettingsScreen: React.FC<
   const endTimeLabel =
     formatTimeLabel(waterReminderWindowEnd, preferences?.time_format) ??
     waterReminderWindowEnd;
+
+  const snoozeSegments = useMemo(
+    () =>
+      MEDICATION_REMINDER_SNOOZE_OPTIONS.map((minutes) => ({
+        key: String(minutes) as SnoozeMinutesKey,
+        label: t('notificationSettings.snoozeMinutesOption', {
+          defaultValue: '{{minutes}}m',
+          minutes,
+        }),
+      })),
+    [t]
+  );
 
   const header = useScreenHeader({
     title: t('notificationSettings.title', { defaultValue: 'Notifications' }),
@@ -388,6 +409,30 @@ const NotificationSettingsScreen: React.FC<
                     value={medicationReminderConsolidate}
                     onValueChange={setMedicationReminderConsolidate}
                   />
+                }
+              />
+            )}
+            {medicationRemindersEnabled && (
+              <SettingsRow
+                title={t('notificationSettings.medicationSnoozeInterval', {
+                  defaultValue: 'Remind In',
+                })}
+                subtitle={
+                  <View className="mt-2">
+                    <SegmentedControl
+                      segments={snoozeSegments}
+                      activeKey={
+                        String(
+                          medicationReminderSnoozeMinutes
+                        ) as SnoozeMinutesKey
+                      }
+                      onSelect={(key) =>
+                        setMedicationReminderSnoozeMinutes(
+                          Number(key) as MedicationReminderSnoozeMinutes
+                        )
+                      }
+                    />
+                  </View>
                 }
               />
             )}

@@ -29,6 +29,7 @@ import {
 } from '@workspace/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateTimeInput } from '@/components/ui/TimeInput';
 import { Label } from '@/components/ui/label';
 import {
   Card,
@@ -342,7 +343,9 @@ export default function TodayMedications({
                       )}
                       {isLogged && entry?.notes && (
                         <p className="text-xs text-muted-foreground italic mt-1.5">
-                          {t('medications.today.note', 'Note:')} {entry.notes}
+                          {t('medications.today.note2', 'Note: {{notes}}', {
+                            notes: entry.notes,
+                          })}
                         </p>
                       )}
                     </div>
@@ -452,7 +455,7 @@ export default function TodayMedications({
                       variant="secondary"
                       className="text-[9px] px-1.5 py-0 bg-purple-100 text-purple-700 hover:bg-purple-100 dark:bg-purple-950 dark:text-purple-300 dark:hover:bg-purple-950 shrink-0"
                     >
-                      PRN
+                      {t('medications.todayMedications.prn', 'PRN')}
                     </Badge>
                   </div>
                   <Input
@@ -1275,7 +1278,9 @@ export default function TodayMedications({
                         </div>
                         {entry.notes && (
                           <p className="text-[11px] text-muted-foreground italic mt-1">
-                            {t('medications.today.note', 'Note:')} {entry.notes}
+                            {t('medications.today.note2', 'Note: {{notes}}', {
+                              notes: entry.notes,
+                            })}
                           </p>
                         )}
                       </div>
@@ -1345,13 +1350,16 @@ export default function TodayMedications({
               </p>
             )}
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">
+              <Label
+                id="medication-taken-at-label"
+                className="text-xs text-muted-foreground"
+              >
                 {t('medications.today.takenAt', 'Taken at')}
               </Label>
-              <Input
-                type="datetime-local"
+              <DateTimeInput
+                aria-labelledby="medication-taken-at-label"
                 value={editTime}
-                onChange={(e) => setEditTime(e.target.value)}
+                onChange={setEditTime}
               />
             </div>
             {editingEntry?.entry_type === 'injection' && (

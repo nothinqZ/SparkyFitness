@@ -234,6 +234,10 @@ describe('useAddFoodEntriesBatch', () => {
       queryKey: ['dailySummary', '2026-09-16'],
     });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['foods'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['foodEntriesRange'],
+      refetchType: 'all',
+    });
   });
 
   test('an identity-change cancel discards the settled batch reconciliation', async () => {

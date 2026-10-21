@@ -119,6 +119,12 @@ async function getAccessibleUsers(userId: string) {
     client.release();
   }
 }
+/** The profile fields sleep scoring reads (age and gender). */
+export interface SleepUserProfile {
+  date_of_birth?: string | null;
+  gender?: string | null;
+}
+
 async function getUserProfile(userId: string) {
   const client = await getClient(userId); // User-specific operation
   try {

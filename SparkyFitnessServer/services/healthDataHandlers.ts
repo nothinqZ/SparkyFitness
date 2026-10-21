@@ -5,6 +5,11 @@ import exerciseEntryDb, {
   EXERCISE_ENTRY_TELEMETRY_COLUMNS,
 } from '../models/exerciseEntry.js';
 import foodRepository from '../models/foodRepository.js';
+import type {
+  SleepEntryInput,
+  SleepEntryUpsertOptions,
+} from '../models/sleepRepository.js';
+import type { SleepUserProfile } from '../models/userRepository.js';
 import moodRepository from '../models/moodRepository.js';
 import waterContainerRepository from '../models/waterContainerRepository.js';
 import * as workoutTelemetryRepo from '../models/workoutTelemetryRepository.js';
@@ -26,8 +31,10 @@ import { loadUserTimezone } from '../utils/timezoneLoader.js';
 import * as genericHealthRepository from '../models/genericHealthRepository.js';
 import {
   BUILT_IN_MOODS,
+  instantForDay,
   instantHourMinute,
   instantToDay,
+  isDayString,
   MAX_HEALTH_TOTAL_CALORIES_PER_DAY,
   MIN_MEASURED_BMR_KCAL,
   MAX_MEASURED_BMR_KCAL,
@@ -415,6 +422,11 @@ async function ingestNutritionFoodEntry(
 
 // ── Registry types ─────────────────────────────────────────────────────────
 
+export interface SleepContext {
+  tz: string;
+  userProfile: SleepUserProfile | null | undefined;
+}
+
 /**
  * Per-request dependencies injected by processHealthData. processSleepEntry
  * and resolveCategory live in measurementService and are passed in rather
@@ -422,23 +434,16 @@ async function ingestNutritionFoodEntry(
  * swap in a request-scoped category resolver without touching handlers).
  */
 export interface HealthBatchContext {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  userId: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  actingUserId: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getSleepContext: () => Promise<{ tz: string; userProfile: any }>;
+  userId: string;
+  actingUserId: string;
+  getSleepContext: () => Promise<SleepContext>;
   processSleepEntry: (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    userId: any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    actingUserId: any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    sleepEntryData: any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    sleepContext: { tz: string; userProfile: any }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ) => Promise<any>;
+    userId: string,
+    actingUserId: string,
+    sleepEntryData: SleepEntryInput,
+    sleepContext: SleepContext,
+    options?: SleepEntryUpsertOptions
+  ) => Promise<{ id: string } & Record<string, unknown>>;
   resolveCategory: (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     userId: any,
@@ -572,8 +577,8 @@ export function createCategoryResolver(): HealthBatchContext['resolveCategory'] 
     };
     const newCategory =
       await measurementRepository.createCustomCategory(newCategoryData);
-    // To return the full category object including the id and the default data_type
-    const created = { id: newCategory.id, ...newCategoryData };
+    // The stored settings win: a concurrent create may have made the category first.
+    const created = { ...newCategoryData, ...newCategory.category };
     byName.set(categoryName, created);
     return created;
   };
@@ -1205,6 +1210,26 @@ const bmrHandler: HealthTypeHandler = {
   handleBatch: checkInHandleBatch,
 };
 
+// Overnight HRV / resting heart rate ride along on Health Connect sleep
+// sessions. Only finite, positive numbers are kept; anything else is dropped so
+// the stored value is left alone rather than overwritten with junk.
+function positiveBiometrics(entry: {
+  avg_overnight_hrv?: unknown;
+  resting_heart_rate?: unknown;
+}): { avg_overnight_hrv?: number; resting_heart_rate?: number } {
+  const result: { avg_overnight_hrv?: number; resting_heart_rate?: number } =
+    {};
+  const hrv = entry.avg_overnight_hrv;
+  if (typeof hrv === 'number' && Number.isFinite(hrv) && hrv > 0) {
+    result.avg_overnight_hrv = hrv;
+  }
+  const rhr = entry.resting_heart_rate;
+  if (typeof rhr === 'number' && Number.isFinite(rhr) && rhr > 0) {
+    result.resting_heart_rate = rhr;
+  }
+  return result;
+}
+
 const sleepSessionHandler: HealthTypeHandler = {
   async handle(entry, ctx) {
     const { source = 'manual', timestamp } = entry;
@@ -1234,12 +1259,14 @@ const sleepSessionHandler: HealthTypeHandler = {
         awake_sleep_seconds: Number(entry.awake_sleep_seconds) || 0,
         record_timezone: entry.record_timezone,
         record_utc_offset_minutes: entry.record_utc_offset_minutes,
+        ...positiveBiometrics(entry),
       };
       const sleepEntryResult = await ctx.processSleepEntry(
         ctx.userId,
         ctx.actingUserId,
         sleepEntryData,
-        await ctx.getSleepContext()
+        await ctx.getSleepContext(),
+        { keepExistingBiometrics: true }
       );
       return { status: 'success', data: sleepEntryResult };
     } catch (sleepError) {
@@ -1421,8 +1448,24 @@ async function ensureCustomMoodsExist(
   }
 }
 
-// Mood has its own dedicated table (mood_entries), upserted on
-// (user_id, entry_date) — unlike Stress it does not go through
+// A record dated by day alone, as the CSV import sends it, has no time of its
+// own: resolveHealthEntryDate stamps it at UTC midnight, which is the evening
+// before for anyone west of UTC. Such a mood takes now for today and local noon
+// for a past day instead.
+async function importedMoodTimestamp(
+  entry: { date?: unknown; entry_date?: unknown; timestamp?: unknown },
+  ctx: HealthEntryContext
+): Promise<string | Date> {
+  const day = entry.date || entry.entry_date;
+  if (entry.timestamp || typeof day !== 'string' || !isDayString(day)) {
+    return ctx.entryTimestamp;
+  }
+  return instantForDay(ctx.parsedDate, await loadUserTimezone(ctx.userId));
+}
+
+// Mood has its own dedicated table (mood_entries), upserted as the day's
+// 'import' derived row on (user_id, entry_date, source) so a re-import never
+// touches manual check-ins — unlike Stress it does not go through
 // custom_measurements. mood_value is a 10-100 scale (see MoodMeter.tsx /
 // moodUtils.ts for the band->label mapping); mood_tags is an optional array
 // of free-form tag names, auto-creating any unrecognized custom mood.
@@ -1444,12 +1487,16 @@ const moodHandler: HealthTypeHandler = {
       if (moodTags && moodTags.length > 0) {
         await ensureCustomMoodsExist(ctx.userId, moodTags);
       }
-      const result = await moodRepository.createOrUpdateMoodEntry(
+      const result = await moodRepository.upsertDerivedMood(
         ctx.userId,
-        moodValue,
-        entry.notes ?? null,
-        ctx.parsedDate,
-        moodTags
+        'import',
+        {
+          moodValue,
+          notes: entry.notes ?? null,
+          moodTags,
+          entryDate: ctx.parsedDate,
+          entryTimestamp: await importedMoodTimestamp(entry, ctx),
+        }
       );
       return { status: 'success', data: result };
     } catch (moodError) {
@@ -2189,6 +2236,137 @@ export const customMeasurementHandler: HealthTypeHandler = {
   handleBatch: customMeasurementHandleBatch,
 };
 
+// ── Daily wearable summary readings ─────────────────────────────────────────
+
+// The Daily Wearable Health Summary reads resting heart rate and VO2 max from
+// daily_health_metrics. Health Connect and HealthKit deliver both as plain
+// records, so they only ever reached custom_measurements and the summary stayed
+// empty. Each record is still stored as a custom measurement exactly as before;
+// the latest valid reading per day and source is also copied onto that day's
+// daily_health_metrics row, the same way total_calories is.
+type DailySummaryColumn = 'resting_heart_rate' | 'vo2_max';
+
+function parseDailySummaryReading(rawValue: unknown): number | null {
+  const value =
+    typeof rawValue === 'number'
+      ? rawValue
+      : typeof rawValue === 'string' && rawValue.trim() !== ''
+        ? Number(rawValue)
+        : Number.NaN;
+  return Number.isFinite(value) ? value : null;
+}
+
+function createDailySummaryReadingHandler(
+  column: DailySummaryColumn,
+  bounds: { min: number; max: number; decimals: number }
+): HealthTypeHandler {
+  const scale = 10 ** bounds.decimals;
+  const handleBatch: HandleBatchFn = async (entries, ctx) => {
+    const outcomes = await customMeasurementHandleBatch(entries, ctx);
+
+    // One reading per day and source: the one taken last wins, whatever order
+    // the records arrived in.
+    const latest = new Map<
+      string,
+      {
+        parsedDate: string;
+        sourceProvider: string;
+        value: number;
+        takenAt: number;
+        indexes: number[];
+      }
+    >();
+    entries.forEach(({ entry, parsedDate, entryTimestamp }, i) => {
+      if (outcomes[i]?.status !== 'success') {
+        return;
+      }
+      const value = parseDailySummaryReading(entry.value);
+      if (value === null || value < bounds.min || value > bounds.max) {
+        log(
+          'info',
+          `healthDataHandlers: not copying ${entry?.type} ${entry?.value} for ${parsedDate} to the daily summary — outside ${bounds.min} to ${bounds.max}.`
+        );
+        return;
+      }
+      const sourceProvider = normalizeHealthSourceProvider(entry.source);
+      const key = `${parsedDate}|${sourceProvider}`;
+      const takenAt = Date.parse(entryTimestamp);
+      const current = latest.get(key);
+      if (!current) {
+        latest.set(key, {
+          parsedDate,
+          sourceProvider,
+          value,
+          takenAt,
+          indexes: [i],
+        });
+        return;
+      }
+      current.indexes.push(i);
+      if (!(takenAt < current.takenAt)) {
+        current.value = value;
+        current.takenAt = takenAt;
+      }
+    });
+
+    for (const reading of latest.values()) {
+      const value = Math.round(reading.value * scale) / scale;
+      try {
+        await genericHealthRepository.upsertDailyHealthMetrics(
+          String(ctx.userId),
+          String(ctx.actingUserId),
+          {
+            user_id: String(ctx.userId),
+            entry_date: reading.parsedDate,
+            source_provider: reading.sourceProvider,
+            ...(column === 'resting_heart_rate'
+              ? { resting_heart_rate: value }
+              : { vo2_max: value }),
+          }
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        for (const i of reading.indexes) {
+          outcomes[i] = {
+            status: 'error',
+            error: `Failed to update daily health metrics: ${message}`,
+          };
+        }
+      }
+    }
+    return outcomes;
+  };
+
+  return {
+    handle: async (entry, ctx) => {
+      const [outcome] = await handleBatch(
+        [
+          {
+            entry,
+            parsedDate: ctx.parsedDate,
+            entryTimestamp: ctx.entryTimestamp,
+            entryHour: ctx.entryHour,
+          },
+        ],
+        ctx
+      );
+      return outcome;
+    },
+    handleBatch,
+  };
+}
+
+const restingHeartRateHandler = createDailySummaryReadingHandler(
+  'resting_heart_rate',
+  { min: 20, max: 250, decimals: 0 }
+);
+
+const vo2MaxHandler = createDailySummaryReadingHandler('vo2_max', {
+  min: 10,
+  max: 100,
+  decimals: 1,
+});
+
 // ── Registry ────────────────────────────────────────────────────────────────
 
 // Handlers keyed by canonical type name.
@@ -2215,6 +2393,8 @@ export const HEALTH_TYPE_HANDLERS: Record<string, HealthTypeHandler> = {
   sleep_entry: sleepEntryHandler,
   Mood: moodHandler,
   MindfulnessSession: mindfulnessHandler,
+  resting_heart_rate: restingHeartRateHandler,
+  vo2_max: vo2MaxHandler,
 };
 
 // Lookup-only normalization of incoming type spellings to canonical handler
@@ -2244,6 +2424,8 @@ export const TYPE_ALIASES: Record<string, string> = {
   mindfulness_session: 'MindfulnessSession',
   mindfulness: 'MindfulnessSession',
   mindful: 'MindfulnessSession',
+  RestingHeartRate: 'resting_heart_rate',
+  Vo2Max: 'vo2_max',
 };
 
 /**

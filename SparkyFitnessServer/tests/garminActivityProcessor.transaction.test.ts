@@ -92,7 +92,15 @@ describe('processActivitiesAndWorkouts transaction boundary', () => {
     );
 
     expect(result).toEqual({ processedEntries: 1 });
-    expect(issuedStatements()).toEqual(['BEGIN', 'COMMIT']);
+    // Inside the transaction the import also takes the per-user advisory lock
+    // and reads earlier Garmin sessions for the duplicate archive
+    // (garminSessionMerge), still on the same client.
+    const statements = issuedStatements();
+    expect(statements[0]).toBe('BEGIN');
+    expect(statements[statements.length - 1]).toBe('COMMIT');
+    expect(statements).toContain(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))'
+    );
     expect(
       exerciseEntryRepository.deleteExerciseEntriesByEntrySourceAndDateWithClient
     ).toHaveBeenCalledWith(

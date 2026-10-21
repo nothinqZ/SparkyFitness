@@ -20,7 +20,10 @@ import Button from '../components/ui/Button';
 import WorkoutFormExerciseList, {
   type WorkoutFormExerciseListHandle,
 } from '../components/WorkoutFormExerciseList';
-import { useSetEditAccessoryBar } from '../components/SetRowChrome';
+import {
+  SET_ACCESSORY_BAR_HEIGHT,
+  useSetEditAccessoryBar,
+} from '../components/SetRowChrome';
 import ActiveWorkoutExerciseCard from '../components/ActiveWorkoutExerciseCard';
 import ActionSheet, {
   type ActionSheetItem,
@@ -33,6 +36,7 @@ import {
   getWorkoutSummary,
   getExerciseVolumeKg,
   hasBodyweightExercise,
+  isWarmupSetType,
   formatVolume,
   canReorderDraftExercises,
   exerciseFromSnapshot,
@@ -209,6 +213,7 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     replaceExercise,
     clearExerciseCompletions,
     addSet,
+    addWarmupSets,
     removeSet,
     updateSetField,
     updateSetMeta,
@@ -636,6 +641,7 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
       ? formState.exercises.reduce(
           (sum, ex) =>
             ex.sets.reduce((s, set) => {
+              if (isWarmupSetType(set.setType)) return s;
               const w = parseSetWeight(
                 set.weight,
                 resolveExerciseModality(
@@ -885,7 +891,8 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
         contentContainerStyle={{
           paddingBottom: insets.bottom + 20 + activeWorkoutBarPadding,
         }}
-        bottomOffset={20}
+        // Clear of the set-entry bar riding on top of the keyboard.
+        bottomOffset={SET_ACCESSORY_BAR_HEIGHT + 16}
         keyboardShouldPersistTaps="handled"
         contentInsetAdjustmentBehavior={
           usesNativeHeader ? 'automatic' : undefined
@@ -996,6 +1003,7 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
               setExerciseNotes={setExerciseNotes}
               onReplaceExercise={handleReplaceExercise}
               clearExerciseCompletions={clearExerciseCompletions}
+              addWarmupSets={addWarmupSets}
               supersetWith={supersetWith}
               ungroupExercise={ungroupExercise}
               onReorderExercises={reorderExercises}

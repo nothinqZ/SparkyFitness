@@ -133,6 +133,29 @@ export function clearBackgroundWater(): Promise<void> {
   return enqueue(() => store(null));
 }
 
+/**
+ * Android: puts the "Log water" launcher shortcut back, labelled in the app
+ * language. Registering the quick actions replaces every dynamic shortcut,
+ * this one included, so it runs after them. Queued with the syncs and clears
+ * so it never brings the shortcut back after a sign-out.
+ */
+export function refreshBackgroundWaterShortcut(
+  shortLabel: string,
+  longLabel: string
+): Promise<void> {
+  return enqueue(async () => {
+    if (!BackgroundWaterModule?.refreshShortcut) return;
+    try {
+      BackgroundWaterModule.refreshShortcut(shortLabel, longLabel);
+    } catch (error) {
+      addLog(
+        `[Background water] Could not restore the shortcut: ${String(error)}`,
+        'WARNING'
+      );
+    }
+  });
+}
+
 export function onAppBecameActive(run: () => void): () => void {
   const subscription = AppState.addEventListener('change', (state) => {
     if (state === 'active') run();

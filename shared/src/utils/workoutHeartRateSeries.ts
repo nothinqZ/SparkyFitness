@@ -1,5 +1,5 @@
-import type { HealthMetricSamples } from "../schemas/database/HealthMetricSamples.zod.ts";
-import { isValidTimeZone, localDateTimeToUtc } from "./timezone.ts";
+import type { HealthMetricSamples } from '../schemas/database/HealthMetricSamples.zod.ts';
+import { isValidTimeZone, localDateTimeToUtc } from './timezone.ts';
 
 export interface WorkoutHeartRateEntry {
   /** Calendar day the workout was logged on (`YYYY-MM-DD`). */
@@ -29,11 +29,11 @@ export function buildWorkoutHeartRateSeries(
   buckets: readonly HealthMetricSamples[] | null | undefined,
   exerciseEntryId: string,
   entry: WorkoutHeartRateEntry | null | undefined,
-  fallbackTimezone: string,
+  fallbackTimezone: string
 ): WorkoutHeartRatePoint[] {
   const entryDate = entry?.entry_date
     ? String(entry.entry_date).slice(0, 10)
-    : "";
+    : '';
   // entry_time is wall-clock time in the zone the workout was recorded in.
   // Older and manual entries have no zone, and those were written in the
   // user's timezone, not the device's.
@@ -44,20 +44,20 @@ export function buildWorkoutHeartRateSeries(
     entryDate && entry?.entry_time
       ? localDateTimeToUtc(
           `${entryDate}T${entry.entry_time}`,
-          entryZone,
+          entryZone
         ).getTime()
       : NaN;
   const endMs =
-    Number.isFinite(startMs) && typeof entry?.duration_minutes === "number"
+    Number.isFinite(startMs) && typeof entry?.duration_minutes === 'number'
       ? startMs + entry.duration_minutes * 60_000
       : NaN;
 
   const tagged: WorkoutHeartRatePoint[] = [];
   const during: WorkoutHeartRatePoint[] = [];
   for (const bucket of buckets ?? []) {
-    if (bucket.metric !== "heart_rate") continue;
+    if (bucket.metric !== 'heart_rate') continue;
     for (const sample of bucket.samples) {
-      if (typeof sample.bpm !== "number") continue;
+      if (typeof sample.bpm !== 'number') continue;
       const timestamp = Date.parse(sample.t);
       if (!Number.isFinite(timestamp)) continue;
       const point = { timestamp, bpm: sample.bpm, elapsedMinutes: 0 };

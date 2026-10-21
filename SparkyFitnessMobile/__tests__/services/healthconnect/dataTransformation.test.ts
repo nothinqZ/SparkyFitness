@@ -363,6 +363,44 @@ describe('transformHealthRecords', () => {
   });
 
   describe('SleepSession records', () => {
+    test('carries overnight HRV and resting heart rate onto the session', () => {
+      const records = [
+        {
+          startTime: atLocalTime('2024-01-15', '22:00'),
+          endTime: atLocalTime('2024-01-16', '06:00'),
+          avg_overnight_hrv: 42,
+          resting_heart_rate: 57,
+        },
+      ];
+      const result = transformHealthRecords(records, {
+        recordType: 'SleepSession',
+        unit: '',
+        type: 'sleep',
+      }) as AggregatedSleepSession[];
+
+      expect(result[0]).toMatchObject({
+        avg_overnight_hrv: 42,
+        resting_heart_rate: 57,
+      });
+    });
+
+    test('omits overnight HRV and resting heart rate keys when absent', () => {
+      const records = [
+        {
+          startTime: atLocalTime('2024-01-15', '22:00'),
+          endTime: atLocalTime('2024-01-16', '06:00'),
+        },
+      ];
+      const result = transformHealthRecords(records, {
+        recordType: 'SleepSession',
+        unit: '',
+        type: 'sleep',
+      }) as AggregatedSleepSession[];
+
+      expect(result[0]).not.toHaveProperty('avg_overnight_hrv');
+      expect(result[0]).not.toHaveProperty('resting_heart_rate');
+    });
+
     test('creates rich sleep object with all required fields', () => {
       const records = [
         {

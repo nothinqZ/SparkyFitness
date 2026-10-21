@@ -306,6 +306,32 @@ describe('transformFitActivity — unit behaviour', () => {
     expect(result.entryDate).toBe('2026-03-02');
   });
 
+  it('ignores an implausible localTimestamp (20 years ahead) and keeps the real date', () => {
+    const messages = baseMessages({
+      activityMesgs: [
+        {
+          timestamp: new Date('2026-10-17T17:17:53Z'),
+          // Some exporters write a Unix-epoch value in this FIT-epoch field: +20 years.
+          localTimestamp: 1792261073,
+        },
+      ],
+      sessionMesgs: [
+        {
+          startTime: new Date('2026-10-17T16:00:00Z'),
+          totalTimerTime: 60,
+          sport: 'cycling',
+        },
+      ],
+    } as Partial<FitMessages>);
+    const result = transformFitActivity(messages, Buffer.from('x'));
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.entryDate).toBeNull(); // caller falls back to the profile timezone
+    expect(result.detailData.activity.startTimeLocal).toBeUndefined();
+    expect(result.warnings).toEqual([
+      expect.stringContaining('no device-local time'),
+    ]);
+  });
+
   it('returns a null entry date and a warning when local time is missing', () => {
     const result = transformFitActivity(baseMessages(), Buffer.from('x'));
     if (!result.ok) throw new Error(result.reason);

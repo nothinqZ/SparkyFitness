@@ -5,6 +5,7 @@ import {
   dailySummaryQueryKey,
   dailySummaryRootQueryKey,
   fastingRootQueryKey,
+  foodEntriesRangeRootQueryKey,
   foodsQueryKey,
   waterIntakeLogQueryKey,
 } from './queryKeys';
@@ -41,6 +42,12 @@ export function invalidateFoodCache(
   });
   void queryClient.invalidateQueries({
     queryKey: fastingRootQueryKey,
+    refetchType: 'all',
+  });
+  // Nutrient trends read food entries over a range, so they must not show an
+  // entry that was just edited or deleted.
+  void queryClient.invalidateQueries({
+    queryKey: foodEntriesRangeRootQueryKey,
     refetchType: 'all',
   });
 }

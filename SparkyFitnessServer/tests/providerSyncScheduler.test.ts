@@ -294,11 +294,22 @@ describe('providerSyncScheduler', () => {
     const tasks = startProviderSyncSchedulers();
     expect(tasks).toHaveLength(10);
     expect(cron.schedule).toHaveBeenCalledTimes(10);
+    // Staggered (homeserver policy): Garmin at :07, Withings at :12, and no
+    // two providers at the same minute, so the hourly syncs never pile up.
     expect(cron.schedule).toHaveBeenCalledWith(
-      '0 * * * *',
+      '7 * * * *',
       expect.any(Function),
       { noOverlap: true }
     );
+    expect(cron.schedule).toHaveBeenCalledWith(
+      '12 * * * *',
+      expect.any(Function),
+      { noOverlap: true }
+    );
+    const minutes = vi
+      .mocked(cron.schedule)
+      .mock.calls.map((call) => String(call[0]).split(' ')[0]);
+    expect(new Set(minutes).size).toBe(minutes.length);
   });
 
   it('hands node-cron the running sync so noOverlap can see it', async () => {

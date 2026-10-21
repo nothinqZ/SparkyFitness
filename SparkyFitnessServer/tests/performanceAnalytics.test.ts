@@ -6,7 +6,7 @@ import {
   isoWeekStart,
   movingAverage,
   paceSecondsPerKm,
-  predictRaceTimes,
+  predictRaceTimesRiegel,
   recoveryEstimate,
   riegelPredictSeconds,
   sleepConsistency,
@@ -58,7 +58,7 @@ describe('running', () => {
   it("predicts race times with Riegel's formula from the best eligible run", () => {
     // 20:00 5k -> 10k: 1200 × 2^1.06 = 2501.8 s (41:42)
     expect(Math.round(riegelPredictSeconds(5, 1200, 10))).toBe(2502);
-    const predictions = predictRaceTimes([
+    const predictions = predictRaceTimesRiegel([
       { date: '2026-10-01', distanceKm: 5, durationMinutes: 20 },
       { date: '2026-10-08', distanceKm: 10, durationMinutes: 50 }, // slower
       { date: '2026-10-09', distanceKm: 1, durationMinutes: 3 }, // too short to use
@@ -70,7 +70,7 @@ describe('running', () => {
     expect(predictions['10k']!.seconds).toBe(2502);
     // 1200 × (42.195/5)^1.06 = 11,509 s (3:11:49)
     expect(predictions.marathon!.seconds).toBe(11509);
-    expect(predictRaceTimes([])['5k']).toBeNull();
+    expect(predictRaceTimesRiegel([])['5k']).toBeNull();
   });
 });
 

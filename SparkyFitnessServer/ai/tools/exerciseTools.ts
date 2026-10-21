@@ -524,6 +524,7 @@ const ADAPTIVE_REASON_TEXT: Record<AdaptiveReason, string> = {
   too_hard: 'hold weight: last session felt too hard',
   too_hard_repeated: 'lighter (-10%): too hard two sessions running',
   high_effort: 'hold weight: last sets were logged at near-max effort',
+  low_effort: 'one step heavier: last sets were logged as easy',
   too_easy_repeated: 'one step heavier: too easy two sessions running',
 };
 

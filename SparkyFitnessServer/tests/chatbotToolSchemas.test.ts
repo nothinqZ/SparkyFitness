@@ -268,6 +268,8 @@ describe('published (flat) chatbot tool schemas', () => {
         'notes',
         'data_type',
         'mood_value',
+        'energy_value',
+        'focus_value',
         'mood_tags',
         'start_time',
         'end_time',

@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { DateTimeInput } from '@/components/ui/TimeInput';
 import { Label } from '@/components/ui/label';
 import {
   Popover,
@@ -215,12 +215,11 @@ export function EndEpisodeButton({ entry, meds }: EpisodeButtonProps) {
                 </Button>
               ))}
             </div>
-            <Input
-              type="datetime-local"
+            <DateTimeInput
               aria-label={t('symptoms.episode.endedWhen', 'It ended')}
               value={toDatetimeLocal(endedAt)}
-              onChange={(e) => {
-                const iso = fromDatetimeLocal(e.target.value);
+              onChange={(value) => {
+                const iso = fromDatetimeLocal(value);
                 if (iso) setEndedAt(iso);
               }}
               className="max-w-xs"

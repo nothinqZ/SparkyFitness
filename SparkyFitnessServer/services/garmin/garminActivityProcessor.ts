@@ -1,4 +1,21 @@
+// Lokaler Patch einer Datei aus dem SparkyFitness-Server-Image.
+//
+// Abgeleitet von:
+//   codewithcj/sparkyfitness_server:latest
+//   @sha256:0a365e3d5561ad58ebe1e6cba1d132c7e968958d632bfd9f6a39cd736c3dc9d7
+//
+// Der Server laeuft die TypeScript-Quellen direkt (tsx index.ts), deshalb
+// genuegt ein read-only Bind-Mount ueber die Originaldatei. Hebt Renovate
+// den Digest, muss der Patch gegen die neue Fassung neu abgeleitet werden -
+// sonst laeuft ein alter Stand dieser einen Datei gegen einen neuen Server.
+// Die inhaltliche Begruendung steht unten an der geaenderten Stelle.
+
 import type { PoolClient } from 'pg';
+import {
+  lockGarminImport,
+  mergeGarminSession,
+  reconcileGarminDuplicates,
+} from './garminSessionMerge.js';
 import { log } from '../../config/logging.js';
 import { getClient } from '../../db/poolManager.js';
 import exerciseEntryRepository from '../../models/exerciseEntry.js';
@@ -213,6 +230,8 @@ export async function processActivitiesAndWorkouts(
   const client = await getClient(userId, userId);
   try {
     await client.query('BEGIN');
+    await lockGarminImport(client, userId);
+    await reconcileGarminDuplicates(client, userId, startDate, endDate);
     await exerciseEntryRepository.deleteExerciseEntriesByEntrySourceAndDateWithClient(
       client,
       userId,
@@ -240,7 +259,33 @@ export async function processActivitiesAndWorkouts(
           (a) => (a as { activity?: GarminActivityDto }).activity ?? {}
         )
       );
+      const strengthByDay = new Map<string, Set<string>>();
+      for (const item of activities) {
+        const a = (item as GarminSessionData)?.activity;
+        if (
+          a?.activityType?.typeKey === 'strength_training' &&
+          a.startTimeLocal &&
+          a.activityId
+        ) {
+          const day = a.startTimeLocal.slice(0, 10);
+          if (!strengthByDay.has(day)) strengthByDay.set(day, new Set());
+          strengthByDay.get(day)!.add(String(a.activityId));
+        }
+      }
       for (const activityData of activities) {
+        const session = activityData as GarminSessionData;
+        const day = session.activity?.startTimeLocal?.slice(0, 10) ?? '';
+        if (
+          await mergeGarminSession(
+            client,
+            userId,
+            session,
+            strengthByDay.get(day)?.size === 1
+          )
+        ) {
+          processedCount++;
+          continue;
+        }
         const act = activityData as Record<string, Record<string, unknown>>;
         if (
           act.activity &&
@@ -749,14 +794,32 @@ export async function processGarminWorkoutSession(
         endMs: endTime ?? null,
       });
 
-      await workoutPresetRepository.addExerciseToWorkoutPreset(
-        userId,
-        workoutPreset.id,
-        exercise.id,
-        null,
-        sets,
-        exerciseSortOrder
-      );
+      // PATCH (homeserver-docker): nur ein Preset befuellen, das dieser
+      // Import selbst angelegt hat. Upstream berechnet isNewWorkoutPreset und
+      // wertet es nie aus, weshalb die importierten Uebungen auch in ein
+      // bestehendes Preset wandern - und das ist der Trainingsplan des
+      // Nutzers, sobald die Garmin-Aktivitaet so heisst wie er.
+      //
+      // Beobachtet am 2026-09-11: sparky-garmin-sync schreibt die Uebungs-
+      // liste auf die Aktivitaet, dieser Import liest sie zur vollen Stunde
+      // zurueck, legt fuer jeden Garmin-Namen einen Katalogeintrag an und
+      // haengt ihn als zweite Zeile in den Plan. Preset 12 und 13 trugen
+      // danach jede Uebung doppelt - einmal deutsch, einmal als Garmin-Name
+      // (Butterfly Reverse / Kneeling Rear Flye, Butterfly / Cable Crossover).
+      // Preset 14, trainiert bevor der Sync lief, blieb sauber.
+      //
+      // Der geloggte Tag selbst (exercise_preset_entries) entsteht weiter
+      // vollstaendig; nur die Plan-Vorlage bleibt unberuehrt.
+      if (isNewWorkoutPreset) {
+        await workoutPresetRepository.addExerciseToWorkoutPreset(
+          userId,
+          workoutPreset.id,
+          exercise.id,
+          null,
+          sets,
+          exerciseSortOrder
+        );
+      }
       exerciseSortOrder++;
     }
 
@@ -793,6 +856,7 @@ export async function processGarminWorkoutDefinition(
     userId,
     workoutName
   );
+  const isNewDefinition = !workoutPreset;
   if (!workoutPreset) {
     workoutPreset = await workoutPresetRepository.createWorkoutPreset({
       user_id: userId,
@@ -802,6 +866,7 @@ export async function processGarminWorkoutDefinition(
     });
   }
   if (
+    isNewDefinition &&
     workoutData.workoutSegments &&
     Array.isArray(workoutData.workoutSegments)
   ) {

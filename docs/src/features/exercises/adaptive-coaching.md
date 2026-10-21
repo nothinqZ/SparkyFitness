@@ -77,6 +77,7 @@ When you start a workout, each exercise's suggested weight takes your recent fee
 | Too hard last time | No weight increase | "Holding weight: last time felt too hard." |
 | Too hard two sessions running | 10% lighter | "Lighter today: too hard two sessions running." |
 | No feedback, but your last sets were logged at RPE 9.5+ or 0 RIR | No weight increase | "Holding weight: your last sets were near max effort." |
+| No feedback, but your last sets were logged at an average RPE of 7 or lower (or 3+ reps in reserve) | One step heavier (your preset's increment, else 2.5 kg / 5 lb) | "A step heavier: your last sets were logged as easy." |
 | Too easy two sessions running | One step heavier (your preset's increment, else 2.5 kg / 5 lb) | "A step heavier: too easy two sessions running." |
 
 - Weights are rounded down to a loadable step (2.5 kg or 5 lb) and always drop at least one step on a lighter day.
@@ -86,7 +87,7 @@ When you start a workout, each exercise's suggested weight takes your recent fee
 
 ### Turning it off
 
-Adaptive suggestions are **on by default**. Until you give feedback, the only thing that can change is holding the weight when your last sets were logged at near-max effort (RPE 9.5+ or 0 RIR). To turn them off:
+Adaptive suggestions are **on by default**. Until you give feedback, the only things that can change are holding the weight when your last sets were logged at near-max effort (RPE 9.5+ or 0 RIR), and adding a step when they were logged as easy (RPE 7 or lower, or 3+ reps in reserve). Warm-ups are not counted, and an answer to the difficulty question always wins over logged effort. To turn them off:
 
 | Where | How |
 | :--- | :--- |
@@ -119,3 +120,7 @@ Turn on **Settings → Workout Settings → Lower music during cues** and your m
 | "My shoulder hurts. Chest exercises that don't use shoulders?" | Alternatives that avoid shoulder muscles |
 | "Yesterday's workout felt too easy." | Saves the feedback on that workout |
 | "Will my Push Day change next time?" | Explains each exercise's adjustment and why |
+
+## Effort on an exercise
+
+Each exercise's **History** tab starts with an **Effort** card once you have logged an RPE for it. It shows the average RPE of your last session and, as bars, of up to your last ten sessions, coloured from easy to max. For a plain weight and reps exercise it also shows an **estimated 1RM with effort**: the best set's Epley estimate counting the reps you had left, so 100 kg for 5 reps at RPE 8 counts as 7 reps. Next to it is the estimate from reps alone. Only sets with an RPE between 6 and 10 are adjusted, and warm-ups are ignored. Personal records and best sets are unchanged and still use reps alone.

@@ -50,11 +50,14 @@ The `sparky_manage_checkin` tool supports the following actions:
     - `unit` (string, optional): Unit for the new category.
 
 ### `log_mood`
-- **Description:** Logs the user's mood for a specific date.
+- **Description:** Logs a new mood check-in. Every call adds a check-in, so a day can hold several. Every parameter is optional, but at least one of mood, energy, focus, notes or tags is required. The check-in is timestamped with the current time, or with local noon when `entry_date` is another day.
 - **Parameters:**
-    - `mood_value` (number): Mood score (typically 1-10).
+    - `mood_value` (integer 1-10, optional): Mood score. There is no default; omit it for a check-in with no mood.
+    - `energy_value` (integer 1-5, optional): Energy rating (1 = drained, 5 = energized).
+    - `focus_value` (integer 1-5, optional): Focus rating (1 = scattered, 5 = locked in).
     - `notes` (string, optional): Optional notes about the mood.
-    - `entry_date` (string, YYYY-MM-DD): The date of the record.
+    - `mood_tags` (string[], optional): Mood tags or emotions, for example `["anxious", "tired"]`.
+    - `entry_date` (string, YYYY-MM-DD, optional): The date of the record. Defaults to today.
 
 ### `log_fasting`
 - **Description:** Logs a fasting window.
@@ -75,6 +78,6 @@ The `sparky_manage_checkin` tool supports the following actions:
     - `source` (string, optional): Source of data (e.g., "manual", "Garmin", "Fitbit").
 
 ### `list_checkin_diary`
-- **Description:** Retrieves all logged health check-in entries (biometrics, mood, sleep, custom metrics) for a specific date.
+- **Description:** Retrieves all logged health check-in entries (biometrics, mood, sleep, custom metrics) for a specific date. Every mood check-in of the day is listed in time order, each as `- HH:MM <score>/10<ratings><tags> — notes` in the user's timezone (the score is omitted for a check-in with no mood). A device-derived mood (Garmin or import) is shown only when no manual check-in that day has a mood.
 - **Parameters:**
     - `entry_date` (string, YYYY-MM-DD, optional): The date to retrieve the diary for. Defaults to today.

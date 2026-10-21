@@ -28,7 +28,14 @@ function notificationCopy(
   options?: Record<string, unknown>
 ): string {
   // i18n-audit-ignore-next-line dynamic-i18n-key -- all call sites use literal notification catalog keys.
-  return i18n.t(key, { defaultValue, ...options });
+  const translated = i18n.t(key, { defaultValue, ...options });
+  if (typeof translated === 'string' && translated.length > 0) {
+    return translated;
+  }
+  if (!options) return defaultValue;
+  return defaultValue.replace(/\{\{(\w+)\}\}/g, (_, token: string) =>
+    options[token] !== undefined ? String(options[token]) : `{{${token}}}`
+  );
 }
 
 const REST_COMPLETE_CATEGORY = 'rest-complete';
@@ -43,6 +50,7 @@ export const MEDICATION_REMINDER_CATEGORY = 'medication-reminder';
 export const MEDICATION_REMINDER_GROUP_CATEGORY = 'medication-reminder-group';
 export const MEDICATION_TAKEN_ACTION = 'medication-taken';
 export const MEDICATION_SKIP_ACTION = 'medication-skip';
+export const MEDICATION_SNOOZE_ACTION = 'medication-snooze';
 
 export type AppNotificationPermission = 'granted' | 'denied' | 'undetermined';
 
@@ -90,6 +98,14 @@ export async function registerLocalizedNotificationPresentation(): Promise<void>
     );
   }
 
+  const snoozeMinutes =
+    useAppPreferencesStore.getState()?.medicationReminderSnoozeMinutes ?? 30;
+  const remindInTitle = notificationCopy(
+    'notifications.actions.remindInMinutes',
+    'Remind in {{minutes}}m',
+    { minutes: snoozeMinutes }
+  );
+
   await Notifications.setNotificationCategoryAsync(REST_COMPLETE_CATEGORY, [
     {
       identifier: COMPLETE_SET_ACTION,
@@ -119,6 +135,11 @@ export async function registerLocalizedNotificationPresentation(): Promise<void>
         ),
         options: { opensAppToForeground: false },
       },
+      {
+        identifier: MEDICATION_SNOOZE_ACTION,
+        buttonTitle: remindInTitle,
+        options: { opensAppToForeground: false },
+      },
     ]
   );
   await Notifications.setNotificationCategoryAsync(
@@ -135,6 +156,11 @@ export async function registerLocalizedNotificationPresentation(): Promise<void>
       {
         identifier: MEDICATION_SKIP_ACTION,
         buttonTitle: notificationCopy('notifications.actions.skip', 'Skip'),
+        options: { opensAppToForeground: false },
+      },
+      {
+        identifier: MEDICATION_SNOOZE_ACTION,
+        buttonTitle: remindInTitle,
         options: { opensAppToForeground: false },
       },
     ]
@@ -220,7 +246,9 @@ export async function initNotifications(): Promise<void> {
     Notifications.setNotificationHandler({
       handleNotification: async (notification) => {
         const category = notification.request.content.categoryIdentifier;
-        const isMedReminder = category === MEDICATION_REMINDER_CATEGORY;
+        const isMedReminder =
+          category === MEDICATION_REMINDER_CATEGORY ||
+          category === MEDICATION_REMINDER_GROUP_CATEGORY;
         const isRestPing = category === REST_COMPLETE_CATEGORY;
         // iOS also runs this while the app is frontmost-but-inactive (screen
         // locking, app switcher), where the chime never plays — so there the

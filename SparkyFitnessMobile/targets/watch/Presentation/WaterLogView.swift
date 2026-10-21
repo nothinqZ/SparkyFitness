@@ -48,7 +48,7 @@ struct WaterLogView: View {
                 }
             }
         }
-        .navigationTitle("Today")
+        .navigationTitle(String(localized: "watch.water.today", defaultValue: "Today"))
         // Inline, so the title sits on the same line as the back chevron
         // rather than eating a whole row of a screen this small.
         .navigationBarTitleDisplayMode(.inline)
@@ -65,7 +65,7 @@ struct WaterLogView: View {
             Image(systemName: "drop")
                 .font(.system(size: 22))
                 .foregroundStyle(.secondary)
-            Text("Nothing logged yet today")
+            Text(String(localized: "watch.water.empty", defaultValue: "Nothing logged yet today"))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -104,7 +104,7 @@ struct WaterLogView: View {
         .buttonStyle(.plain)
         .opacity(isDeleting ? 0.4 : 1)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(entry.name), \(amountText(entry)), at \(entry.time)")
+        .accessibilityLabel(String(localized: "watch.water.entryAccessibility", defaultValue: "\(entry.name), \(amountText(entry)), at \(entry.time)"))
         .accessibilityHint(
             isDeleting ? "Deleting, waiting for your phone" : "Opens a prompt to delete this entry"
         )
@@ -118,7 +118,7 @@ struct WaterLogView: View {
 
     private func confirmation(for entry: WaterLogEntry) -> some View {
         VStack(spacing: 10) {
-            Text("Delete this entry?")
+            Text(String(localized: "watch.water.deleteEntryConfirm", defaultValue: "Delete this entry?"))
                 .font(.system(size: 15, weight: .semibold))
                 .multilineTextAlignment(.center)
             Text("\(entry.name) · \(amountText(entry))")
@@ -128,13 +128,13 @@ struct WaterLogView: View {
                 .multilineTextAlignment(.center)
 
             HStack(spacing: 8) {
-                Button("No") {
+                Button(String(localized: "watch.common.no", defaultValue: "No")) {
                     Haptics.tap()
                     pendingDeletion = nil
                 }
                 .buttonStyle(.bordered)
 
-                Button("Yes") {
+                Button(String(localized: "watch.common.yes", defaultValue: "Yes")) {
                     Haptics.tap()
                     delete(entry)
                 }

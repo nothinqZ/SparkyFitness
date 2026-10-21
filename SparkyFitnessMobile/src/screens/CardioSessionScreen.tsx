@@ -1,103 +1,36 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
 import { View, Text, ScrollView, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { ExerciseActivityQueryItem } from '@workspace/shared';
+import Toast from 'react-native-toast-message';
 
 import { useScreenHeader } from '../hooks/useScreenHeader';
 import { useCardioSessionDetail } from '../hooks/useCardioSessionDetail';
-import { formatLocalizedNumber, getAppLocale } from '../localization';
+import { getAppLocale } from '../localization';
 import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
+import {
+  METERS_PER_KM,
+  METERS_PER_MILE,
+  formatPace,
+} from '../utils/gpsRecording';
+import {
+  paceSeriesFromDistance,
+  paceSeriesFromTrack,
+} from '../utils/cardioSession';
+import { bpmText, sessionStats } from '../utils/cardioSessionStats';
+import Button from '../components/ui/Button';
+import { shareRouteAsGpx } from '../services/gpxExport';
+import { saveActivityAsRoute } from '../services/routeService';
 import RouteMap from '../components/exerciseStats/RouteMap';
 import HeartRateChart from '../components/exerciseStats/HeartRateChart';
+import PaceChart from '../components/exerciseStats/PaceChart';
 import HeartRateZones from '../components/exerciseStats/HeartRateZones';
+import ProgramWorkoutBadge from '../components/recording/ProgramWorkoutBadge';
+import ShoePickerCard from '../components/ShoePickerCard';
 import type { RootStackScreenProps } from '../types/navigation';
 
 type CardioSessionScreenProps = RootStackScreenProps<'CardioSession'>;
-
-interface Stat {
-  key: string;
-  label: string;
-  value: string;
-}
-
-const minutesText = (t: TFunction, minutes: number) =>
-  t('exerciseStatistics.cardio.minutes', {
-    count: minutes,
-    formattedCount: formatLocalizedNumber(minutes),
-    defaultValue: '{{formattedCount}} min',
-    defaultValue_one: '{{formattedCount}} min',
-    defaultValue_other: '{{formattedCount}} min',
-  });
-
-const bpmText = (t: TFunction, bpm: number) =>
-  t('exerciseStatistics.cardio.bpm', {
-    defaultValue: '{{value}} bpm',
-    value: formatLocalizedNumber(Math.round(bpm)),
-  });
-
-function sessionStats(
-  t: TFunction,
-  session: ExerciseActivityQueryItem,
-  distanceUnit: 'km' | 'miles'
-): Stat[] {
-  const stats: Stat[] = [];
-  if (session.distanceFormatted != null && session.distanceFormatted > 0) {
-    stats.push({
-      key: 'distance',
-      label: t('exerciseStatistics.cardio.distance', {
-        defaultValue: 'Distance',
-      }),
-      value: `${formatLocalizedNumber(session.distanceFormatted, {
-        maximumFractionDigits: 2,
-      })} ${
-        distanceUnit === 'miles'
-          ? t('exerciseStatistics.cardio.unitMi', { defaultValue: 'mi' })
-          : t('exerciseStatistics.cardio.unitKm', { defaultValue: 'km' })
-      }`,
-    });
-  }
-  if (session.durationMinutes > 0) {
-    stats.push({
-      key: 'duration',
-      label: t('exerciseStatistics.cardio.duration', {
-        defaultValue: 'Duration',
-      }),
-      value: minutesText(t, Math.round(session.durationMinutes)),
-    });
-  }
-  if (session.formattedPace) {
-    stats.push({
-      key: 'pace',
-      label: t('exerciseStatistics.cardio.pace', { defaultValue: 'Pace' }),
-      value: session.formattedPace,
-    });
-  }
-  if (session.avgHeartRate != null && session.avgHeartRate > 0) {
-    stats.push({
-      key: 'hr',
-      label: t('exerciseStatistics.cardio.avgHeartRate', {
-        defaultValue: 'Avg heart rate',
-      }),
-      value: bpmText(t, session.avgHeartRate),
-    });
-  }
-  if (session.caloriesBurned > 0) {
-    stats.push({
-      key: 'calories',
-      label: t('exerciseStatistics.cardio.caloriesLabel', {
-        defaultValue: 'Calories',
-      }),
-      value: t('exerciseStatistics.cardio.calories', {
-        defaultValue: '{{value}} Cal',
-        value: formatLocalizedNumber(Math.round(session.caloriesBurned)),
-      }),
-    });
-  }
-  return stats;
-}
 
 const Card: React.FC<{ title: string; children: React.ReactNode }> = ({
   title,
@@ -109,8 +42,11 @@ const Card: React.FC<{ title: string; children: React.ReactNode }> = ({
   </View>
 );
 
-const CardioSessionScreen: React.FC<CardioSessionScreenProps> = ({ route }) => {
-  const { session, distanceUnit } = route.params;
+const CardioSessionScreen: React.FC<CardioSessionScreenProps> = ({
+  navigation,
+  route,
+}) => {
+  const { session, distanceUnit, diaryEntry } = route.params;
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const activeWorkoutBarPadding = useActiveWorkoutBarPadding('stack');
@@ -122,10 +58,62 @@ const CardioSessionScreen: React.FC<CardioSessionScreenProps> = ({ route }) => {
     // it the route's static "Cardio Session" shows instead.
     nativeTitle: session.exerciseName,
     left: { kind: 'back' },
+    // A run or walk made in the app opens here from the diary; its editor is
+    // the activity screen, which this hands over to.
+    right: diaryEntry
+      ? {
+          kind: 'text',
+          label: t('common.edit', { defaultValue: 'Edit' }),
+          role: 'secondary',
+          onPress: () =>
+            navigation.replace('ActivityDetail', { session: diaryEntry }),
+          accessibilityLabel: t('activityDetail.accessibility.edit', {
+            defaultValue: 'Edit activity',
+          }),
+          identifier: 'cardio-session-edit',
+        }
+      : null,
   });
 
   const detail = useCardioSessionDetail(session.id, session.entryDate);
   const stats = sessionStats(t, session, distanceUnit);
+  const exportGpx = async () => {
+    try {
+      await shareRouteAsGpx({
+        name: session.exerciseName,
+        day: session.entryDate.slice(0, 10),
+        points: detail.route,
+      });
+    } catch {
+      Toast.show({
+        type: 'error',
+        text1: t('exerciseStatistics.cardio.exportGpxFailed', {
+          defaultValue: 'Could not export the route',
+        }),
+      });
+    }
+  };
+  const [savingRoute, setSavingRoute] = React.useState(false);
+  const saveAsRoute = () => {
+    setSavingRoute(true);
+    void saveActivityAsRoute(session.id)
+      .then((saved) => {
+        Toast.show({
+          type: 'success',
+          text1: t('routes.savedAsRoute', { defaultValue: 'Saved to Routes' }),
+        });
+        navigation.navigate('RouteDetail', { id: saved.id });
+      })
+      .catch(() => {
+        Toast.show({
+          type: 'error',
+          text1: t('routes.saveAsRouteFailed', {
+            defaultValue: 'Could not save the route',
+          }),
+        });
+      })
+      .finally(() => setSavingRoute(false));
+  };
   const [year, month, day] = session.entryDate
     .slice(0, 10)
     .split('-')
@@ -140,6 +128,19 @@ const CardioSessionScreen: React.FC<CardioSessionScreenProps> = ({ route }) => {
     day: 'numeric',
     year: 'numeric',
   });
+
+  const unitMeters = distanceUnit === 'miles' ? METERS_PER_MILE : METERS_PER_KM;
+  const paceSeries = React.useMemo(
+    () =>
+      detail.route.length > 0
+        ? paceSeriesFromTrack(detail.route, unitMeters)
+        : paceSeriesFromDistance(detail.distanceSeries ?? [], unitMeters),
+    [detail.route, detail.distanceSeries, unitMeters]
+  );
+  const paceUnitLabel =
+    distanceUnit === 'miles'
+      ? t('exerciseStatistics.cardio.perMile', { defaultValue: '/mi' })
+      : t('exerciseStatistics.cardio.perKm', { defaultValue: '/km' });
 
   const peak = detail.heartRate.reduce((max, p) => Math.max(max, p.bpm), 0);
   const average =
@@ -164,6 +165,8 @@ const CardioSessionScreen: React.FC<CardioSessionScreenProps> = ({ route }) => {
       >
         <Text className="text-text-secondary text-sm mb-3">{dateText}</Text>
 
+        <ProgramWorkoutBadge entryId={session.id} />
+
         {stats.length > 0 ? (
           <View className="bg-surface rounded-xl p-4 mb-4 shadow-sm flex-row flex-wrap">
             {stats.map((stat) => (
@@ -179,6 +182,20 @@ const CardioSessionScreen: React.FC<CardioSessionScreenProps> = ({ route }) => {
           </View>
         ) : null}
 
+        <Button
+          variant="secondary"
+          className="mb-4 py-3 items-center"
+          testID="share-as-image"
+          onPress={() =>
+            navigation.navigate('ActivityShare', { session, distanceUnit })
+          }
+        >
+          {t('exerciseStatistics.cardio.shareImage', {
+            defaultValue: 'Share as image',
+          })}
+        </Button>
+        <ShoePickerCard exerciseEntryId={session.id} />
+
         <Card
           title={t('exerciseStatistics.cardio.route', {
             defaultValue: 'Route',
@@ -187,13 +204,32 @@ const CardioSessionScreen: React.FC<CardioSessionScreenProps> = ({ route }) => {
           {detail.isRouteLoading ? (
             <ActivityIndicator />
           ) : detail.route.length > 1 ? (
-            <RouteMap
-              points={detail.route}
-              accessibilityLabel={t('exerciseStatistics.cardio.routeA11y', {
-                defaultValue:
-                  'Route of this workout, from the green dot to the red ring',
-              })}
-            />
+            <>
+              <RouteMap
+                points={detail.route}
+                accessibilityLabel={t('exerciseStatistics.cardio.routeA11y', {
+                  defaultValue:
+                    'Route of this workout, from the green dot to the red ring',
+                })}
+              />
+              <Button
+                variant="link"
+                testID="export-gpx"
+                onPress={() => void exportGpx()}
+              >
+                {t('exerciseStatistics.cardio.exportGpx', {
+                  defaultValue: 'Export GPX',
+                })}
+              </Button>
+              <Button
+                variant="link"
+                testID="save-as-route"
+                loading={savingRoute}
+                onPress={saveAsRoute}
+              >
+                {t('routes.saveAsRoute', { defaultValue: 'Save as route' })}
+              </Button>
+            </>
           ) : (
             <Text className="text-text-secondary text-sm">
               {t('exerciseStatistics.cardio.noRoute', {
@@ -203,6 +239,37 @@ const CardioSessionScreen: React.FC<CardioSessionScreenProps> = ({ route }) => {
             </Text>
           )}
         </Card>
+
+        {paceSeries.length >= 2 ? (
+          <Card
+            title={t('exerciseStatistics.cardio.pace', {
+              defaultValue: 'Pace',
+            })}
+          >
+            <View className="flex-row mb-2">
+              <Text className="text-text-secondary text-sm mr-4">
+                {t('exerciseStatistics.cardio.bestPace', {
+                  defaultValue: 'Best {{value}}',
+                  value: `${formatPace(
+                    Math.min(...paceSeries.map((p) => p.paceSeconds))
+                  )} ${paceUnitLabel}`,
+                })}
+              </Text>
+            </View>
+            <PaceChart
+              data={paceSeries}
+              xAxisCaption={
+                distanceUnit === 'miles'
+                  ? t('exerciseStatistics.cardio.milesAxis', {
+                      defaultValue: 'Miles from start',
+                    })
+                  : t('exerciseStatistics.cardio.kilometersAxis', {
+                      defaultValue: 'Kilometers from start',
+                    })
+              }
+            />
+          </Card>
+        ) : null}
 
         <Card
           title={t('exerciseStatistics.cardio.heartRate', {

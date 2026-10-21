@@ -9,10 +9,34 @@ import {
   todayInZone,
   addDays,
   userFastingPreferencesMutatorSchema,
+  clampStoredMoodValue,
+  instantToDay,
 } from '@workspace/shared';
 import { authenticate } from '../middleware/authMiddleware.js';
 import checkPermissionMiddleware from '../middleware/checkPermissionMiddleware.js';
 const router = express.Router();
+
+// Logs the optional end-of-fast mood as a manual check-in stamped at the end
+// of the fast and dated in the user's timezone. Writes nothing when the fast
+// ended without a mood value, or when a check-in at that end time already
+// exists: a retried end then neither duplicates the mood nor loses one whose
+// first write failed after the fast had ended.
+async function saveFastingMoodCheckin(
+  userId: string,
+  moodValue: number | null,
+  notes: string | null | undefined,
+  endTime: string
+): Promise<void> {
+  if (moodValue === null) return;
+  if (await moodRepository.hasManualCheckinAt(userId, endTime)) return;
+  const tz = await loadUserTimezone(userId);
+  await moodRepository.createCheckin(userId, {
+    moodValue,
+    notes: notes || null,
+    entryTimestamp: endTime,
+    entryDate: instantToDay(endTime, tz),
+  });
+}
 /**
  * @swagger
  * tags:
@@ -179,6 +203,7 @@ router.post('/start', async (req, res) => {
  *                 properties:
  *                   value:
  *                     type: integer
+ *                     description: Mood intensity on a 10-100 scale; see the MoodEntry schema for the band boundaries.
  *                   notes:
  *                     type: string
  *     responses:
@@ -204,6 +229,17 @@ router.post('/end', async (req, res) => {
   if (!id || !end_time) {
     return res.status(400).json({ error: 'Fast ID and end time are required' });
   }
+  // The mood lands in the same 10-100 column `POST /api/mood` writes, so it is
+  // brought into range the same way, and an unparseable value is rejected here,
+  // before either branch writes anything, rather than reaching the column. A
+  // mood with no value logs no check-in.
+  let storedMoodValue: number | null = null;
+  if (mood && mood.value !== null && mood.value !== undefined) {
+    storedMoodValue = clampStoredMoodValue(mood.value);
+    if (storedMoodValue === null) {
+      return res.status(400).json({ error: 'Mood value must be a number' });
+    }
+  }
   try {
     if (id === 'auto-current') {
       const tz = await loadUserTimezone(userId);
@@ -220,15 +256,6 @@ router.post('/end', async (req, res) => {
         return res
           .status(400)
           .json({ error: 'start_time must be before end_time' });
-      }
-
-      if (mood && mood.value !== null) {
-        await moodRepository.createOrUpdateMoodEntry(
-          userId,
-          mood.value,
-          mood.notes || '',
-          end_time
-        );
       }
 
       const durationMinutes = Math.max(
@@ -248,6 +275,14 @@ router.post('/end', async (req, res) => {
         durationMinutes,
         fastingType
       );
+      // A retried end finds the fast already recorded (null); the mood write
+      // is keyed on the end time, so it is still made once and only once.
+      await saveFastingMoodCheckin(
+        userId,
+        storedMoodValue,
+        mood?.notes,
+        end_time
+      );
       return res.json(completed);
     }
 
@@ -258,14 +293,6 @@ router.post('/end', async (req, res) => {
       return res
         .status(400)
         .json({ error: 'start_time must be before end_time' });
-    }
-    if (mood && mood.value !== null) {
-      await moodRepository.createOrUpdateMoodEntry(
-        userId,
-        mood.value,
-        mood.notes || '',
-        end_time
-      );
     }
     const durationMinutes = Math.max(
       0,
@@ -280,6 +307,16 @@ router.post('/end', async (req, res) => {
       durationMinutes,
       startUsed
     );
+    // A retry of an already completed fast still reaches here; the mood write
+    // is keyed on the end time, so it is made once and only once.
+    if (updatedFast) {
+      await saveFastingMoodCheckin(
+        userId,
+        storedMoodValue,
+        mood?.notes,
+        end_time
+      );
+    }
     res.json(updatedFast);
   } catch (error) {
     // @ts-expect-error TS(2571): Object is of type 'unknown'.

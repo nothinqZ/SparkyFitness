@@ -1,4 +1,5 @@
 import { log } from '../config/logging.js';
+import { CustomCategoryExistsError } from '../utils/errors.js';
 import { getClient } from '../db/poolManager.js';
 import measurementRepository from '../models/measurementRepository.js';
 import { loadUserTimezone } from '../utils/timezoneLoader.js';
@@ -22,6 +23,11 @@ import {
 } from '../utils/sleepStageAggregates.js';
 import userRepository from '../models/userRepository.js';
 import sleepRepository from '../models/sleepRepository.js';
+import type {
+  SleepEntryInput,
+  SleepEntryUpsertOptions,
+} from '../models/sleepRepository.js';
+import type { SleepUserProfile } from '../models/userRepository.js';
 import exerciseEntryDb from '../models/exerciseEntry.js';
 import waterContainerRepository from '../models/waterContainerRepository.js';
 import foodRepository from '../models/foodRepository.js';
@@ -268,8 +274,9 @@ async function processHealthData(
   const tzFallbackByType = {};
   // Loaded at most once per batch and shared across every sleep session so we don't
   // re-query the user profile per record. Lazy so non-sleep syncs pay nothing.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let sleepContext: { tz: string; userProfile: any } | undefined;
+  let sleepContext:
+    | { tz: string; userProfile: SleepUserProfile | null | undefined }
+    | undefined;
   const getSleepContext = async () => {
     if (!sleepContext) {
       sleepContext = {
@@ -526,8 +533,8 @@ async function getOrCreateCustomCategory(
     };
     const newCategory =
       await measurementRepository.createCustomCategory(newCategoryData);
-    // To return the full category object including the id and the default data_type
-    return { id: newCategory.id, ...newCategoryData };
+    // The stored settings win: a concurrent create may have made the category first.
+    return { ...newCategoryData, ...newCategory.category };
   }
 }
 async function getWaterIntake(
@@ -1190,10 +1197,14 @@ async function createCustomCategory(
   try {
     categoryData.user_id = authenticatedUserId; // Ensure user_id is set from authenticated user
     categoryData.created_by_user_id = actingUserId; // Use actingUserId for audit
-    const newCategory =
+    const { id, created } =
       await measurementRepository.createCustomCategory(categoryData);
-    return newCategory;
+    if (!created) {
+      throw new CustomCategoryExistsError(categoryData.name);
+    }
+    return { id };
   } catch (error) {
+    if (error instanceof CustomCategoryExistsError) throw error;
     log(
       'error',
       `Error creating custom category for user ${authenticatedUserId} by ${actingUserId}:`,
@@ -1580,17 +1591,17 @@ async function calculateSleepScore(
   return Math.round(Math.max(0, Math.min(score, maxScore)));
 }
 async function processSleepEntry(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  userId: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  actingUserId: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sleepEntryData: any,
+  userId: string,
+  actingUserId: string,
+  sleepEntryData: SleepEntryInput,
   // Batch callers pass an already-loaded profile + timezone to skip a per-session
   // DB round-trip; single-entry callers omit it and load directly below.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  prefetched?: { tz: string; userProfile: any }
-) {
+  prefetched?: {
+    tz: string;
+    userProfile: SleepUserProfile | null | undefined;
+  },
+  options: SleepEntryUpsertOptions = {}
+): Promise<{ id: string } & Record<string, unknown>> {
   log(
     'debug',
     `[processSleepEntry] Received sleepEntryData: ${JSON.stringify(sleepEntryData)}`
@@ -1674,7 +1685,8 @@ async function processSleepEntry(
     const newSleepEntry = await sleepRepository.upsertSleepEntry(
       userId,
       actingUserId,
-      entryToUpsert
+      entryToUpsert,
+      options
     );
     if (originalHadStages && stage_events && stage_events.length > 0) {
       // Stages merge by natural key (entry_id, start_time, end_time) inside one
@@ -1682,8 +1694,7 @@ async function processSleepEntry(
       await sleepRepository.mergeSleepStageEvents(
         userId,
         newSleepEntry.id,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        stage_events.map((stageEvent: any) => ({
+        stage_events.map((stageEvent) => ({
           ...stageEvent,
           duration_in_seconds:
             Math.round(Number(stageEvent.duration_in_seconds)) || 0,
@@ -1707,8 +1718,7 @@ async function processSleepEntry(
       await sleepRepository.mergeSleepStageEvents(
         userId,
         newSleepEntry.id,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        stage_events.map((stageEvent: any) => ({
+        stage_events.map((stageEvent) => ({
           ...stageEvent,
           duration_in_seconds:
             Math.round(Number(stageEvent.duration_in_seconds)) || 0,

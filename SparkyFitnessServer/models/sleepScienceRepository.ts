@@ -1,3 +1,4 @@
+import { preferredSleepClause } from './sleepSourcePolicy.js';
 import { getClient } from '../db/poolManager.js';
 import { todayInZone, addDays } from '@workspace/shared';
 /**
@@ -37,7 +38,7 @@ async function getSleepHistory(userId: any, days = 90, timezone = 'UTC') {
         se.record_utc_offset_minutes,
         se.sleep_score AS "sleepScore"
       FROM sleep_entries se
-      WHERE se.user_id = $1
+      WHERE se.user_id = $1 AND ${preferredSleepClause('se')}
         AND se.entry_date >= $2
         AND se.duration_in_seconds > 0
       ORDER BY se.entry_date DESC`,
@@ -213,7 +214,74 @@ async function getMCTQStats(userId: any) {
   const client = await getClient(userId);
   try {
     const result = await client.query(
-      'SELECT * FROM v_mctq_stats WHERE user_id = $1',
+      `WITH v_mctq_analysis AS (
+SELECT se.user_id,
+    se.entry_date AS date,
+    EXTRACT(dow FROM se.entry_date) AS day_of_week,
+        CASE
+            WHEN dcc.classified_as IS NOT NULL THEN dcc.classified_as
+            WHEN EXTRACT(dow FROM se.entry_date) = ANY (ARRAY[0::numeric, 6::numeric]) THEN 'freeday'::character varying
+            ELSE 'workday'::character varying
+        END AS day_type,
+    se.duration_in_seconds::numeric / 3600.0 AS tst_hours,
+        CASE
+            WHEN se.bedtime IS NOT NULL AND se.wake_time IS NOT NULL THEN (se.bedtime + (se.wake_time - se.bedtime) / 2::double precision)::time without time zone
+            ELSE NULL::time without time zone
+        END AS mid_sleep,
+    se.bedtime,
+    se.wake_time,
+        CASE
+            WHEN se.wake_time IS NOT NULL THEN EXTRACT(hour FROM se.wake_time) + EXTRACT(minute FROM se.wake_time) / 60.0
+            ELSE NULL::numeric
+        END AS wake_hour
+   FROM sleep_entries se
+     LEFT JOIN day_classification_cache dcc ON se.user_id = dcc.user_id AND EXTRACT(dow FROM se.entry_date) = dcc.day_of_week::numeric
+  WHERE se.bedtime IS NOT NULL AND se.wake_time IS NOT NULL AND se.duration_in_seconds > 0 AND se.user_id = $1 AND ${preferredSleepClause('se')}
+), preferred_stats AS (
+WITH recent_data AS (
+         SELECT v_mctq_analysis.user_id,
+            v_mctq_analysis.day_type,
+            v_mctq_analysis.tst_hours,
+            v_mctq_analysis.mid_sleep,
+            v_mctq_analysis.wake_hour
+           FROM v_mctq_analysis
+          WHERE v_mctq_analysis.date >= (CURRENT_DATE - '90 days'::interval) AND v_mctq_analysis.tst_hours IS NOT NULL AND v_mctq_analysis.tst_hours >= 3::numeric AND v_mctq_analysis.tst_hours <= 14::numeric
+        ), workday_stats AS (
+         SELECT recent_data.user_id,
+            avg(recent_data.tst_hours) AS sd_workday,
+            avg(EXTRACT(hour FROM recent_data.mid_sleep) + EXTRACT(minute FROM recent_data.mid_sleep) / 60.0) AS msw_hour,
+            count(*) AS workday_count
+           FROM recent_data
+          WHERE recent_data.day_type::text = 'workday'::text
+          GROUP BY recent_data.user_id
+        ), freeday_stats AS (
+         SELECT recent_data.user_id,
+            avg(recent_data.tst_hours) AS sd_freeday,
+            avg(EXTRACT(hour FROM recent_data.mid_sleep) + EXTRACT(minute FROM recent_data.mid_sleep) / 60.0) AS msf_hour,
+            count(*) AS freeday_count
+           FROM recent_data
+          WHERE recent_data.day_type::text = 'freeday'::text
+          GROUP BY recent_data.user_id
+        )
+ SELECT COALESCE(w.user_id, f.user_id) AS user_id,
+    round(w.sd_workday, 2) AS sd_workday,
+    round(f.sd_freeday, 2) AS sd_freeday,
+    round((5::numeric * COALESCE(w.sd_workday, 7::numeric) + 2::numeric * COALESCE(f.sd_freeday, 8::numeric)) / 7::numeric, 2) AS sd_week,
+        CASE
+            WHEN f.sd_freeday > w.sd_workday THEN round(f.sd_freeday - (f.sd_freeday - (5::numeric * w.sd_workday + 2::numeric * f.sd_freeday) / 7::numeric) / 2::numeric, 2)
+            ELSE round((5::numeric * COALESCE(w.sd_workday, 7::numeric) + 2::numeric * COALESCE(f.sd_freeday, 8::numeric)) / 7::numeric, 2)
+        END AS sleep_need_ideal,
+    round(abs(COALESCE(f.msf_hour, 4::numeric) - COALESCE(w.msw_hour, 3::numeric)), 2) AS social_jetlag_hours,
+    w.workday_count,
+    f.freeday_count,
+        CASE
+            WHEN COALESCE(w.workday_count, 0::bigint) >= 40 AND COALESCE(f.freeday_count, 0::bigint) >= 16 THEN 'high'::text
+            WHEN COALESCE(w.workday_count, 0::bigint) >= 20 AND COALESCE(f.freeday_count, 0::bigint) >= 8 THEN 'medium'::text
+            ELSE 'low'::text
+        END AS confidence
+   FROM workday_stats w
+     FULL JOIN freeday_stats f ON w.user_id = f.user_id
+) SELECT * FROM preferred_stats WHERE user_id = $1`,
       [userId]
     );
     return result.rows[0] || null;

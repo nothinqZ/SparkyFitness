@@ -49,6 +49,7 @@ import {
   getExerciseVolumeKg,
   evaluateExerciseProgression,
   liveAdaptiveAdjustment,
+  alignPreviousSets,
   isDurationModality,
   isWeightDistanceModality,
   isWeightDurationModality,
@@ -417,6 +418,12 @@ function ActiveWorkoutExerciseCard({
   // PREVIOUS column source: the most recent prior session's sets, matched to
   // the current rows by position (Hevy-style).
   const previousSessionSets = (stats?.recentSessions ?? [])[0]?.sets;
+  // Warm-ups pair with last time's warm-ups and working sets with its working
+  // sets, so warm-ups added ahead of them do not take their history.
+  const alignedPreviousSets = useMemo(
+    () => alignPreviousSets(exercise.sets, previousSessionSets),
+    [exercise.sets, previousSessionSets]
+  );
 
   // Live sessions carry no progression/ramp settings on the server entry;
   // they come from the preset, captured into the store at live start.
@@ -1658,6 +1665,13 @@ function ActiveWorkoutExerciseCard({
                   ? 'current'
                   : 'upcoming';
             const nextSet = exercise.sets[index + 1];
+            const isFocusedRow = isLive && focusedSetKey === renderKey;
+            // Only the row holding the keyboard reads activeField (the edit
+            // cursor row, or live's tap-focused row); the rest get a stable
+            // undefined so a field move does not re-render them.
+            const ownsActiveField = isEdit
+              ? setId === activeSetId
+              : isFocusedRow;
 
             // In preview mode ('view'), display the calculated progression weight if goal was hit
             const effectiveSet = set;
@@ -1675,9 +1689,7 @@ function ActiveWorkoutExerciseCard({
                   metricColumn={effectiveMetricColumn}
                   weightUnit={weightUnit}
                   previousSet={
-                    readOnly
-                      ? undefined
-                      : (previousSessionSets?.[index] ?? null)
+                    readOnly ? undefined : (alignedPreviousSets[index] ?? null)
                   }
                   assumed={assumedSetValues?.[index] ?? null}
                   mode={mode}
@@ -1687,8 +1699,8 @@ function ActiveWorkoutExerciseCard({
                   onDelete={onDeleteSet}
                   onLongPress={onLongPressSetKeyed}
                   onPressSetType={onPressSetType}
-                  activeField={activeField}
-                  isFocused={isLive && focusedSetKey === renderKey}
+                  activeField={ownsActiveField ? activeField : undefined}
+                  isFocused={isFocusedRow}
                   nextSetId={nextSet != null ? String(nextSet.id) : null}
                   entryId={exercise.id}
                   rpeEditable={rpeEditable}

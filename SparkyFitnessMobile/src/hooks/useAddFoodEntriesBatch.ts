@@ -12,7 +12,11 @@ import {
   partitionDrafts,
   type MultiAddDraft,
 } from '../utils/multiAddFoodEntries';
-import { dailySummaryQueryKey, foodsQueryKey } from './queryKeys';
+import {
+  dailySummaryQueryKey,
+  foodEntriesRangeRootQueryKey,
+  foodsQueryKey,
+} from './queryKeys';
 import { useFoodSearchSelectionStore } from '../stores/foodSearchSelectionStore';
 import type { RowOutcomeStatus } from './useFoodSearchSelection';
 
@@ -169,6 +173,10 @@ export function useAddFoodEntriesBatch() {
           });
         }
         queryClient.invalidateQueries({ queryKey: [...foodsQueryKey] });
+        queryClient.invalidateQueries({
+          queryKey: foodEntriesRangeRootQueryKey,
+          refetchType: 'all',
+        });
 
         if (succeededKeys.length > 0) {
           Toast.show({

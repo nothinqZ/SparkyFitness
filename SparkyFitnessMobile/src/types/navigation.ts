@@ -1,3 +1,4 @@
+import type { RunSummaryParams } from '../utils/runSummary';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type {
@@ -6,11 +7,13 @@ import type {
   FoodPhotoEstimateResponse,
   FoodPhotoLogItem,
   IndividualSessionResponse,
+  MindfulnessSessionResponse,
   PresetSessionResponse,
   SharedPregnancy,
   WorkoutFormat,
 } from '@workspace/shared';
 import type { FoodFormData } from '../components/FoodForm';
+import type { NutritionLabelScan } from '../utils/labelScanFood';
 import type { SaveFoodPayload } from '../services/api/foodsApi';
 import type { CompletedSetMap, PrSetMap } from '../stores/activeWorkoutStore';
 import type { MealTypeKey } from '../utils/mealNutrition';
@@ -32,6 +35,7 @@ import type {
 import type { Meal, MealIngredientDraft } from './meals';
 import type { MealPlanPickerTarget, MealPlanTemplate } from './mealPlans';
 import type { WorkoutPreset } from './workoutPresets';
+import type { WorkoutPlanTemplate } from './workoutPlans';
 import type { ExerciseReplaceContext } from '../utils/exerciseReplace';
 
 export type FoodPickerMode =
@@ -79,6 +83,18 @@ export type RootStackParamList = {
   FoodsLibrary: undefined;
   MealsLibrary: undefined;
   MealPlans: undefined;
+  WorkoutPlans: undefined;
+  WorkoutPlanForm: { template?: WorkoutPlanTemplate } | undefined;
+  RunPrograms: undefined;
+  RunProgramCalendar: undefined;
+  RunProgramWorkout: { index: number };
+  RunProgramRace: undefined;
+  RunProgramEdit: { id?: string; fromProgramId?: string } | undefined;
+  PersonalRecords: undefined;
+  Routes: undefined;
+  RouteDetail: { id: string };
+  RouteDraw: undefined;
+  WatchRunLive: undefined;
   MealPlanForm: { template?: MealPlanTemplate; initialMeal?: Meal } | undefined;
   // #2115, Phase 12: mobile-only water-container CRUD.
   WaterContainers: undefined;
@@ -182,7 +198,24 @@ export type RootStackParamList = {
   };
   ExerciseStatistics: undefined;
   Performance: undefined;
+  /** `programWorkout` opens it with today's training-program workout chosen. */
+  RecordActivity: { programWorkout?: boolean } | undefined;
+  RunSummary: RunSummaryParams;
+  Reports: undefined;
+  HydrationReport: undefined;
+  SubstancesReport: undefined;
+  MeasurementsReport: undefined;
+  ReportsSettings: undefined;
+  NutritionReport: undefined;
+  SleepAnalytics: undefined;
+  MoodReport: undefined;
   CardioSession: {
+    session: ExerciseActivityQueryItem;
+    distanceUnit: 'km' | 'miles';
+    /** The diary entry this was opened from, when it can be edited in the app. */
+    diaryEntry?: IndividualSessionResponse;
+  };
+  ActivityShare: {
     session: ExerciseActivityQueryItem;
     distanceUnit: 'km' | 'miles';
   };
@@ -220,6 +253,7 @@ export type RootStackParamList = {
         foodId: string;
         variantId: string;
         customNutrients?: Record<string, string | number> | null;
+        pendingNutritionLabelScan?: NutritionLabelScan;
       };
   ExerciseForm:
     | {
@@ -243,6 +277,10 @@ export type RootStackParamList = {
       }
     | {
         mode: 'capture-barcode';
+        returnKey: string;
+      }
+    | {
+        mode: 'capture-label';
         returnKey: string;
       }
     | undefined;
@@ -311,6 +349,9 @@ export type RootStackParamList = {
     sourcePresetId: number | null;
     sourceServerConfigId: string | null;
     plannedSetValues: Record<string, AssumedSetValues>;
+    // Set when the workout was finished on the watch: the app-level prompt
+    // asks "Update preset?" (on the watch first), so this screen does not.
+    presetCheckHandledElsewhere?: boolean;
     // The rest of the live placeholder inputs, so the prompt can ignore
     // values the ramp or progression filled in. Optional: older snapshots.
     previousSessionSets?: Record<string, ExerciseRecentSessionSet[]>;
@@ -325,9 +366,14 @@ export type RootStackParamList = {
   };
   ActivityDetail: { session: IndividualSessionResponse };
   FastingDetail: undefined;
+  FastingSettings: undefined;
   MindfulnessDetail: { selectedDate?: string } | undefined;
+  /** Logs a mindful session for `date`, or edits `session` when one is passed. */
+  MindfulnessLog:
+    { date?: string; session?: MindfulnessSessionResponse } | undefined;
   SleepDetail: { entryId: string; day: string };
   Chat: undefined;
+  ChatSettings: undefined;
   Logs: undefined;
   Sync: undefined;
   ImportHistory: undefined;
@@ -343,14 +389,28 @@ export type RootStackParamList = {
   /** Cross-fading time-lapse of every photo for one angle, oldest to newest. */
   ProgressPhotoTimelapse: { angle?: PhotoType } | undefined;
   CalorieSettings: undefined;
+  /**
+   * Without params this edits today's goals. `presetId` edits that goal
+   * preset; `newPreset` starts a new one from today's goals.
+   */
+  Goals: { presetId?: string; newPreset?: boolean } | undefined;
+  WeeklyGoalPlanEdit: { planId?: string } | undefined;
   MealTypeSettings: undefined;
+  Equipment: undefined;
+  Shoes: undefined;
+  ShoeForm: { shoeId?: string };
   FoodSettings: undefined;
+  CustomNutrients: undefined;
+  CustomNutrientForm: { nutrientId?: string } | undefined;
+  NutrientDisplaySettings: undefined;
+  AllergenSettings: undefined;
   DashboardSettings: undefined;
   HealthTrendsSettings: undefined;
   WatchSettings: undefined;
   GarminWatchSettings: undefined;
   DiarySettings: undefined;
   WorkoutSettings: undefined;
+  WarmupSettings: undefined;
   ServerSettings: undefined;
   PasskeySettings: undefined;
   AppSettings: undefined;
@@ -359,8 +419,17 @@ export type RootStackParamList = {
   WhatsNew: undefined;
   MedicationsList: undefined;
   MedicationDetail: { medicationId: string };
-  MedicationForm: { medicationId?: string; isSupplement?: boolean };
+  MedicationForm: {
+    medicationId?: string;
+    isSupplement?: boolean;
+    /** Set by the barcode scanner when it returns a code. */
+    pendingScannedBarcode?: string;
+    scannedBarcodeNonce?: number;
+  };
   MedicationScheduleForm: { medicationId: string; scheduleId?: string };
+  Glp1Tracker: { medicationId: string };
+  Glp1PenForm: { medicationId: string; penId?: string };
+  Glp1TitrationForm: { medicationId: string; stepId?: string };
   SymptomLog:
     | {
         entryId?: string;
@@ -369,7 +438,10 @@ export type RootStackParamList = {
         date?: string;
       }
     | undefined;
+  MoodLog: { date?: string; checkinId?: string } | undefined;
+  MoodDay: { date?: string } | undefined;
   SymptomHistory: { symptomId?: string } | undefined;
+  SymptomEpisodeDetail: { entryId: string };
   ManageSymptoms: undefined;
   SymptomDefinitionEditor: { definitionId?: string } | undefined;
 };

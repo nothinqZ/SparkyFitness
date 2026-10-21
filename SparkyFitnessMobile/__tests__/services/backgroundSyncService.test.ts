@@ -37,6 +37,8 @@ jest.mock('../../src/services/CalorieWidgetBridge', () => ({
     reloadWidget: jest.fn(() => Promise.resolve()),
     setMacroSnapshot: jest.fn(() => Promise.resolve()),
     reloadMacroWidget: jest.fn(() => Promise.resolve()),
+    setWaterSnapshot: jest.fn(() => Promise.resolve()),
+    reloadWaterWidget: jest.fn(() => Promise.resolve()),
     isAvailable: true,
   },
 }));
@@ -273,6 +275,14 @@ const mockReloadMacroWidget =
   CalorieWidgetBridge.reloadMacroWidget as jest.MockedFunction<
     typeof CalorieWidgetBridge.reloadMacroWidget
   >;
+const mockSetWaterSnapshot =
+  CalorieWidgetBridge.setWaterSnapshot as jest.MockedFunction<
+    typeof CalorieWidgetBridge.setWaterSnapshot
+  >;
+const mockReloadWaterWidget =
+  CalorieWidgetBridge.reloadWaterWidget as jest.MockedFunction<
+    typeof CalorieWidgetBridge.reloadWaterWidget
+  >;
 const widgetSummaryResponse: Awaited<ReturnType<typeof fetchDailySummary>> = {
   goals: {
     calories: 2100,
@@ -280,6 +290,7 @@ const widgetSummaryResponse: Awaited<ReturnType<typeof fetchDailySummary>> = {
     carbs: 220,
     fat: 70,
     dietary_fiber: 30,
+    water_goal_ml: 3000,
   },
   foodEntries: [
     {
@@ -296,7 +307,13 @@ const widgetSummaryResponse: Awaited<ReturnType<typeof fetchDailySummary>> = {
     },
   ],
   exerciseSessions: [],
-  waterIntake: 0,
+  waterIntake: 1250,
+  waterIntakeBreakdown: {
+    water_ml: 1250,
+    manual_ml: 1000,
+    ledger_ml: 1000,
+    food_ml: 250,
+  },
   stepCalories: 0,
   calorieBalance: {
     eaten: 350,
@@ -338,6 +355,8 @@ describe('performBackgroundSync (via triggerManualSync)', () => {
     mockReloadCalorieWidget.mockReset().mockResolvedValue(undefined);
     mockSetMacroSnapshot.mockReset().mockResolvedValue(undefined);
     mockReloadMacroWidget.mockReset().mockResolvedValue(undefined);
+    mockSetWaterSnapshot.mockReset().mockResolvedValue(undefined);
+    mockReloadWaterWidget.mockReset().mockResolvedValue(undefined);
     Object.defineProperty(Platform, 'OS', {
       configurable: true,
       value: 'ios',
@@ -412,6 +431,22 @@ describe('performBackgroundSync (via triggerManualSync)', () => {
         fatGoal: 70,
       });
       expect(mockReloadMacroWidget).toHaveBeenCalledTimes(1);
+
+      // Only the totals: the drink and the unit are the dashboard's to send,
+      // and the native side keeps the ones it last got.
+      const waterPayload = JSON.parse(
+        mockSetWaterSnapshot.mock.calls[0][0]
+      ) as Record<string, number | string>;
+      expect(waterPayload).toMatchObject({
+        date: '2024-01-15',
+        consumedMl: 1250,
+        goalMl: 3000,
+        manualMl: 1000,
+      });
+      expect(waterPayload).not.toHaveProperty('drinkMl');
+      expect(waterPayload).not.toHaveProperty('unit');
+      expect(waterPayload).not.toHaveProperty('canLog');
+      expect(mockReloadWaterWidget).toHaveBeenCalledTimes(1);
     });
 
     test('keeps a successful background sync successful when the widget refresh fails', async () => {

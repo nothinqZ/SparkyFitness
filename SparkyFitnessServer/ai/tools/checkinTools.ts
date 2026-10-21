@@ -1,14 +1,22 @@
 import { tool } from 'ai';
 import {
   dayToUtcRange,
+  instantForDay,
   todayInZone,
   utcOffsetMinutesFromIsoString,
   BUILT_IN_MOODS,
+  chatScoreToMoodValue,
+  moodValueToChatScore,
+  instantHourMinute,
 } from '@workspace/shared';
 import { log } from '../../config/logging.js';
 import measurementService from '../../services/measurementService.js';
+import { CustomCategoryExistsError } from '../../utils/errors.js';
 import preferenceService from '../../services/preferenceService.js';
-import moodRepository from '../../models/moodRepository.js';
+import moodRepository, {
+  hasMoodContent,
+  type MoodEntryRow,
+} from '../../models/moodRepository.js';
 import fastingRepository from '../../models/fastingRepository.js';
 import fastingAutoCalculationService from '../../services/fastingAutoCalculationService.js';
 import sleepRepository from '../../models/sleepRepository.js';
@@ -97,6 +105,34 @@ function isSet<T>(value: T | null | undefined): value is T {
   return value !== null && value !== undefined;
 }
 
+function formatMoodRatings(
+  energy?: number | null,
+  focus?: number | null
+): string {
+  let out = '';
+  if (isSet(energy)) out += `, energy ${energy}/5`;
+  if (isSet(focus)) out += `, focus ${focus}/5`;
+  return out;
+}
+
+function formatClock(ts: Date | string, tz: string): string {
+  const { hour, minute } = instantHourMinute(ts, tz);
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+// `<score>/10<ratings><tags>` followed by ` — notes` when there are notes. The
+// score is omitted for a check-in with no mood, so the ratings' leading ", " is
+// dropped. Each part carries its own leading space, so any may be absent.
+function formatCheckinDetail(row: MoodEntryRow): string {
+  const score =
+    row.mood_value === null ? '' : `${moodValueToChatScore(row.mood_value)}/10`;
+  const body =
+    `${score}${formatMoodRatings(row.energy_value, row.focus_value)}${formatMoodTags(row.mood_tags)}`
+      .replace(/^, /, '')
+      .trim();
+  return `${body ? ' ' + body : ''}${row.notes ? ' — ' + row.notes : ''}`;
+}
+
 function formatMoodTags(tags?: string[] | null): string {
   if (!tags || !tags.length) return '';
   const formatted = tags.map((t) => {
@@ -154,11 +190,11 @@ export async function getBiometricsHistoryRows(
 export function buildCheckinTools(userId: string, tz: string) {
   return {
     sparky_manage_checkin: tool({
-      description: `Health tracking: weight, steps, body measurements, mood, sleep, fasting, custom metrics.
+      description: `Health tracking: weight, steps, body measurements, mood (with optional energy and focus), sleep, fasting, custom metrics.
 
 Actions:
 - log_biometrics(entry_date, weight?, steps?, height?, neck?, waist?, hips?, body_fat?, muscle_mass?, bone_mass?, body_water?, bmr?, weight_unit?:"kg"|"lbs", height_unit?:"cm"|"in", measurements_unit?:"cm"|"in")
-- log_mood(entry_date, mood_value:1-10, notes?)
+- log_mood(entry_date?, mood_value?:1-10, energy_value?:1-5, focus_value?:1-5, notes?, mood_tags?) -- each call logs a NEW check-in (several per day are fine); every field is optional but at least one is required
 - log_sleep(entry_date, duration_seconds?, sleep_score?:0-100, bedtime?, wake_time?, source?)
 - log_fasting(start_time:ISO8601, end_time?, fasting_status?:"ACTIVE"|"COMPLETED"|"CANCELLED", fasting_type?)
 - log_custom_metric(entry_date, category_name, value:string|number, unit?, notes?)
@@ -177,6 +213,8 @@ Actions:
           (args) => {
             if (
               args.mood_value !== undefined ||
+              args.energy_value !== undefined ||
+              args.focus_value !== undefined ||
               (args.notes !== undefined && args.category_name === undefined)
             ) {
               return 'log_mood';
@@ -420,16 +458,31 @@ Actions:
             }
 
             case 'log_mood': {
-              await moodRepository.createOrUpdateMoodEntry(
-                userId,
-                args.mood_value,
-                args.notes || null,
-                args.entry_date,
-                args.mood_tags || null
-              );
-              const tagsStr = formatMoodTags(args.mood_tags);
+              const checkin = {
+                // The tool speaks in 1-10; the column holds 10-100.
+                moodValue:
+                  args.mood_value === undefined
+                    ? null
+                    : chatScoreToMoodValue(args.mood_value),
+                notes: args.notes?.trim() || null,
+                moodTags: args.mood_tags || null,
+                energyValue: args.energy_value,
+                focusValue: args.focus_value,
+              };
+              if (!hasMoodContent(checkin)) {
+                return ERRORS.VALIDATION(
+                  'A check-in needs at least one of mood, energy, focus, notes or tags.'
+                );
+              }
+              const row = await moodRepository.createCheckin(userId, {
+                ...checkin,
+                entryDate: args.entry_date,
+                // Now for today; local noon for another day, so the time
+                // stays on the day it was logged for.
+                entryTimestamp: instantForDay(args.entry_date, tz),
+              });
               return formatConfirmation(
-                `Mood logged for ${args.entry_date}: ${args.mood_value}/10${tagsStr}${args.notes ? ' — ' + args.notes : ''}.`
+                `Check-in logged for ${args.entry_date} at ${formatClock(row.entry_timestamp, tz)}:${formatCheckinDetail(row)}.`
               );
             }
 
@@ -485,6 +538,10 @@ Actions:
                 wakeTime = wake.toISOString();
               }
 
+              if (!bedtime || !wakeTime) {
+                throw new Error('Could not resolve bedtime and wake time.');
+              }
+
               await measurementService.processSleepEntry(userId, userId, {
                 entry_date: args.entry_date,
                 bedtime,
@@ -525,10 +582,20 @@ Actions:
                   date
                 );
               const bioRow = exactBiometricRows[0] ?? null;
-              const moodEntry = await moodRepository.getMoodEntryByDate(
+              const checkins = await moodRepository.getCheckinsForDate(
                 userId,
                 date
               );
+              // A derived mood (Garmin, import) only stands in when no manual
+              // check-in that day has a mood.
+              const hasManualMood = checkins.some((c) => c.mood_value !== null);
+              const legacyMood = hasManualMood
+                ? undefined
+                : await moodRepository.getLegacyMoodEntryForDate(userId, date);
+              const derivedMood =
+                legacyMood && legacyMood.source !== 'manual'
+                  ? legacyMood
+                  : undefined;
               const sleepRows =
                 await sleepRepository.getSleepEntriesByUserIdAndDateRange(
                   userId,
@@ -581,7 +648,6 @@ Actions:
                 };
               }
 
-              const moods = moodEntry ? [moodEntry] : [];
               const sleeps = [...sleepRows]
                 .sort(
                   (a: SleepEntryRow, b: SleepEntryRow) =>
@@ -658,13 +724,13 @@ Actions:
               }
 
               // Mood
-              if (moods.length > 0) {
+              if (checkins.length > 0 || derivedMood) {
                 text += '## Mood\n';
-                for (const m of moods) {
-                  const tagsStr = formatMoodTags(m.mood_tags);
-                  text += `- ${m.mood_value}/10${tagsStr}`;
-                  if (m.notes) text += ` — ${m.notes}`;
-                  text += '\n';
+                for (const c of checkins) {
+                  text += `- ${formatClock(c.entry_timestamp, tz)}${formatCheckinDetail(c)}\n`;
+                }
+                if (derivedMood) {
+                  text += `- Derived mood (${derivedMood.source}): ${moodValueToChatScore(derivedMood.mood_value)}/10\n`;
                 }
                 text += '\n';
               }
@@ -716,7 +782,8 @@ Actions:
               // Check if empty
               if (
                 !bio &&
-                moods.length === 0 &&
+                checkins.length === 0 &&
+                !derivedMood &&
                 sleeps.length === 0 &&
                 fasts.length === 0 &&
                 customs.length === 0
@@ -839,7 +906,10 @@ Actions:
           }
         } catch (error) {
           log('error', '[Checkin Tool] Error:', error);
-          if (error instanceof Error && error.message.includes('not found')) {
+          if (
+            error instanceof CustomCategoryExistsError ||
+            (error instanceof Error && error.message.includes('not found'))
+          ) {
             return ERRORS.VALIDATION(error.message);
           }
           return ERRORS.DB_ERROR(error);

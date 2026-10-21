@@ -1,5 +1,6 @@
 import { vi, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import cycleRepository from '../models/cycleRepository.js';
+import { DAILY_MOOD_VALUE_SQL } from '../models/moodRepository.js';
 import { getClient } from '../db/poolManager.js';
 
 vi.mock('../db/poolManager', () => ({
@@ -69,5 +70,22 @@ describe('cycleRepository.upsertLog', () => {
     expect(sqlOf()).toContain('DO UPDATE SET');
     expect(sqlOf()).toContain('updated_at = NOW()');
     expect(paramsOf()).toEqual(['user-1', '2026-08-01']);
+  });
+});
+
+describe('cycleRepository.getCorrelationSources mood', () => {
+  it('reads one non-null mood value per day, never a raw row', async () => {
+    const client = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      release: vi.fn(),
+    };
+    vi.mocked(getClient).mockResolvedValue(client as never);
+    await cycleRepository.getCorrelationSources('user-1');
+    const moodSql = client.query.mock.calls
+      .map((c: unknown[]) => String(c[0]))
+      .find((q: string) => q.includes('FROM mood_entries'));
+    expect(moodSql).toContain(DAILY_MOOD_VALUE_SQL);
+    expect(moodSql).toContain('GROUP BY entry_date');
+    expect(moodSql).toContain('IS NOT NULL');
   });
 });

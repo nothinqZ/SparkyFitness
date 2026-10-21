@@ -19,6 +19,9 @@ export const checkInKeys = {
     [...checkInKeys.all, 'customEntries', categoryId, userId] as const,
   rawStressData: (userId: string, categoryId: string) =>
     [...checkInKeys.all, 'rawStressData', userId, categoryId] as const,
+  // Under checkInKeys.all so the measurement mutations, which invalidate the
+  // whole family, also refresh the day weights shown with the photos.
+  photoGallery: () => [...checkInKeys.all, 'photoGallery'] as const,
 };
 
 export const moodKeys = {

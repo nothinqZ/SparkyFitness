@@ -124,8 +124,29 @@ const logMoodSchema = z
       .min(1)
       .max(10)
       .optional()
-      .default(5)
-      .describe('Mood score (1-10); defaults to 5 if omitted'),
+      .describe(
+        'Mood score (1-10). Optional; omit if the user did not give one. ' +
+          'Converted to the stored 10-100 scale on write -- do not widen this ' +
+          'range to match the column'
+      ),
+    energy_value: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(5)
+      .optional()
+      .describe(
+        'Energy 1-5 (1 = drained, 5 = energized). Optional; omit if the user did not mention it'
+      ),
+    focus_value: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(5)
+      .optional()
+      .describe(
+        'Focus 1-5 (1 = scattered, 5 = locked in). Optional; omit if the user did not mention it'
+      ),
     notes: z
       .string()
       .max(2000)
@@ -313,7 +334,27 @@ export const manageCheckinInput = z.object({
     .min(1)
     .max(10)
     .optional()
-    .describe('Mood score (1-10)'),
+    .describe(
+      'Mood score (1-10). Optional; omit if the user did not give one. Converted to the stored 10-100 scale'
+    ),
+  energy_value: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(5)
+    .optional()
+    .describe(
+      'Energy 1-5 (1 = drained, 5 = energized). Optional; omit if the user did not mention it'
+    ),
+  focus_value: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(5)
+    .optional()
+    .describe(
+      'Focus 1-5 (1 = scattered, 5 = locked in). Optional; omit if the user did not mention it'
+    ),
   mood_tags: z
     .array(z.string())
     .optional()

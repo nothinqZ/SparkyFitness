@@ -69,9 +69,14 @@ describe('processGarminWorkoutSession set durations', () => {
     vi.mocked(
       exercisePresetEntryRepository.createExercisePresetEntryWithClient
     ).mockResolvedValue({ id: 'preset-entry-1' });
+    // No preset with that name yet: the import creates one and fills it.
+    // An existing preset (a user's training template) is never appended to.
     vi.mocked(workoutPresetRepository.getWorkoutPresetByName).mockResolvedValue(
-      { id: 7 }
+      null as never
     );
+    vi.mocked(workoutPresetRepository.createWorkoutPreset).mockResolvedValue({
+      id: 7,
+    } as never);
   });
 
   it('stores per-set duration in integer seconds and entry duration in minutes (issue #1903)', async () => {

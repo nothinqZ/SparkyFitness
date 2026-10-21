@@ -8,6 +8,7 @@ on:
       - "SparkyFitnessMobile/**"
       - "SparkyFitnessServer/**"
       - "SparkyFitnessGarmin/**"
+      - "shared/**"
       - ".github/workflows/ci-tests.yml"
   push:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - "SparkyFitnessMobile/**"
       - "SparkyFitnessServer/**"
       - "SparkyFitnessGarmin/**"
+      - "shared/**"
       - ".github/workflows/ci-tests.yml"
 
 jobs:
@@ -28,6 +30,7 @@ jobs:
       mobile: ${{ steps.filter.outputs.mobile }}
       server: ${{ steps.filter.outputs.server }}
       garmin: ${{ steps.filter.outputs.garmin }}
+      shared: ${{ steps.filter.outputs.shared }}
       migrations: ${{ steps.filter.outputs.migrations }}
     steps:
       - name: Checkout code
@@ -40,12 +43,17 @@ jobs:
           filters: |
             frontend:
               - 'SparkyFitnessFrontend/**'
+              - 'shared/**'
             mobile:
               - 'SparkyFitnessMobile/**'
+              - 'shared/**'
             server:
               - 'SparkyFitnessServer/**'
+              - 'shared/**'
             garmin:
               - 'SparkyFitnessGarmin/**'
+            shared:
+              - 'shared/**'
             # Files whose change can break a fresh-install migration run.
             # Includes the jobs' own execution path (workflow + script) so a
             # change there can't break migration CI while the jobs gate out.
@@ -62,9 +70,45 @@ jobs:
               - 'SparkyFitnessServer/tests/stravaActivityDetailCleanup.integration.test.ts'
               - 'SparkyFitnessServer/tests/oidcProviderRepository.integration.test.ts'
               - 'SparkyFitnessServer/tests/providerSyncClaim.integration.test.ts'
+              - 'SparkyFitnessServer/tests/uniqueWrites.integration.test.ts'
+              - 'SparkyFitnessServer/tests/checkInConcurrentWrites.integration.test.ts'
               - 'SparkyFitnessServer/models/oidcProviderRepository.ts'
               - 'SparkyFitnessServer/package.json'
               - '.github/workflows/ci-tests.yml'
+
+  shared-validate:
+    name: Shared Validate
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.shared == 'true'
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: shared
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run validation (Type Check, Format)
+        run: pnpm run validate
 
   frontend-tests:
     name: Frontend Tests
@@ -265,9 +309,9 @@ jobs:
       # The schema + RLS policies are now applied and the non-superuser app role
       # exists, so the permission matrix can verify every table's real RLS
       # behaviour as the app role (superuser DB user seeds, app role is enforced).
-      - name: Verify RLS, Strava cleanup, OIDC providers, Better Auth schema, sign-in rate limits, provider sync claims and startup locking
+      - name: Verify RLS, Strava cleanup, OIDC providers, Better Auth schema, sign-in rate limits, provider sync claims, sleep entry and custom category uniqueness, concurrent check-ins and startup locking
         run: |
-          pnpm exec vitest run tests/rlsPermissionMatrix.integration.test.ts tests/stravaActivityDetailCleanup.integration.test.ts tests/betterAuthSchemaCheck.integration.test.ts tests/oidcProviderRepository.integration.test.ts tests/authRateLimitDatabase.integration.test.ts tests/providerSyncClaim.integration.test.ts
+          pnpm exec vitest run tests/rlsPermissionMatrix.integration.test.ts tests/stravaActivityDetailCleanup.integration.test.ts tests/betterAuthSchemaCheck.integration.test.ts tests/oidcProviderRepository.integration.test.ts tests/authRateLimitDatabase.integration.test.ts tests/providerSyncClaim.integration.test.ts tests/uniqueWrites.integration.test.ts tests/checkInConcurrentWrites.integration.test.ts
           # Initialization reapplies policies, so run it after the other database tests.
           RUN_DATABASE_INITIALIZATION_TEST=1 pnpm exec vitest run tests/initializeDatabase.integration.test.ts
         env:

@@ -47,7 +47,11 @@ export const fetchExerciseEntries = async (
 };
 
 export const createExerciseEntry = async (
-  payload: CreateExerciseEntryRequest & { imageFile: File | null }
+  payload: Omit<CreateExerciseEntryRequest, 'calories_burned'> & {
+    // Optional: when omitted the server estimates calories from the exercise.
+    calories_burned?: number;
+    imageFile: File | null;
+  }
 ): Promise<void> => {
   const { imageFile, ...entryData } = payload;
 

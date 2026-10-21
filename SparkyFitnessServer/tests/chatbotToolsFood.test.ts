@@ -6,6 +6,7 @@ import foodEntryService from '../services/foodEntryService.js';
 import mealService from '../services/mealService.js';
 import preferenceService from '../services/preferenceService.js';
 import { searchProviderFoods } from '../services/externalFoodSearchService.js';
+import { fetchProviderFoodDetails } from '../services/foodProviderDetailService.js';
 import { VALID_PROVIDER_TYPES } from '../constants/foodProviders.js';
 import foodRepository from '../models/foodRepository.js';
 import foodEntryMealRepository from '../models/foodEntryMealRepository.js';
@@ -23,6 +24,7 @@ vi.mock('../services/foodCoreService', () => ({
     deleteFood: vi.fn(),
     updateFoodEntriesSnapshot: vi.fn(),
     bulkCreateFoodVariants: vi.fn(),
+    getFoodVariantsByFoodId: vi.fn().mockResolvedValue([]),
   },
 }));
 vi.mock('../services/foodEntryService', () => ({
@@ -56,6 +58,9 @@ vi.mock('../services/preferenceService', () => ({
 }));
 vi.mock('../services/externalFoodSearchService', () => ({
   searchProviderFoods: vi.fn(),
+}));
+vi.mock('../services/foodProviderDetailService', () => ({
+  fetchProviderFoodDetails: vi.fn(),
 }));
 vi.mock('../models/foodRepository', () => ({
   default: {
@@ -468,7 +473,7 @@ describe('lookup_food_nutrition', () => {
     );
 
     expect(result).toBe(
-      'No matches found in internal DB or configured external databases/OpenFoodFacts for "dragonfruit smoothie". You may estimate the nutrition using AI and save it using create_food.'
+      'No verified match is available for "dragonfruit smoothie". Try another provider or official source (up to three candidates), then ask for the label or portion weight. Do not invent nutrition.'
     );
     expect(
       externalProviderRepository.getActiveProvidersByTypes
@@ -533,7 +538,7 @@ describe('lookup_food_nutrition', () => {
     );
 
     expect(result).toBe(
-      '### Found match in **usda**:\n**Apple**\n  Serving Size: 100 g\n  Energy: 52 kcal\n  Macros: Protein: 0.3g | Carbs: 14g | Fat: 0.2g\n  Details: Fiber: 2.4g | Sugar: 10g | Sodium: 1mg | SatFat: 0g\n  Available Serving Units: 100 g\n  External ID: 171688\n\n**Other Alternatives found:**\n- **Apple juice** (240ml: 110 kcal)\n\nNote: this external result is not saved in the food database yet. To save and log it in one step, call sparky_manage_food with: {"action":"log_external_food","food_name":"Apple","external_id":"171688","quantity":1,"meal_type":"<breakfast|lunch|dinner|snacks>"} (adjust quantity and meal_type). Do NOT pass the External ID as food_id.'
+      '### Found match in **usda**:\n**Apple**\n  Serving Size: 100 g\n  Energy: 52 kcal\n  Macros: Protein: 0.3g | Carbs: 14g | Fat: 0.2g\n  Details: Fiber: 2.4g | Sugar: 10g | Sodium: 1mg | SatFat: 0g\n  Available Serving Units: 100 g\n  External ID: 171688\n\n**Other Alternatives found:**\n- **Apple juice** (240ml: 110 kcal)\n\nNote: this external result is not saved in the food database yet. To save and log it in one step, call sparky_manage_food with: {"action":"log_external_food","food_name":"Apple","provider_type":"usda","external_id":"171688","quantity":1,"meal_type":"<breakfast|lunch|dinner|snacks>"} (adjust quantity and meal_type). Do NOT pass the External ID as food_id.'
     );
   });
 
@@ -570,7 +575,7 @@ describe('lookup_food_nutrition', () => {
     );
 
     expect(result).toBe(
-      '### Found match in **openfoodfacts**:\n**Apple**\n  Serving Size: 100 g\n  Energy: 52 kcal\n  Macros: Protein: 0.3g | Carbs: 14g | Fat: 0.2g\n  Available Serving Units: 100 g\n\nNote: this external result is not saved in the food database yet. To save and log it in one step, call sparky_manage_food with: {"action":"log_external_food","food_name":"Apple","quantity":1,"meal_type":"<breakfast|lunch|dinner|snacks>"} (adjust quantity and meal_type). Do NOT pass the External ID as food_id.'
+      '### Found match in **openfoodfacts**:\n**Apple**\n  Serving Size: 100 g\n  Energy: 52 kcal\n  Macros: Protein: 0.3g | Carbs: 14g | Fat: 0.2g\n  Available Serving Units: 100 g\n\nNote: this external result is not saved in the food database yet. To save and log it in one step, call sparky_manage_food with: {"action":"log_external_food","food_name":"Apple","provider_type":"openfoodfacts","quantity":1,"meal_type":"<breakfast|lunch|dinner|snacks>"} (adjust quantity and meal_type). Do NOT pass the External ID as food_id.'
     );
   });
 
@@ -627,7 +632,7 @@ describe('lookup_food_nutrition', () => {
     expect(result).toContain("**BANANA** (BETTER'N PEANUT BUTTER)");
     // And the copyable log example points at the whole food.
     expect(result).toContain(
-      '"food_name":"Banana, raw","external_id":"1105073"'
+      '"food_name":"Banana, raw","provider_type":"usda","external_id":"1105073"'
     );
   });
 
@@ -690,7 +695,7 @@ describe('lookup_food_nutrition', () => {
     expect(result).not.toContain('28 mg');
   });
 
-  it('falls through to ai_estimate when an explicitly requested provider is unconfigured', async () => {
+  it('reports provider failure without authorizing invented nutrition', async () => {
     vi.mocked(
       externalProviderRepository.getActiveProvidersByTypes
     ).mockResolvedValue([]);
@@ -708,7 +713,7 @@ describe('lookup_food_nutrition', () => {
     );
 
     expect(result).toBe(
-      'No matches found in internal DB or configured external databases/OpenFoodFacts for "apple". You may estimate the nutrition using AI and save it using create_food.'
+      'No verified match is available for "apple"; one or more providers failed. Try another provider or official source (up to three candidates), then ask for the label or portion weight. Do not invent nutrition.'
     );
     // Explicit provider bypasses the internal search entirely.
     expect(foodRepository.getFoodsWithPagination).not.toHaveBeenCalled();
@@ -721,7 +726,7 @@ describe('lookup_food_nutrition', () => {
     );
   });
 
-  it('returns a DB error for an explicit internal miss (MCP quirk)', async () => {
+  it('reports an explicit internal miss without querying providers', async () => {
     vi.mocked(foodRepository.getFoodsWithPagination).mockResolvedValue([]);
     vi.mocked(foodRepository.countFoods).mockResolvedValue(0);
 
@@ -734,7 +739,7 @@ describe('lookup_food_nutrition', () => {
       opts
     );
 
-    expect(result).toBe(DB_ERROR_TEXT);
+    expect(result).toContain('No verified match is available for "nope"');
     expect(searchProviderFoods).not.toHaveBeenCalled();
   });
 
@@ -782,6 +787,53 @@ describe('lookup_food_nutrition', () => {
       'swissfood',
       'Appenzeller',
       { providerId: 'prov-swiss' }
+    );
+  });
+
+  it('supports explicit provider_type: "livsmedelsverket" in lookup_food_nutrition', async () => {
+    vi.mocked(
+      externalProviderRepository.getActiveProvidersByTypes
+    ).mockResolvedValue([
+      {
+        id: 'prov-slv',
+        provider_type: 'livsmedelsverket',
+        provider_name: 'Swedish Food Agency (Livsmedelsverket)',
+      },
+    ]);
+    vi.mocked(searchProviderFoods).mockResolvedValue({
+      foods: [
+        {
+          name: 'Knäckebröd råg',
+          provider_external_id: 'slv-101',
+          default_variant: {
+            serving_size: 100,
+            serving_unit: 'g',
+            calories: 350,
+            protein: 10,
+            carbs: 65,
+            fat: 2,
+          },
+        },
+      ],
+      pagination: { page: 1, pageSize: 20, totalCount: 1, hasMore: false },
+    });
+
+    const result = await tools.sparky_manage_food.execute!(
+      {
+        action: 'lookup_food_nutrition',
+        food_name: 'Knäckebröd',
+        provider_type: 'livsmedelsverket',
+      },
+      opts
+    );
+
+    expect(result).toContain('Found match in **livsmedelsverket**');
+    expect(result).toContain('Knäckebröd råg');
+    expect(searchProviderFoods).toHaveBeenCalledWith(
+      'user-1',
+      'livsmedelsverket',
+      'Knäckebröd',
+      { providerId: 'prov-slv' }
     );
   });
 });
@@ -1229,7 +1281,7 @@ describe('log_food', () => {
     );
 
     expect(result).toBe(
-      'Error [VALIDATION]: Food "Unicorn Steak" not found in the database. Call lookup_food_nutrition first to search external providers, for example: {"action":"lookup_food_nutrition","food_name":"Unicorn Steak"}. If it returns an external match, log it with log_external_food; otherwise call create_food with estimated macros.'
+      'Error [VALIDATION]: Food "Unicorn Steak" not found in the database. Call lookup_food_nutrition first to search external providers, for example: {"action":"lookup_food_nutrition","food_name":"Unicorn Steak"}. If it returns an external match, log it with log_external_food; otherwise research a verified source or ask for the label.'
     );
     expect(foodEntryService.createFoodEntry).not.toHaveBeenCalled();
   });
@@ -1629,7 +1681,7 @@ describe('log_food', () => {
     );
 
     expect(result).toContain(
-      "Cannot safely convert 100 g to this food's 1 serving reference serving."
+      'Cannot safely convert 100 g to a verified reference serving'
     );
     expect(foodEntryService.createFoodEntry).not.toHaveBeenCalled();
   });
@@ -1800,6 +1852,141 @@ describe('entry_time defaults when the model omits one', () => {
 });
 
 describe('log_external_food', () => {
+  it('fetches the pinned FatSecret food and logs two verified slices as 200 kcal', async () => {
+    const breadSlice = {
+      serving_size: 1,
+      serving_unit: 'slice',
+      calories: 100,
+      protein: 3,
+      carbs: 20,
+      fat: 1,
+    };
+    const bread = {
+      name: 'White bread',
+      provider_external_id: 'bread-1',
+      default_variant: {
+        serving_size: 100,
+        serving_unit: 'g',
+        calories: 250,
+        protein: 7.5,
+        carbs: 50,
+        fat: 2.5,
+      },
+      variants: [breadSlice],
+    };
+    vi.mocked(fetchProviderFoodDetails).mockResolvedValue(bread);
+    vi.mocked(foodCoreService.createFood).mockResolvedValue({
+      id: FOOD_ID,
+      name: bread.name,
+      default_variant: { ...breadSlice, id: VARIANT_ID },
+    });
+    vi.mocked(foodEntryService.createFoodEntry).mockResolvedValue({
+      id: ENTRY_ID,
+      food_name: bread.name,
+    });
+    const result = await tools.sparky_manage_food.execute!(
+      {
+        action: 'log_external_food',
+        food_name: bread.name,
+        provider_type: 'fatsecret',
+        external_id: 'bread-1',
+        quantity: 2,
+        unit: 'slices',
+        meal_type: 'lunch',
+      },
+      opts
+    );
+    expect(searchProviderFoods).not.toHaveBeenCalled();
+    expect(fetchProviderFoodDetails).toHaveBeenCalledWith(
+      expect.objectContaining({
+        externalId: 'bread-1',
+        providerType: 'fatsecret',
+      })
+    );
+    expect(foodCoreService.createFood).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        serving_size: 1,
+        serving_unit: 'slice',
+        calories: 100,
+      })
+    );
+    expect(foodEntryService.createFoodEntry).toHaveBeenCalledWith(
+      'user-1',
+      'user-1',
+      expect.objectContaining({
+        quantity: 2,
+        unit: 'slice',
+        variant_id: VARIANT_ID,
+      })
+    );
+    expect(result).toContain('Consumed: 200 kcal');
+  });
+
+  it('does not import or log a slice against a gram-only FatSecret reference', async () => {
+    vi.mocked(fetchProviderFoodDetails).mockResolvedValue({
+      name: 'White bread',
+      provider_external_id: 'bread-1',
+      default_variant: {
+        serving_size: 100,
+        serving_unit: 'g',
+        calories: 250,
+        protein: 8,
+        carbs: 50,
+        fat: 2,
+      },
+    });
+    const result = await tools.sparky_manage_food.execute!(
+      {
+        action: 'log_external_food',
+        food_name: 'White bread',
+        provider_type: 'fatsecret',
+        external_id: 'bread-1',
+        quantity: 2,
+        unit: 'slice',
+        meal_type: 'lunch',
+      },
+      opts
+    );
+    expect(result).toContain('Cannot safely convert');
+    expect(foodCoreService.createFood).not.toHaveBeenCalled();
+    expect(foodEntryService.createFoodEntry).not.toHaveBeenCalled();
+  });
+
+  it('never substitutes a different food when a pinned provider ID is missing', async () => {
+    mockUsdaLookup([usdaApple]);
+    const result = await tools.sparky_manage_food.execute!(
+      {
+        action: 'log_external_food',
+        food_name: 'Apple',
+        external_id: 'missing-item',
+        meal_type: 'lunch',
+      },
+      opts
+    );
+    expect(result).toContain('Selected external ID');
+    expect(foodCoreService.createFood).not.toHaveBeenCalled();
+    expect(foodEntryService.createFoodEntry).not.toHaveBeenCalled();
+  });
+
+  it('preserves a provider failure without inventing or saving a food', async () => {
+    vi.mocked(fetchProviderFoodDetails).mockRejectedValueOnce(
+      new Error('FatSecret unavailable')
+    );
+    const result = await tools.sparky_manage_food.execute!(
+      {
+        action: 'log_external_food',
+        food_name: 'White bread',
+        provider_type: 'fatsecret',
+        external_id: 'bread-1',
+        meal_type: 'lunch',
+      },
+      opts
+    );
+    expect(result).toContain('No verified external match');
+    expect(foodCoreService.createFood).not.toHaveBeenCalled();
+    expect(foodEntryService.createFoodEntry).not.toHaveBeenCalled();
+  });
   const usdaApple = {
     name: 'Apple',
     brand: 'USDA',
@@ -1975,7 +2162,7 @@ describe('log_external_food', () => {
     );
 
     expect(result).toBe(
-      '✅ Saved "Apple" from usda (52 kcal per 100g) and logged 200 g to Breakfast on 2026-06-10.'
+      '✅ Saved "Apple" from usda and logged 200 g to Breakfast on 2026-06-10. Reference: 100 g. Consumed: 104 kcal | P unknown | C unknown | F unknown.'
     );
     expect(foodCoreService.createFood).toHaveBeenCalledWith('user-1', {
       user_id: 'user-1',
@@ -2094,6 +2281,70 @@ describe('log_external_food', () => {
     );
   });
 
+  it('supports logging a food from livsmedelsverket provider', async () => {
+    const swedishBread = {
+      name: 'Knäckebröd råg',
+      provider_external_id: 'slv-101',
+      default_variant: {
+        serving_size: 100,
+        serving_unit: 'g',
+        calories: 350,
+        protein: 10,
+        carbs: 65,
+        fat: 2,
+      },
+    };
+    vi.mocked(
+      externalProviderRepository.getActiveProvidersByTypes
+    ).mockResolvedValue([
+      {
+        id: 'prov-slv',
+        provider_type: 'livsmedelsverket',
+        provider_name: 'Swedish Food Agency (Livsmedelsverket)',
+      },
+    ]);
+    vi.mocked(searchProviderFoods).mockResolvedValue({
+      foods: [swedishBread],
+      pagination: { page: 1, pageSize: 20, totalCount: 1, hasMore: false },
+    });
+    vi.mocked(foodCoreService.createFood).mockResolvedValue({
+      id: FOOD_ID,
+      name: 'Knäckebröd råg',
+      default_variant: {
+        id: VARIANT_ID,
+        serving_size: 100,
+        serving_unit: 'g',
+        calories: 350,
+      },
+    });
+    vi.mocked(foodEntryService.createFoodEntry).mockResolvedValue({
+      id: ENTRY_ID,
+      food_name: 'Knäckebröd råg',
+    });
+
+    const result = await tools.sparky_manage_food.execute!(
+      {
+        action: 'log_external_food',
+        food_name: 'Knäckebröd råg',
+        provider_type: 'livsmedelsverket',
+        quantity: 100,
+        unit: 'g',
+        meal_type: 'breakfast',
+        entry_date: '2026-10-14',
+      },
+      opts
+    );
+
+    expect(result).toContain('Saved "Knäckebröd råg" from livsmedelsverket');
+    expect(foodCoreService.createFood).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        provider_type: 'livsmedelsverket',
+        provider_external_id: 'slv-101',
+      })
+    );
+  });
+
   // The provider's other serving units are what let a user log "1 fruit"
   // instead of guessing grams. This insert is best-effort (failures are only
   // warned about), so an invalid `source` silently stripped every count unit
@@ -2109,7 +2360,14 @@ describe('log_external_food', () => {
           calories: 68,
           is_default: true,
         },
-        { serving_size: 1, serving_unit: 'fruit', calories: 37 },
+        {
+          serving_size: 1,
+          serving_unit: 'fruit',
+          calories: 37,
+          protein: 1.4,
+          carbs: 8,
+          fat: 0.5,
+        },
       ],
     };
     mockUsdaLookup([guava]);
@@ -2142,6 +2400,15 @@ describe('log_external_food', () => {
     expect(foodCoreService.bulkCreateFoodVariants).toHaveBeenCalledWith(
       'user-1',
       [expect.objectContaining({ serving_unit: 'fruit', source: 'imported' })]
+    );
+    expect(foodEntryService.createFoodEntry).toHaveBeenCalledWith(
+      'user-1',
+      'user-1',
+      expect.objectContaining({
+        variant_id: 'variant-fruit',
+        quantity: 5,
+        unit: 'fruit',
+      })
     );
   });
 
@@ -2186,7 +2453,7 @@ describe('log_external_food', () => {
     );
 
     expect(result).toBe(
-      '✅ Saved "Apple pie" from usda (296 kcal per 125g) and logged 125 g to Snacks on 2026-06-10.'
+      '✅ Saved "Apple pie" from usda and logged 125 g to Snacks on 2026-06-10. Reference: 125 g. Consumed: 296 kcal | P unknown | C unknown | F unknown.'
     );
     expect(foodCoreService.createFood).toHaveBeenCalledWith(
       'user-1',
@@ -2228,7 +2495,7 @@ describe('log_external_food', () => {
     );
 
     expect(result).toBe(
-      '✅ Saved "Apple" from usda (52 kcal per 100g) and logged 200 g to Breakfast on 2026-06-10. Saved as Quick Add — hidden from your food list and search.'
+      '✅ Saved "Apple" from usda and logged 200 g to Breakfast on 2026-06-10. Reference: 100 g. Consumed: 104 kcal | P unknown | C unknown | F unknown. Saved as Quick Add — hidden from your food list and search.'
     );
     expect(foodCoreService.createFood).toHaveBeenCalledWith(
       'user-1',
@@ -2258,7 +2525,7 @@ describe('log_external_food', () => {
     );
 
     expect(result).toBe(
-      '✅ "Eggs" was already in the food database — logged 200 g for Breakfast on 2026-06-10. Quick Add was not applied because this food is already in your food list.'
+      '✅ "Eggs" was already in the food database — logged 200 g for Breakfast on 2026-06-10. Consumed: 310 kcal | P 26g | C 2.2g | F 22g. Quick Add was not applied because this food is already in your food list.'
     );
     expect(foodCoreService.createFood).not.toHaveBeenCalled();
   });
@@ -2284,7 +2551,7 @@ describe('log_external_food', () => {
     );
 
     expect(result).toBe(
-      '✅ "Eggs" was already in the food database — logged 200 g for Breakfast on 2026-06-10.'
+      '✅ "Eggs" was already in the food database — logged 200 g for Breakfast on 2026-06-10. Consumed: 310 kcal | P 26g | C 2.2g | F 22g.'
     );
     expect(foodCoreService.createFood).not.toHaveBeenCalled();
     expect(foodEntryService.createFoodEntry).toHaveBeenCalledWith(
@@ -2294,7 +2561,7 @@ describe('log_external_food', () => {
     );
   });
 
-  it('falls back to a create_food suggestion when nothing matches anywhere', async () => {
+  it('asks for evidence when nothing matches anywhere', async () => {
     mockUsdaLookup([]);
 
     const result = await tools.sparky_manage_food.execute!(
@@ -2308,7 +2575,7 @@ describe('log_external_food', () => {
     );
 
     expect(result).toBe(
-      'Error [VALIDATION]: No external match found for "dragonfruit smoothie". Please estimate the nutrition yourself and call create_food (include meal_type_id (or meal_type) and entry_date to save and log in one step), for example: {"action":"create_food","food_name":"dragonfruit smoothie","calories":300,"protein":15,"carbs":40,"fat":5,"meal_type":"snacks","entry_date":"2026-06-10"}'
+      'Error [VALIDATION]: No verified external match is available for "dragonfruit smoothie". Nothing was logged. Try another provider or official product source (up to three candidates), then ask for the label or portion weight. A provider outage is not permission to invent nutrition.'
     );
     expect(foodCoreService.createFood).not.toHaveBeenCalled();
     expect(foodEntryService.createFoodEntry).not.toHaveBeenCalled();
@@ -2316,7 +2583,7 @@ describe('log_external_food', () => {
 
   // Regression: the retry example is what the model copies verbatim. Dropping
   // is_quick_food here saved a visible food after the user asked not to.
-  it('carries Quick Add into the create_food fallback suggestion', async () => {
+  it('does not invent nutrition for a failed Quick Add lookup', async () => {
     mockUsdaLookup([]);
 
     const result = await tools.sparky_manage_food.execute!(
@@ -2330,15 +2597,15 @@ describe('log_external_food', () => {
       opts
     );
 
-    expect(result).toContain('"is_quick_food":true');
+    expect(result).not.toContain('create_food');
     expect(result).toBe(
-      'Error [VALIDATION]: No external match found for "dragonfruit smoothie". Please estimate the nutrition yourself and call create_food (include meal_type_id (or meal_type) and entry_date to save and log in one step), for example: {"action":"create_food","food_name":"dragonfruit smoothie","calories":300,"protein":15,"carbs":40,"fat":5,"meal_type":"snacks","entry_date":"2026-06-10","is_quick_food":true}'
+      'Error [VALIDATION]: No verified external match is available for "dragonfruit smoothie". Nothing was logged. Try another provider or official product source (up to three candidates), then ask for the label or portion weight. A provider outage is not permission to invent nutrition.'
     );
   });
 
   // Regression: a custom meal_type_id must survive into the retry example so
   // the model is not steered back to a built-in category (issue #1959).
-  it('keeps a custom meal_type_id in the create_food retry example', async () => {
+  it('does not log to a fallback category when a custom meal lookup fails', async () => {
     mockUsdaLookup([]);
 
     const result = await tools.sparky_manage_food.execute!(
@@ -2351,7 +2618,7 @@ describe('log_external_food', () => {
       opts
     );
 
-    expect(result).toContain('"meal_type_id":"' + MEAL_TYPE_ID + '"');
+    expect(result).toContain('Nothing was logged');
     expect(result).not.toContain('"meal_type":');
     expect(foodCoreService.createFood).not.toHaveBeenCalled();
     expect(foodEntryService.createFoodEntry).not.toHaveBeenCalled();
@@ -2386,7 +2653,7 @@ describe('log_external_food', () => {
     );
 
     expect(result).toBe(
-      '✅ Saved "Apple" from usda (52 kcal per 100g) and logged 100 g to Breakfast on 2026-06-10.'
+      '✅ Saved "Apple" from usda and logged 100 g to Breakfast on 2026-06-10. Reference: 100 g. Consumed: 52 kcal | P unknown | C unknown | F unknown.'
     );
   });
 });
@@ -2470,7 +2737,7 @@ describe('create_food', () => {
     }
   );
 
-  it('applies count-unit defaults and the 0-becomes-null storage quirk', async () => {
+  it('applies count-unit defaults and preserves an explicit nutrient zero', async () => {
     vi.mocked(foodCoreService.createFood).mockResolvedValue({
       id: FOOD_ID,
       name: 'Protein Bar',
@@ -2523,7 +2790,7 @@ describe('create_food', () => {
       sodium: 180,
       potassium: null,
       dietary_fiber: 2,
-      sugars: null,
+      sugars: 0,
       vitamin_a: null,
       vitamin_c: null,
       calcium: null,
@@ -5141,6 +5408,80 @@ describe('sparky_get_food_diary', () => {
       sugars: 37.5,
     });
   });
+
+  it('does not scale a serving count twice when the reference is in servings', async () => {
+    // Shape written by POST /food-entries/import-from-csv for 4.5 servings:
+    // serving_size is pinned to the quantity and the nutrients are totals.
+    vi.mocked(foodEntryService.getFoodEntriesByDateRange).mockResolvedValue([
+      {
+        id: ENTRY_ID,
+        food_id: FOOD_ID,
+        food_name: 'Lasagne',
+        quantity: 4.5,
+        unit: 'serving',
+        serving_size: 4.5,
+        serving_unit: 'serving',
+        calories: 415.67,
+        protein: 40.99,
+        entry_date: '2026-10-10',
+        meal_type: 'Dinner',
+        meal_type_id: 'cb3fcdd0-ebcf-4626-bce3-c6ec36072041',
+      },
+      {
+        id: '22222222-3333-4444-8555-666666666666',
+        food_id: FOOD_ID,
+        food_name: 'Pancakes',
+        quantity: 0.7,
+        unit: 'serving',
+        serving_size: 0.7,
+        serving_unit: 'serving',
+        calories: 106.62,
+        protein: 6.44,
+        entry_date: '2026-10-10',
+        meal_type: 'Breakfast',
+        meal_type_id: 'cb3fcdd0-ebcf-4626-bce3-c6ec36072041',
+      },
+      {
+        id: '33333333-4444-4555-8666-777777777777',
+        food_id: FOOD_ID,
+        food_name: 'Yogurt',
+        quantity: 2,
+        unit: 'serving',
+        serving_size: 1,
+        serving_unit: 'serving',
+        calories: 90,
+        protein: 10,
+        entry_date: '2026-10-10',
+        meal_type: 'Snacks',
+        meal_type_id: 'cb3fcdd0-ebcf-4626-bce3-c6ec36072041',
+      },
+    ]);
+    vi.mocked(
+      foodEntryMealRepository.getFoodEntryMealsByDateRange
+    ).mockResolvedValue([]);
+
+    const result = await tools.sparky_get_food_diary.execute!(
+      { date: '2026-10-10' },
+      opts
+    );
+    const entries: Array<Record<string, unknown>> = JSON.parse(
+      result as string
+    ).food_entries;
+    const byName = (name: string) =>
+      entries.find((entry) => entry.food_name === name);
+
+    // Same values as the daily totals (calories * quantity / serving_size).
+    expect(byName('Lasagne')).toMatchObject({
+      calories: 415.67,
+      protein: 40.99,
+    });
+    expect(byName('Pancakes')).toMatchObject({
+      calories: 106.62,
+      protein: 6.44,
+    });
+    // A one-serving reference still scales by the serving count.
+    expect(byName('Yogurt')).toMatchObject({ calories: 180, protein: 20 });
+  });
 });
 
 describe('sparky_get_nutrition_summary', () => {
@@ -5282,4 +5623,153 @@ describe('sparky_manage_food set_food_notes', () => {
 
     expect(result).toContain('food_id or food_name');
   });
+});
+
+describe('update_entry saved reference selection', () => {
+  it('switches a slice snapshot to the saved gram variant for an explicit gram amount', async () => {
+    vi.mocked(foodRepository.getFoodEntryById).mockResolvedValue({
+      food_id: FOOD_ID,
+      variant_id: VARIANT_ID,
+      quantity: 2,
+      serving_size: 1,
+      serving_unit: 'slice',
+    });
+    vi.mocked(foodRepository.getFoodVariantsByFoodId).mockResolvedValue([
+      { id: 'gram-variant', serving_size: 100, serving_unit: 'g' },
+    ]);
+    vi.mocked(foodEntryService.updateFoodEntry).mockResolvedValue({
+      id: ENTRY_ID,
+    });
+    const result = await tools.sparky_manage_food.execute!(
+      {
+        action: 'update_entry',
+        entry_id: ENTRY_ID,
+        entry_type: 'food_entry',
+        quantity: 75,
+        unit: 'g',
+      },
+      opts
+    );
+    expect(result).toBe('✅ Entry updated to 75 g.');
+    expect(foodRepository.getFoodVariantsByFoodId).toHaveBeenCalledWith(
+      FOOD_ID,
+      'user-1'
+    );
+    expect(foodEntryService.updateFoodEntry).toHaveBeenCalledWith(
+      'user-1',
+      'user-1',
+      ENTRY_ID,
+      { variant_id: 'gram-variant', quantity: 75, unit: 'g' },
+      { preserveSnapshot: true }
+    );
+  });
+  it('does not guess a gram amount for a unit-only slice edit', async () => {
+    vi.mocked(foodRepository.getFoodEntryById).mockResolvedValue({
+      food_id: FOOD_ID,
+      quantity: 2,
+      serving_size: 1,
+      serving_unit: 'slice',
+    });
+    const result = await tools.sparky_manage_food.execute!(
+      {
+        action: 'update_entry',
+        entry_id: ENTRY_ID,
+        entry_type: 'food_entry',
+        unit: 'g',
+      },
+      opts
+    );
+    expect(result).toContain('Cannot safely convert');
+    expect(foodEntryService.updateFoodEntry).not.toHaveBeenCalled();
+  });
+  it('preserves literal stored servings on a unit-only serving edit', async () => {
+    vi.mocked(foodRepository.getFoodEntryById).mockResolvedValue({
+      quantity: 2,
+      serving_size: 4.5,
+      serving_unit: 'serving',
+    });
+    vi.mocked(foodEntryService.updateFoodEntry).mockResolvedValue({
+      id: ENTRY_ID,
+    });
+    const result = await tools.sparky_manage_food.execute!(
+      {
+        action: 'update_entry',
+        entry_id: ENTRY_ID,
+        entry_type: 'food_entry',
+        unit: 'serving',
+      },
+      opts
+    );
+    expect(result).toBe('✅ Entry updated to 2 serving.');
+    expect(foodEntryService.updateFoodEntry).toHaveBeenCalledWith(
+      'user-1',
+      'user-1',
+      ENTRY_ID,
+      { quantity: 2, unit: 'serving' },
+      { preserveSnapshot: true }
+    );
+  });
+});
+
+it('logs and lists literal servings without multiplying a multi-serving reference twice', async () => {
+  const reference = {
+    id: VARIANT_ID,
+    food_id: FOOD_ID,
+    serving_size: 4.5,
+    serving_unit: 'serving',
+    calories: 450,
+    protein: 45,
+    carbs: 45,
+    fat: 10,
+  };
+  const food = {
+    id: FOOD_ID,
+    name: 'Verified multi-serving reference',
+    default_variant: reference,
+  };
+  vi.mocked(foodRepository.getFoodById).mockResolvedValue(food);
+  vi.mocked(foodCoreService.getFoodById).mockResolvedValue(food);
+  vi.mocked(foodEntryService.createFoodEntry).mockResolvedValue({
+    id: ENTRY_ID,
+  });
+  await tools.sparky_manage_food.execute!(
+    {
+      action: 'log_food',
+      food_id: FOOD_ID,
+      quantity: 2,
+      unit: 'serving',
+      meal_type: 'breakfast',
+      entry_date: '2026-10-16',
+    },
+    opts
+  );
+  expect(foodEntryService.createFoodEntry).toHaveBeenCalledWith(
+    'user-1',
+    'user-1',
+    expect.objectContaining({
+      quantity: 2,
+      unit: 'serving',
+      variant_id: VARIANT_ID,
+    })
+  );
+  vi.mocked(foodEntryService.getFoodEntriesByDate).mockResolvedValue([
+    {
+      ...reference,
+      id: ENTRY_ID,
+      food_name: food.name,
+      quantity: 2,
+      unit: 'serving',
+      meal_type: 'Breakfast',
+    },
+  ]);
+  vi.mocked(foodEntryMealRepository.getFoodEntryMealsByDate).mockResolvedValue(
+    []
+  );
+  const diary = await tools.sparky_manage_food.execute!(
+    { action: 'list_diary', entry_date: '2026-10-16' },
+    opts
+  );
+  expect(diary).toContain('200 kcal');
+  expect(diary).toContain('**Total Energy:** 200 kcal');
+  expect(diary).not.toContain('900 kcal');
 });

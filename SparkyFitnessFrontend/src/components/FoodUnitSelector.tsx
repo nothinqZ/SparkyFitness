@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { TimeInput } from '@/components/ui/TimeInput';
 import { NumericInput } from '@/components/NumericInput';
 import { Label } from '@/components/ui/label';
 import {
@@ -749,7 +750,7 @@ const FoodUnitSelector = ({
               {showTimeInput && (
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="entryTime">
+                    <Label id="entryTime-label">
                       {t('foodUnitSelector.timeOptional', 'Time (optional)')}
                     </Label>
                     <div className="flex items-center gap-1.5">
@@ -791,11 +792,11 @@ const FoodUnitSelector = ({
                       )}
                     </div>
                   </div>
-                  <Input
+                  <TimeInput
                     id="entryTime"
-                    type="time"
+                    aria-labelledby="entryTime-label"
                     value={entryTime}
-                    onChange={(e) => setEntryTime(e.target.value)}
+                    onChange={setEntryTime}
                   />
                 </div>
               )}
@@ -825,7 +826,7 @@ const FoodUnitSelector = ({
                     <div>
                       <Label htmlFor="conversionFactor">
                         1 {pendingUnit.trim()} ={' '}
-                        {conversionBaseVariant?.serving_unit}
+                        <span>{conversionBaseVariant?.serving_unit}</span>
                       </Label>
                       <Input
                         id="conversionFactor"
@@ -913,7 +914,7 @@ const FoodUnitSelector = ({
                       >
                         <span>
                           1 {pendingUnit} = ?{' '}
-                          {conversionBaseVariant?.serving_unit}
+                          <span>{conversionBaseVariant?.serving_unit}</span>
                         </span>
                         {aiEstimateData !== null && (
                           <span

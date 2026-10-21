@@ -199,6 +199,11 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
         // string.
         NSCameraUsageDescription:
           'SparkyFitness uses the camera to photograph foods and meals, and to scan barcodes and nutrition labels.',
+        // GPS activity recording. Only while-using access is requested: the
+        // `location` background mode below keeps an already-started recording
+        // going with the screen locked, and shows the blue status-bar pill.
+        NSLocationWhenInUseUsageDescription:
+          'SparkyFitness uses your location to record the route, distance and pace of your walks, runs and rides.',
         NSPhotoLibraryUsageDescription:
           'SparkyFitness lets you choose photos from your library for your foods, meals, and diary entries.',
         NSAppTransportSecurity: {
@@ -215,20 +220,25 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
         // silent track playing during a rest, so the chime still sounds with
         // the app in the background. Nothing plays in the background unless
         // that setting is on and a rest is running.
-        //
         // `bluetooth-central` lets iOS wake the app when the Garmin watch
         // (Sparky Strength) sends a logged set over Bluetooth while the phone
         // is locked; see modules/garmin-connectiq.
-        UIBackgroundModes: ['audio', 'bluetooth-central'],
+        UIBackgroundModes: ['audio', 'location', 'bluetooth-central'],
         // The Connect IQ SDK checks for Garmin Connect to pick the watch.
         LSApplicationQueriesSchemes: ['gcm-ciq'],
         NSBluetoothAlwaysUsageDescription:
           'SparkyFitness connects to your Garmin watch over Bluetooth to keep workouts in sync.',
         NSBluetoothPeripheralUsageDescription:
           'SparkyFitness connects to your Garmin watch over Bluetooth to keep workouts in sync.',
+        // Lets the Siri and Shortcuts actions and the Lock Screen controls find
+        // the Keychain group the app shares with the widget extension.
+        // Read by the Siri and Shortcuts actions to find the widget snapshots.
+        APP_GROUP_IDENTIFIER: iosAppGroup,
+        SparkyKeychainGroup: `$(AppIdentifierPrefix)${iosAppGroup}`,
       },
       entitlements: {
         'com.apple.security.application-groups': [iosAppGroup],
+        'keychain-access-groups': [`$(AppIdentifierPrefix)${iosAppGroup}`],
         // Lets iOS honour the `timeSensitive` rest alert (see
         // `scheduleRestNotification`); without it a Focus mode silences it.
         'com.apple.developer.usernotifications.time-sensitive': true,
@@ -252,22 +262,57 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
         : (config.plugins ?? [])),
       'expo-image',
       [
-        // No mic permission and no Android record/foreground-service perms.
-        // iOS background audio for the rest chime comes from `UIBackgroundModes`
-        // above; the plugin flag would also add Android's media-playback
-        // foreground service, which the chime doesn't use.
+        // System voice input (Android/iOS speech recognition) for chat dictation.
+        'expo-speech-recognition',
+        {
+          microphonePermission:
+            'SparkyFitness uses the microphone so you can dictate messages in Chat.',
+          speechRecognitionPermission:
+            'SparkyFitness uses speech recognition to turn voice input into chat text.',
+        },
+      ],
+      [
+        // Foreground-only voice capture for optional server-side transcription.
+        // Keep the existing iOS background playback for workout cues; this
+        // plugin must not enable Android's media-playback foreground service.
         'expo-audio',
         {
-          microphonePermission: false,
-          recordAudioAndroid: false,
+          microphonePermission:
+            'SparkyFitness uses the microphone so you can dictate messages in Chat.',
+          recordAudioAndroid: true,
           enableBackgroundPlayback: false,
+        },
+      ],
+      [
+        // Recording only runs while the person is on a started activity, from a
+        // foreground service (Android) or the `location` background mode (iOS,
+        // set in infoPlist above). That needs no ACCESS_BACKGROUND_LOCATION,
+        // the permission Google Play reviews closely, so it stays off.
+        'expo-location',
+        {
+          locationWhenInUsePermission:
+            'SparkyFitness uses your location to record the route, distance and pace of your walks, runs and rides.',
+          locationAlwaysAndWhenInUsePermission: false,
+          locationAlwaysPermission: false,
+          // The module links CoreMotion, so App Store Connect rejects the upload
+          // (ITMS-90683) without this purpose string. It is also the text iOS
+          // shows when the step counter (`expo-sensors` Pedometer) asks for
+          // Motion & Fitness, so it says what the steps are used for. `false`
+          // would strip the key.
+          motionUsagePermission:
+            'SparkyFitness uses your step count to estimate the distance of indoor walks and runs, and to learn your stride from your recorded walks and runs.',
+          isAndroidForegroundServiceEnabled: true,
+          isAndroidBackgroundLocationEnabled: false,
+          isIosBackgroundLocationEnabled: false,
         },
       ],
       './plugins/withGlanceAndroidSupport',
       './plugins/withAppLanguage',
       './plugins/withCalorieWidget',
+      './plugins/withQuickSettingsTiles',
       './plugins/withExactAlarmModule',
       './plugins/withBackgroundWater',
+      './plugins/withQuickActionLaunchGuard',
       './plugins/withWorkoutNotification',
       './plugins/withEnrichedMarkdownNoMath',
       './plugins/withSceneLifecycle',
@@ -294,7 +339,7 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
             [
               'expo-widgets',
               {
-                groupIdentifier: getIosAppGroup(),
+                groupIdentifier: iosAppGroup,
                 bundleIdentifier:
                   process.env.WIDGET_BUNDLE_IDENTIFIER ||
                   (isDev
