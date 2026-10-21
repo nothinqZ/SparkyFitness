@@ -10,8 +10,10 @@ import {
   EyeOff,
   Footprints,
   Gauge,
+  GitCompareArrows,
   LayoutDashboard,
   Scale,
+  Sparkles,
   Utensils,
   AlertTriangle,
   CheckCircle2,
@@ -40,11 +42,14 @@ import {
   TrendBarChart,
   TrendLineChart,
 } from './PerformanceCharts';
+import { CompareCard, ReportCard, TodayInsightsCard } from './InsightsSections';
 
 type Overview = PerformanceOverviewResponse;
 
 const SECTION_ICONS: Record<PerformanceSection, typeof Activity> = {
+  insights: Sparkles,
   overview: LayoutDashboard,
+  compare: GitCompareArrows,
   running: Footprints,
   strength: Dumbbell,
   load: Gauge,
@@ -117,7 +122,9 @@ export default function PerformancePage() {
   const shortDate = (d: string) => formatDateInUserTimezone(d, 'MMM d');
 
   const sectionLabels: Record<PerformanceSection, string> = {
+    insights: t('performance.sections.insights', 'Insights'),
     overview: t('performance.sections.overview', 'Overview'),
+    compare: t('performance.sections.compare', 'Compare'),
     running: t('performance.sections.running', 'Running'),
     strength: t('performance.sections.strength', 'Strength'),
     load: t('performance.sections.load', 'Training load'),
@@ -345,6 +352,16 @@ function Dashboard({
 
   return (
     <>
+      {visible('insights') && (
+        <section id="perf-insights" className="scroll-mt-4 space-y-3">
+          <h2 className="text-lg font-semibold">{labels.insights}</h2>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <TodayInsightsCard shortDate={shortDate} />
+            <ReportCard shortDate={shortDate} />
+          </div>
+        </section>
+      )}
+
       {visible('overview') && (
         <section id="perf-overview" className="scroll-mt-4 space-y-3">
           <h2 className="sr-only">{labels.overview}</h2>
@@ -449,6 +466,15 @@ function Dashboard({
               }
               provenance="estimated"
             />
+          </div>
+        </section>
+      )}
+
+      {visible('compare') && (
+        <section id="perf-compare" className="scroll-mt-4 space-y-3">
+          <h2 className="text-lg font-semibold">{labels.compare}</h2>
+          <div className={grid}>
+            <CompareCard data={data} shortDate={shortDate} />
           </div>
         </section>
       )}

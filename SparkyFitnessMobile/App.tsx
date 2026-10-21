@@ -129,6 +129,7 @@ import {
   SafeNutrientTrends,
   SafeExerciseStatistics,
   SafePerformance,
+  SafeInsights,
   SafeReports,
   SafeNutritionReport,
   SafeSleepAnalytics,
@@ -856,6 +857,11 @@ function AppContent() {
             name="Performance"
             component={SafePerformance}
             options={createStackScreenOptions(t('screens.performance', { defaultValue: 'Performance' }), { headerBackButtonDisplayMode: 'minimal' })}
+          />
+          <Stack.Screen
+            name="Insights"
+            component={SafeInsights}
+            options={createStackScreenOptions(t('screens.insights', { defaultValue: 'Insights' }), { headerBackButtonDisplayMode: 'minimal' })}
           />
           <Stack.Screen
             name="Reports"

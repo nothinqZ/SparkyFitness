@@ -269,3 +269,5 @@ export * from './utils/watchPairing.ts';
 export * from './schemas/api/Performance.api.zod.ts';
 export * from './schemas/database/WatchSessionImports.zod.ts';
 export * from './analytics/performance.ts';
+export * from './analytics/insights.ts';
+export * from './schemas/api/Insights.api.zod.ts';

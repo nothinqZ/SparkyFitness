@@ -184,11 +184,11 @@ Chat-Fragen.
 |---|---|---|---|---|---|
 | 0 | Garmin-Live-Sync auf Uhr + iPhone testen und nachbessern | sehr hoch | klein–mittel | mittel | läuft gerade, dein akutes Problem |
 | 1 | ✅ **Upstream eingearbeitet** (v1.8.0 → 1.9.0), Produktions-Overlays im Fork. Entscheidung 21.10.: Produktion bleibt das normale Sparky; fitness-next läuft dauerhaft parallel und wird jede Nacht aus der Produktion kopiert | sehr hoch | erledigt | – | ohne das hätten wir Upstream-Features doppelt gebaut |
-| 2 | `FitnessFinding`-Schema + Tabelle + Route; homelab-agent liefert Session-/Block-/Reflexionsbefunde an Sparky | hoch | mittel | klein | vereint die beste vorhandene Logik mit der zentralen App |
-| 3 | Dashboard-Karte „Heute wichtig“ (Web + App) aus Befunden + Erholungsfaktoren | hoch | klein | klein | direkter, täglicher Nutzen |
+| 2 | 🟡 `FitnessFinding`-Schema + Route erledigt (`shared/src/analytics/insights.ts`, `GET /api/v2/insights/today` und `/report`). Befunde werden bei jeder Abfrage deterministisch berechnet, ohne Tabelle und ohne Migration. Offen: homelab-agent liefert Session-/Block-/Reflexionsbefunde an Sparky | hoch | mittel | klein | vereint die beste vorhandene Logik mit der zentralen App |
+| 3 | ✅ „Heute wichtig“: App-Dashboard-Karte und Insights-Seite, Web-Abschnitt „Insights“ auf `/performance`. Jeder Befund zeigt Art (Beobachtung/möglich/gemessen), Sicherheit, Belege und fehlende Signale. Die optionale KI-Zusammenfassung über den eigenen KI-Dienst ist gekennzeichnet | hoch | erledigt | – | direkter, täglicher Nutzen |
 | 4 | SparkyAI: `sparky_get_findings`, Quellen-Fußzeile, Plan-Vorschläge mit Bestätigung | hoch | mittel | mittel | ein Coach statt drei |
-| 5 | Performance-Vergleichsmodus (2 Kennzahlen, Zeitraum, mobil) | mittel–hoch | mittel | klein | ersetzt Garmins Performance Dashboard |
-| 6 | Wochen-/Monatsbericht in Sparky (aus 2+3), Zustellung weiter über Telegram/ntfy | mittel | klein | klein | Daten sind dann schon da |
+| 5 | ✅ Vergleichsmodus: zwei Kennzahlen inklusive e1RM je Übung, auf den eigenen Bereich normiert. Bei Wochenwerten wird wochenweise gebündelt. Pearson-r erscheint erst ab 8 Paaren, immer mit dem Hinweis „Beobachtung, keine Ursache“. Web und App | mittel–hoch | erledigt | – | ersetzt Garmins Performance Dashboard |
+| 6 | 🟡 Wochen-/Monatsbericht in Sparky erledigt: letzte volle Woche bzw. letzter Monat, Deltas zum Zeitraum davor, Bestwerte, Befunde. Offen: Zustellung über Telegram/ntfy | mittel | klein | klein | Daten sind dann schon da |
 | 7 | Hybrid-Hinweise (Beintag ↔ harter Lauf), Prognosen mit Unsicherheitsband | mittel | mittel | klein | sobald 2 steht |
 | ⛔ | Trails, 3D-Karten, Badges, LiveTrack-SMS, Coach-Videos | – | – | – | kein Nutzen für dich |
 

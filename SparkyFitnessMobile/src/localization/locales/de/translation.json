@@ -939,7 +939,8 @@
     "watchSettings": "Apple Watch",
     "aiSettings": "KI",
     "performance": "Performance",
-    "garminWatchSettings": "Garmin-Uhr"
+    "garminWatchSettings": "Garmin-Uhr",
+    "insights": "Insights"
   },
   "healthCategories": {
     "Common": "Allgemein",
@@ -6141,5 +6142,163 @@
     "bluetoothForget": "Trennen",
     "bluetoothForgetTitle": "Uhr trennen?",
     "bluetoothForgetMessage": "Workouts werden dann nicht mehr live mit der Uhr synchronisiert. Die Kopplung für Uploads bleibt bestehen."
+  },
+  "insights": {
+    "compare": {
+      "days": "Tage",
+      "disclaimer": "Die Linien sind auf ihren eigenen Bereich skaliert. Ein Zusammenhang ist eine Beobachtung, keine Ursache.",
+      "inverse": "entgegengesetzte Richtungen",
+      "moderate": "Mäßiger Zusammenhang",
+      "noData": "Zu wenige Daten in diesem Zeitraum.",
+      "noLink": "Kein klarer Zusammenhang",
+      "result": "{{strength}}, Bewegung in {{direction}} (r = {{r}}, {{pairs}} {{bucket}})",
+      "resultNone": "{{strength}} (r = {{r}}, {{pairs}} {{bucket}})",
+      "same": "dieselbe Richtung",
+      "strong": "Starker Zusammenhang",
+      "title": "Vergleichen",
+      "tooFew": "{{pairs}} von {{min}} {{bucket}} mit beiden Werten – zu wenig für eine Aussage.",
+      "weak": "Schwacher Zusammenhang",
+      "weeks": "Wochen",
+      "flat": "Kein klarer Zusammenhang: einer der Werte ändert sich nicht ({{pairs}} {{bucket}})."
+    },
+    "confidence": {
+      "high": "hohe Sicherheit",
+      "low": "geringe Sicherheit",
+      "medium": "mittlere Sicherheit"
+    },
+    "disclaimer": "Mit festen Regeln aus deinen erfassten und gemessenen Daten berechnet. Keine medizinische Beratung.",
+    "entry": {
+      "subtitle": "Heute, letzte Woche und letzter Monat auf einen Blick",
+      "title": "Insights & Berichte"
+    },
+    "error": "Insights konnten nicht geladen werden.",
+    "kind": {
+      "finding": "Gemessen",
+      "hypothesis": "Möglich",
+      "observation": "Beobachtung"
+    },
+    "metric": {
+      "bedtimeStdDev": "Streuung der Schlafenszeit",
+      "calories": "Kalorien",
+      "e1rm": "Geschätztes 1RM",
+      "e1rmOf": "e1RM {{exercise}}",
+      "e1rmStart": "Geschätztes 1RM, Anfang",
+      "hrv": "HRV",
+      "hrvBaseline": "HRV, üblich",
+      "loadAcute": "Akute Belastung",
+      "loadRatio": "Belastungsverhältnis",
+      "protein": "Protein",
+      "restingHr": "Ruhepuls",
+      "restingHrBaseline": "Ruhepuls, üblich",
+      "runDistance": "Lauf-km / Woche",
+      "sessions": "Einheiten",
+      "sleepHours": "Schlaf",
+      "strengthSets": "Sätze / Woche",
+      "strengthVolume": "Kraftvolumen / Woche",
+      "vo2max": "VO2max",
+      "weeklySetsUsual": "Sätze / Woche, üblich",
+      "weight": "Gewicht",
+      "weightTrend": "Gewichtstrend"
+    },
+    "missing": "Zu wenige aktuelle Daten für: {{list}}",
+    "none": "Nichts Auffälliges. Deine letzten Daten sehen unauffällig aus.",
+    "report": {
+      "bests": "Beste Lifts der letzten 90 Tage",
+      "calories": "Kalorien pro Tag",
+      "compared": "Im Vergleich zum Zeitraum davor",
+      "distance": "Laufstrecke",
+      "hrv": "HRV",
+      "protein": "Protein pro Tag",
+      "restingHr": "Ruhepuls",
+      "runs": "Läufe",
+      "sets": "Sätze",
+      "sleep": "Schlaf pro Nacht",
+      "strengthDays": "Krafttage",
+      "volume": "Volumen",
+      "weightChange": "Gewichtsänderung",
+      "bestValue": "{{value}} kg · {{date}}"
+    },
+    "rules": {
+      "bestInWindow": {
+        "detail": "Geschätztes 1RM {{e1rm}} kg, dein Bestwert der letzten {{days}} Tage.",
+        "title": "Bestwert {{exercise}}"
+      },
+      "consistencyDrop": {
+        "detail": "Woche ab {{week}}: {{sets}} Sätze, sonst etwa {{usual}}.",
+        "title": "Weniger Training als üblich"
+      },
+      "consistencySpike": {
+        "detail": "Woche ab {{week}}: {{sets}} Sätze, sonst etwa {{usual}}.",
+        "title": "Deutlich mehr Training als üblich"
+      },
+      "hrvLow": {
+        "detail": "7-Tage-Schnitt {{hrv}} ms, üblich {{hrvBaseline}} ms.",
+        "title": "HRV unter deinem Normalbereich"
+      },
+      "loadHigh": {
+        "detail": "Akut-zu-chronische Belastung {{ratio}}, zwischen 1,3 und 1,5.",
+        "title": "Trainingsbelastung erhöht"
+      },
+      "loadLow": {
+        "detail": "Akut-zu-chronische Belastung {{ratio}}, unter 0,8.",
+        "title": "Trainingsbelastung unter deinem Niveau"
+      },
+      "loadVeryHigh": {
+        "detail": "Akut-zu-chronische Belastung {{ratio}}, über 1,5.",
+        "title": "Trainingsbelastung sprunghaft gestiegen"
+      },
+      "progress": {
+        "detail": "+{{percent}} % geschätztes 1RM in {{weeks}} Wochen.",
+        "title": "{{exercise}} steigt"
+      },
+      "proteinLow": {
+        "detail": "Durchschnitt {{grams}} g ({{perKg}} g/kg) an {{days}} erfassten Tagen.",
+        "title": "Protein eher knapp"
+      },
+      "recoveryStrained": {
+        "detail": "HRV {{hrv}} ms statt üblich {{hrvBaseline}} ms, Ruhepuls {{restingHr}} statt {{restingHrBaseline}} bpm. Möglicherweise Ermüdung; ein leichterer Tag könnte passen.",
+        "title": "Erholung wirkt angespannt"
+      },
+      "restingHrHigh": {
+        "detail": "7-Tage-Schnitt {{restingHr}} bpm, üblich {{restingHrBaseline}} bpm.",
+        "title": "Ruhepuls erhöht"
+      },
+      "sleepIrregular": {
+        "detail": "Die Schlafenszeit schwankt um etwa {{minutes}} Minuten.",
+        "title": "Unregelmäßige Schlafenszeit"
+      },
+      "sleepShort": {
+        "detail": "Durchschnitt {{hours}} h in den letzten {{nights}} Nächten.",
+        "title": "Wenig Schlaf"
+      },
+      "stall": {
+        "detail": "Seit {{weeks}} Wochen kein besseres geschätztes 1RM als {{best}} kg.",
+        "title": "{{exercise}} stagniert womöglich"
+      },
+      "weightFalling": {
+        "detail": "Etwa {{kgPerWeek}} kg pro Woche.",
+        "title": "Gewicht sinkt"
+      },
+      "weightRising": {
+        "detail": "Etwa {{kgPerWeek}} kg pro Woche.",
+        "title": "Gewicht steigt"
+      }
+    },
+    "source": {
+      "device": "Garmin",
+      "estimated": "geschätzt",
+      "logged": "erfasst",
+      "measured": "gemessen"
+    },
+    "tabs": {
+      "month": "Monat",
+      "today": "Heute",
+      "week": "Woche"
+    },
+    "today": {
+      "aiWorded": "Von deinem KI-Dienst aus den Befunden formuliert",
+      "dataThrough": "Daten bis {{date}}",
+      "title": "Heute wichtig"
+    }
   }
 }

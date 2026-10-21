@@ -108,6 +108,7 @@ import DailyNutritionDetailsScreen from '../screens/DailyNutritionDetailsScreen'
 import NutrientTrendsScreen from '../screens/NutrientTrendsScreen';
 import ExerciseStatisticsScreen from '../screens/ExerciseStatisticsScreen';
 import PerformanceScreen from '../screens/PerformanceScreen';
+import InsightsScreen from '../screens/InsightsScreen';
 import ReportsScreen from '../screens/ReportsScreen';
 import NutritionReportScreen from '../screens/NutritionReportScreen';
 import SleepAnalyticsScreen from '../screens/SleepAnalyticsScreen';
@@ -227,6 +228,7 @@ export const SafeDailyNutritionDetails = withErrorBoundary(DailyNutritionDetails
 export const SafeNutrientTrends = withErrorBoundary(NutrientTrendsScreen, 'NutrientTrends', { canGoBack: true });
 export const SafeExerciseStatistics = withErrorBoundary(ExerciseStatisticsScreen, 'ExerciseStatistics', { canGoBack: true });
 export const SafePerformance = withErrorBoundary(PerformanceScreen, 'Performance', { canGoBack: true });
+export const SafeInsights = withErrorBoundary(InsightsScreen, 'Insights', { canGoBack: true });
 export const SafeRecordActivity = withErrorBoundary(RecordActivityScreen, 'RecordActivity', { canGoBack: true });
 export const SafeReports = withErrorBoundary(ReportsScreen, 'Reports', { canGoBack: true });
 export const SafeNutritionReport = withErrorBoundary(NutritionReportScreen, 'NutritionReport', { canGoBack: true });

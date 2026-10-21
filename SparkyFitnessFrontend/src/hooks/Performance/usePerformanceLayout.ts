@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react';
 
 export const PERFORMANCE_SECTIONS = [
+  'insights',
   'overview',
+  'compare',
   'running',
   'strength',
   'load',

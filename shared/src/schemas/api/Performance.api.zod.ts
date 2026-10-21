@@ -1,11 +1,11 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // GET /api/v2/performance/overview — the desktop performance dashboard.
 // Every block says where its numbers come from (see analytics/performance.ts):
 // "measured" by a device or the user, computed by the "device" vendor, or
 // "estimated" here.
 
-const provenance = z.enum(["measured", "device", "estimated"]);
+const provenance = z.enum(['measured', 'device', 'estimated']);
 const dated = z.object({ date: z.string(), value: z.number() });
 
 const baseline = z.object({
@@ -13,12 +13,12 @@ const baseline = z.object({
   baseline: z.number().nullable(),
   baselineStdDev: z.number().nullable(),
   zScore: z.number().nullable(),
-  status: z.enum(["below", "within", "above", "insufficient_data"]),
+  status: z.enum(['below', 'within', 'above', 'insufficient_data']),
 });
 
 const raceTimes = z.object({
-  "5k": z.number().nullable(),
-  "10k": z.number().nullable(),
+  '5k': z.number().nullable(),
+  '10k': z.number().nullable(),
   half_marathon: z.number().nullable(),
   marathon: z.number().nullable(),
 });
@@ -66,7 +66,7 @@ export const performanceOverviewResponseSchema = z.object({
         runs: z.number(),
         durationMinutes: z.number(),
         avgPaceSecondsPerKm: z.number().nullable(),
-      }),
+      })
     ),
     runs: z.array(
       z.object({
@@ -75,7 +75,7 @@ export const performanceOverviewResponseSchema = z.object({
         durationMinutes: z.number(),
         paceSecondsPerKm: z.number().nullable(),
         avgHeartRate: z.number().nullable(),
-      }),
+      })
     ),
     predictions: z.object({
       estimated: raceTimes,
@@ -91,7 +91,9 @@ export const performanceOverviewResponseSchema = z.object({
         weekStart: z.string(),
         volumeKg: z.number(),
         sets: z.number(),
-      }),
+        /** Days with logged strength sets in that week. */
+        days: z.number().optional(),
+      })
     ),
     topLifts: z.array(
       z.object({
@@ -101,7 +103,7 @@ export const performanceOverviewResponseSchema = z.object({
         bestDate: z.string(),
         sets: z.number(),
         trend: z.array(dated),
-      }),
+      })
     ),
   }),
   load: z.object({
@@ -111,7 +113,7 @@ export const performanceOverviewResponseSchema = z.object({
         acute: z.number(),
         chronic: z.number(),
         ratio: z.number().nullable(),
-      }),
+      })
     ),
     device: z.array(
       z.object({
@@ -119,12 +121,12 @@ export const performanceOverviewResponseSchema = z.object({
         acute: z.number().nullable(),
         chronic: z.number().nullable(),
         ratio: z.number().nullable(),
-      }),
+      })
     ),
     current: z
       .object({
         ratio: z.number(),
-        zone: z.enum(["low", "optimal", "high", "very_high"]),
+        zone: z.enum(['low', 'optimal', 'high', 'very_high']),
         provenance: provenance,
       })
       .nullable(),
@@ -138,7 +140,7 @@ export const performanceOverviewResponseSchema = z.object({
           date: z.string(),
           hours: z.number(),
           score: z.number().nullable(),
-        }),
+        })
       ),
       nights: z.number(),
       bedtimeStdDevMinutes: z.number().nullable(),
@@ -163,7 +165,7 @@ export const performanceOverviewResponseSchema = z.object({
         protein: z.number(),
         carbs: z.number(),
         fat: z.number(),
-      }),
+      })
     ),
     averages: z.object({
       days: z.number(),

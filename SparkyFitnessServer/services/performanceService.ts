@@ -90,7 +90,10 @@ export function summarizeStrength(
     reps: number;
   }>
 ): PerformanceOverviewResponse['strength'] {
-  const weekly = new Map<string, { volumeKg: number; sets: number }>();
+  const weekly = new Map<
+    string,
+    { volumeKg: number; sets: number; days: Set<string> }
+  >();
   const lifts = new Map<
     string,
     {
@@ -106,9 +109,10 @@ export function summarizeStrength(
     const weight = Number(s.weight);
     const reps = Number(s.reps);
     const week = isoWeekStart(s.date);
-    const w = weekly.get(week) ?? { volumeKg: 0, sets: 0 };
+    const w = weekly.get(week) ?? { volumeKg: 0, sets: 0, days: new Set() };
     w.volumeKg += weight * reps;
     w.sets += 1;
+    w.days.add(s.date);
     weekly.set(week, w);
 
     // Epley is unreliable beyond ~10 reps; those sets count for volume only.
@@ -139,6 +143,7 @@ export function summarizeStrength(
         weekStart,
         volumeKg: Math.round(w.volumeKg),
         sets: w.sets,
+        days: w.days.size,
       })),
     topLifts: [...lifts.values()]
       .sort((a, b) => b.sets - a.sets || b.bestE1rmKg - a.bestE1rmKg)

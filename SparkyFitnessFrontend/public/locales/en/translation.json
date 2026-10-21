@@ -9408,7 +9408,9 @@
       "overview": "Overview",
       "recovery": "Sleep & recovery",
       "running": "Running",
-      "strength": "Strength"
+      "strength": "Strength",
+      "insights": "Insights",
+      "compare": "Compare"
     },
     "sets": "Sets",
     "showChart": "Show chart",
@@ -9432,6 +9434,170 @@
       "optimal": "Optimal (0.8–1.3)",
       "optimalShort": "optimal",
       "veryHigh": "Very high (> 1.5)"
+    }
+  },
+  "insights": {
+    "compare": {
+      "days": "days",
+      "disclaimer": "Lines are scaled to their own range. A link is an observation, not a cause.",
+      "inverse": "opposite directions",
+      "moderate": "Moderately linked",
+      "noData": "Not enough data in this range.",
+      "noLink": "No clear link",
+      "result": "{{strength}}, moving in {{direction}} (r = {{r}}, {{pairs}} {{bucket}})",
+      "resultNone": "{{strength}} (r = {{r}}, {{pairs}} {{bucket}})",
+      "same": "the same direction",
+      "strong": "Strongly linked",
+      "title": "Compare",
+      "tooFew": "{{pairs}} of {{min}} {{bucket}} with both values; too few to judge a link.",
+      "weak": "Weakly linked",
+      "weeks": "weeks",
+      "first": "First metric",
+      "second": "Second metric",
+      "vs": "vs.",
+      "day": "Day",
+      "flat": "No clear link: one of the values does not change ({{pairs}} {{bucket}})."
+    },
+    "confidence": {
+      "high": "high confidence",
+      "low": "low confidence",
+      "medium": "medium confidence"
+    },
+    "disclaimer": "Computed from your logged and measured data with fixed rules. Not medical advice.",
+    "entry": {
+      "subtitle": "Today, last week and last month at a glance",
+      "title": "Insights & reports"
+    },
+    "error": "Insights could not be loaded.",
+    "kind": {
+      "finding": "Measured",
+      "hypothesis": "Possible",
+      "observation": "Observation"
+    },
+    "metric": {
+      "bedtimeStdDev": "Bedtime spread",
+      "calories": "Calories",
+      "e1rm": "Estimated 1RM",
+      "e1rmOf": "e1RM {{exercise}}",
+      "e1rmStart": "Estimated 1RM, start",
+      "hrv": "HRV",
+      "hrvBaseline": "HRV, usual",
+      "loadAcute": "Acute load",
+      "loadRatio": "Load ratio",
+      "protein": "Protein",
+      "restingHr": "Resting heart rate",
+      "restingHrBaseline": "Resting heart rate, usual",
+      "runDistance": "Running km / week",
+      "sessions": "Sessions",
+      "sleepHours": "Sleep",
+      "strengthSets": "Sets / week",
+      "strengthVolume": "Strength volume / week",
+      "vo2max": "VO2max",
+      "weeklySetsUsual": "Sets / week, usual",
+      "weight": "Weight",
+      "weightTrend": "Weight trend"
+    },
+    "missing": "Not enough recent data for: {{list}}",
+    "none": "Nothing stands out. Your recent data looks unremarkable.",
+    "report": {
+      "bests": "Best lifts of the last 90 days",
+      "calories": "Calories per day",
+      "compared": "Compared with the period before",
+      "distance": "Running distance",
+      "hrv": "HRV",
+      "protein": "Protein per day",
+      "restingHr": "Resting heart rate",
+      "runs": "Runs",
+      "sets": "Sets",
+      "sleep": "Sleep per night",
+      "strengthDays": "Strength days",
+      "volume": "Volume",
+      "weightChange": "Weight change",
+      "title": "Report",
+      "period": "Report period",
+      "bestValue": "{{value}} kg · {{date}}"
+    },
+    "rules": {
+      "bestInWindow": {
+        "detail": "Estimated 1RM {{e1rm}} kg, your best of the last {{days}} days.",
+        "title": "Best {{exercise}}"
+      },
+      "consistencyDrop": {
+        "detail": "Week of {{week}}: {{sets}} sets, usually about {{usual}}.",
+        "title": "Less training than usual"
+      },
+      "consistencySpike": {
+        "detail": "Week of {{week}}: {{sets}} sets, usually about {{usual}}.",
+        "title": "Much more training than usual"
+      },
+      "hrvLow": {
+        "detail": "7-day average {{hrv}} ms, usually {{hrvBaseline}} ms.",
+        "title": "HRV below your normal range"
+      },
+      "loadHigh": {
+        "detail": "Acute to chronic load {{ratio}}, between 1.3 and 1.5.",
+        "title": "Training load raised"
+      },
+      "loadLow": {
+        "detail": "Acute to chronic load {{ratio}}, below 0.8.",
+        "title": "Training load below your level"
+      },
+      "loadVeryHigh": {
+        "detail": "Acute to chronic load {{ratio}}, above 1.5.",
+        "title": "Training load jumped"
+      },
+      "progress": {
+        "detail": "+{{percent}} % estimated 1RM over {{weeks}} weeks.",
+        "title": "{{exercise}} is climbing"
+      },
+      "proteinLow": {
+        "detail": "Average {{grams}} g ({{perKg}} g/kg) over {{days}} logged days.",
+        "title": "Protein on the low side"
+      },
+      "recoveryStrained": {
+        "detail": "HRV {{hrv}} ms against your usual {{hrvBaseline}} ms, resting heart rate {{restingHr}} against {{restingHrBaseline}} bpm. Possibly fatigue; a lighter day could fit.",
+        "title": "Recovery looks strained"
+      },
+      "restingHrHigh": {
+        "detail": "7-day average {{restingHr}} bpm, usually {{restingHrBaseline}} bpm.",
+        "title": "Resting heart rate raised"
+      },
+      "sleepIrregular": {
+        "detail": "Bedtime varies by about {{minutes}} minutes.",
+        "title": "Irregular bedtime"
+      },
+      "sleepShort": {
+        "detail": "Average {{hours}} h over the last {{nights}} nights.",
+        "title": "Little sleep"
+      },
+      "stall": {
+        "detail": "No better estimated 1RM than {{best}} kg for {{weeks}} weeks.",
+        "title": "{{exercise}} may be stalling"
+      },
+      "weightFalling": {
+        "detail": "About {{kgPerWeek}} kg per week.",
+        "title": "Weight going down"
+      },
+      "weightRising": {
+        "detail": "About {{kgPerWeek}} kg per week.",
+        "title": "Weight going up"
+      }
+    },
+    "source": {
+      "device": "Garmin",
+      "estimated": "estimated",
+      "logged": "logged",
+      "measured": "measured"
+    },
+    "tabs": {
+      "month": "Month",
+      "today": "Today",
+      "week": "Week"
+    },
+    "today": {
+      "aiWorded": "Worded by your AI service from the findings above",
+      "dataThrough": "Data through {{date}}",
+      "title": "What matters today"
     }
   }
 }

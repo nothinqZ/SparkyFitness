@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type {
   PerformanceOverviewResponse,
@@ -17,6 +17,7 @@ import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
 import SegmentedControl from '../components/SegmentedControl';
 import StatusView from '../components/StatusView';
+import CompareCard from '../components/CompareCard';
 import { weightFromKg } from '../utils/unitConversions';
 import { getAppLocale } from '../localization';
 import {
@@ -95,7 +96,9 @@ const Row: React.FC<{
   </View>
 );
 
-const PerformanceScreen: React.FC<PerformanceScreenProps> = () => {
+const PerformanceScreen: React.FC<PerformanceScreenProps> = ({
+  navigation,
+}) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const activeWorkoutBarPadding = useActiveWorkoutBarPadding('stack');
@@ -301,6 +304,8 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = () => {
           </Card>
         )}
 
+        <CompareCard overview={d} />
+
         <Card
           title={t('performance.sections.body', { defaultValue: 'Body' })}
           provenance={['estimated']}
@@ -369,6 +374,27 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = () => {
             onSelect={setRange}
           />
         </View>
+        <TouchableOpacity
+          testID="performance-open-insights"
+          accessibilityRole="button"
+          onPress={() => navigation.navigate('Insights')}
+          className="bg-surface rounded-xl p-4 mb-4 shadow-sm flex-row justify-between items-center"
+          activeOpacity={0.7}
+        >
+          <View className="flex-1">
+            <Text className="text-text-primary text-base font-bold">
+              {t('insights.entry.title', {
+                defaultValue: 'Insights & reports',
+              })}
+            </Text>
+            <Text className="text-text-secondary text-sm">
+              {t('insights.entry.subtitle', {
+                defaultValue: 'Today, last week and last month at a glance',
+              })}
+            </Text>
+          </View>
+          <Text className="text-text-muted text-lg">›</Text>
+        </TouchableOpacity>
         {isLoading ? (
           <StatusView inline loading />
         ) : data ? (

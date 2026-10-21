@@ -243,6 +243,7 @@ export function TrendLineChart({
   reversed,
   domain,
   height = 220,
+  tooltipValue,
 }: {
   data: Row[];
   xKey: string;
@@ -258,6 +259,8 @@ export function TrendLineChart({
     number | 'auto' | 'dataMin' | 'dataMax',
   ];
   height?: number;
+  /** Tooltip text from the row instead of the plotted value (e.g. normalized lines). */
+  tooltipValue?: (row: Row, seriesKey: string) => string;
 }) {
   const colors = useSeriesColors();
   return (
@@ -301,8 +304,12 @@ export function TrendLineChart({
         <Tooltip
           contentStyle={tooltipStyle}
           labelFormatter={(l) => (formatX ? formatX(String(l)) : String(l))}
-          formatter={(v, n) => [
-            formatValue ? formatValue(Number(v)) : String(v),
+          formatter={(v, n, item) => [
+            tooltipValue && item?.payload && item.dataKey !== undefined
+              ? tooltipValue(item.payload as Row, String(item.dataKey))
+              : formatValue
+                ? formatValue(Number(v))
+                : String(v),
             String(n),
           ]}
         />

@@ -98,6 +98,7 @@ import reportRoutesV2 from './routes/v2/reportRoutes.js';
 import nutritionKineticsRoutesV2 from './routes/v2/nutritionKineticsRoutes.js';
 import mindfulnessRoutesV2 from './routes/v2/mindfulnessRoutes.js';
 import performanceRoutesV2 from './routes/v2/performanceRoutes.js';
+import insightsRoutesV2 from './routes/v2/insightsRoutes.js';
 import watchPairingRoutesV2 from './routes/v2/watchPairingRoutes.js';
 import watchSyncRoutesV2 from './routes/v2/watchSyncRoutes.js';
 import runProgramRoutesV2 from './routes/v2/runProgramRoutes.js';
@@ -797,6 +798,7 @@ app.use('/api/v2/reports', reportRoutesV2);
 app.use('/api/v2/nutrition', nutritionKineticsRoutesV2);
 app.use('/api/v2/mindfulness', mindfulnessRoutesV2);
 app.use('/api/v2/performance', performanceRoutesV2);
+app.use('/api/v2/insights', insightsRoutesV2);
 // Pairing must mount first: its start/poll routes run without credentials,
 // while the watch router authenticates everything it sees.
 app.use('/api/v2/watch/pairing', watchPairingRoutesV2);

@@ -13,6 +13,19 @@ jest.mock('react-i18next', () => ({
         String(vars?.[k] ?? '')
       );
     },
+    i18n: { language: 'en' },
+  }),
+}));
+jest.mock('@/hooks/Performance/useInsights', () => ({
+  useInsightsToday: () => ({
+    data: undefined,
+    isLoading: true,
+    isError: false,
+  }),
+  useInsightsReport: () => ({
+    data: undefined,
+    isLoading: true,
+    isError: false,
   }),
 }));
 jest.mock('@/contexts/PreferencesContext', () => ({
@@ -160,6 +173,16 @@ describe('PerformancePage', () => {
     expect(screen.queryByText('Back Squat')).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Show Strength' })
+    ).toBeInTheDocument();
+  });
+
+  it('lists the insights and compare sections in the sidebar', () => {
+    render(<PerformancePage />);
+    expect(
+      screen.getByRole('button', { name: 'Hide Insights' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Hide Compare' })
     ).toBeInTheDocument();
   });
 

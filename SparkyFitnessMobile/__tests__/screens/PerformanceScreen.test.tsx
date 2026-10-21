@@ -185,6 +185,12 @@ describe('PerformanceScreen', () => {
     expect(usePerformanceOverview).toHaveBeenLastCalledWith(180);
   });
 
+  it('opens Insights', () => {
+    const screen = render(<PerformanceScreen {...props} />);
+    fireEvent.press(screen.getByTestId('performance-open-insights'));
+    expect(props.navigation.navigate).toHaveBeenCalledWith('Insights');
+  });
+
   it('explains how to pair when the server has no watch data', () => {
     jest
       .mocked(useWatchSyncStatus)

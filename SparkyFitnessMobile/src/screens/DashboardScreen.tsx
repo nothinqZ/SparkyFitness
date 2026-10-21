@@ -46,6 +46,7 @@ import SymptomsCard from '../components/SymptomsCard';
 import MoodCard from '../components/mood/MoodCard';
 import ProgressPhotosCard from '../components/ProgressPhotosCard';
 import PerformanceTodayCard from '../components/PerformanceTodayCard';
+import TodayInsightCard from '../components/TodayInsightCard';
 import TrainingLoadDashboardCard from '../components/TrainingLoadDashboardCard';
 import SegmentedControl, { type Segment } from '../components/SegmentedControl';
 import StatusView from '../components/StatusView';
@@ -556,9 +557,12 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
         }
       >
         {getDateRelationToToday(selectedDate) === 'today' && (
-          <PerformanceTodayCard
-            onPress={() => navigation.navigate('Performance')}
-          />
+          <>
+            <TodayInsightCard onPress={() => navigation.navigate('Insights')} />
+            <PerformanceTodayCard
+              onPress={() => navigation.navigate('Performance')}
+            />
+          </>
         )}
         {/* Goal-notification reconciliation is owned here (headless, always
             mounted) so it survives the card being hidden. Fasting is "now"-based,
