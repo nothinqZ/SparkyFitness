@@ -7118,6 +7118,10 @@
       "weightRising": {
         "detail": "Etwa {{kgPerWeek}} kg pro Woche.",
         "title": "Gewicht steigt"
+      },
+      "stallMany": {
+        "title": "{{count}} Übungen ohne neuen Bestwert",
+        "detail": "Seit mindestens {{weeks}} Wochen, z. B. {{exercises}}. Oft eher eine leichtere Phase oder weniger Training als ein Plateau."
       }
     },
     "source": {

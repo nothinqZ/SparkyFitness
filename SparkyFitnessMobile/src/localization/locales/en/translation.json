@@ -8488,6 +8488,10 @@
       "weightRising": {
         "detail": "About {{kgPerWeek}} kg per week.",
         "title": "Weight going up"
+      },
+      "stallMany": {
+        "title": "{{count}} lifts without a new best",
+        "detail": "For at least {{weeks}} weeks, e.g. {{exercises}}. Often a lighter phase or less training rather than a plateau."
       }
     },
     "source": {

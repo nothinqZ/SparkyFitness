@@ -127,6 +127,19 @@ export function findingText(
           p
         ),
       };
+    case 'strength.stall_many':
+      return {
+        title: t(
+          'insights.rules.stallMany.title',
+          '{{count}} lifts without a new best',
+          p
+        ),
+        detail: t(
+          'insights.rules.stallMany.detail',
+          'For at least {{weeks}} weeks, e.g. {{exercises}}. Often a lighter phase or less training rather than a plateau.',
+          p
+        ),
+      };
     case 'strength.progress':
       return {
         title: t(

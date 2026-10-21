@@ -54,7 +54,13 @@ const SEVERITY_RANK: Record<FindingSeverity, number> = {
   notice: 2,
   info: 1,
 };
-// Within a severity, what matters most for today's training decision.
+const CONFIDENCE_RANK: Record<Confidence, number> = {
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+// Within a severity, what matters most for today's training decision;
+// confidence breaks ties within an area.
 const AREA_RANK: Record<FindingArea, number> = {
   recovery: 7,
   load: 6,
@@ -237,6 +243,10 @@ function loadFindings(o: PerformanceOverviewResponse): FitnessFinding[] {
 /** Minimum points and span before a lift's trend is judged at all. */
 const STALL_MIN_SESSIONS = 5;
 const STALL_MIN_SPAN_DAYS = 21;
+/** A lift not trained for this long is paused, not stalling. */
+const STALL_MAX_IDLE_DAYS = 14;
+/** More stalls than this become one summary finding. */
+const STALL_MAX_SINGLE = 2;
 const PROGRESS_MIN_GAIN = 0.05;
 
 function strengthFindings(
@@ -276,6 +286,8 @@ function strengthFindings(
     if (trend.length < STALL_MIN_SESSIONS) continue;
     const span = dayIndex(trend.at(-1)!.date) - dayIndex(trend[0]!.date);
     if (span < STALL_MIN_SPAN_DAYS) continue;
+    const idle =
+      dayIndex(asOf) - dayIndex(trend.at(-1)!.date) > STALL_MAX_IDLE_DAYS;
     const recent = trend.slice(-3).map((p) => p.value);
     const earlier = trend.slice(0, -3).map((p) => p.value);
     const recentBest = Math.max(...recent);
@@ -283,6 +295,7 @@ function strengthFindings(
     const firstMean = mean(trend.slice(0, 3).map((p) => p.value))!;
     const lastMean = mean(recent)!;
     if (recentBest <= earlierBest) {
+      if (idle) continue;
       const since = trend.find((p) => p.value === earlierBest)!.date;
       const weeks = Math.max(
         1,
@@ -345,7 +358,45 @@ function strengthFindings(
       });
     }
   }
-  return out;
+  return collapseStalls(out);
+}
+
+/**
+ * Many lifts without a new best at once usually share one cause (a lighter
+ * phase, less training); one summary says that better than a list.
+ */
+function collapseStalls(findings: FitnessFinding[]): FitnessFinding[] {
+  const stalls = findings.filter((f) => f.id === 'strength.stall');
+  if (stalls.length <= STALL_MAX_SINGLE) return findings;
+  const byWeeks = [...stalls].sort(
+    (a, b) => Number(b.params['weeks']) - Number(a.params['weeks'])
+  );
+  const summary: FitnessFinding = {
+    id: 'strength.stall_many',
+    area: 'strength',
+    kind: 'hypothesis',
+    severity: 'notice',
+    tone: 'caution',
+    params: {
+      count: stalls.length,
+      exercises: byWeeks
+        .slice(0, 3)
+        .map((f) => String(f.params['exercise']))
+        .join(', '),
+      weeks: Math.min(...stalls.map((f) => Number(f.params['weeks']))),
+    },
+    evidence: byWeeks.map((f) => ({
+      metric: `e1rm:${String(f.params['exercise'])}`,
+      value: Number(f.params['best']),
+      unit: 'kg',
+      period: `${String(f.params['weeks'])} wk`,
+      source: 'estimated' as const,
+    })),
+    confidence: stalls.some((f) => f.confidence === 'medium')
+      ? 'medium'
+      : 'low',
+  };
+  return [...findings.filter((f) => f.id !== 'strength.stall'), summary];
 }
 
 const SHORT_SLEEP_HOURS = 6.5;
@@ -572,7 +623,8 @@ function bodyFindings(o: PerformanceOverviewResponse): FitnessFinding[] {
 export function compareFindings(a: FitnessFinding, b: FitnessFinding): number {
   return (
     SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] ||
-    AREA_RANK[b.area] - AREA_RANK[a.area]
+    AREA_RANK[b.area] - AREA_RANK[a.area] ||
+    CONFIDENCE_RANK[b.confidence] - CONFIDENCE_RANK[a.confidence]
   );
 }
 
@@ -584,7 +636,7 @@ export function deriveFindings(
   overview: PerformanceOverviewResponse,
   asOf: string = overview.range.end
 ): FitnessFinding[] {
-  return [
+  const all = [
     ...recoveryFindings(overview),
     ...loadFindings(overview),
     ...strengthFindings(overview, asOf),
@@ -592,7 +644,20 @@ export function deriveFindings(
     ...consistencyFindings(overview, asOf),
     ...nutritionFindings(overview, asOf),
     ...bodyFindings(overview),
-  ].sort(compareFindings);
+  ];
+  // Less training already explains missing new bests: the stall is then a
+  // side note, not the headline.
+  const trainedLess = all.some(
+    (f) => f.id === 'consistency.drop' || f.id === 'load.low'
+  );
+  return all
+    .map((f) =>
+      trainedLess &&
+      (f.id === 'strength.stall' || f.id === 'strength.stall_many')
+        ? { ...f, severity: 'info' as const }
+        : f
+    )
+    .sort(compareFindings);
 }
 
 /** What the data cannot say today, so the card can be honest about it. */

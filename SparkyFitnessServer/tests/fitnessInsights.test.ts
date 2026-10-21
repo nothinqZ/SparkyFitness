@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  compareFindings,
   compareMetrics,
   correlationStrength,
   deriveFindings,
@@ -224,6 +225,70 @@ describe('deriveFindings', () => {
     });
     expect(f.params.weeks).toBeGreaterThanOrEqual(3);
     expect(ids(overview(stalled(4)))).toEqual([]);
+  });
+
+  it('ignores paused lifts and folds many stalls into one finding', () => {
+    const stalledLift = (name: string, lastDay: number) => ({
+      exerciseId: name,
+      exerciseName: name,
+      bestE1rmKg: 150,
+      bestDate: day(lastDay - 40),
+      sets: 30,
+      trend: Array.from({ length: 8 }, (_, i) => ({
+        date: day(lastDay - 49 + i * 7),
+        value: i === 2 ? 150 : 145,
+      })),
+    });
+    // Last session 30 days ago: paused, not stalling.
+    expect(
+      ids(overview((o) => (o.strength.topLifts = [stalledLift('Rudern', -30)])))
+    ).not.toContain('strength.stall');
+
+    const many = deriveFindings(
+      overview((o) => {
+        o.strength.topLifts = ['A', 'B', 'C', 'D'].map((n) =>
+          stalledLift(n, -5)
+        );
+      })
+    );
+    expect(many.map((f) => f.id)).toEqual(['strength.stall_many']);
+    expect(many[0]).toMatchObject({
+      kind: 'hypothesis',
+      params: { count: 4, exercises: 'A, B, C' },
+    });
+    expect(many[0]!.evidence).toHaveLength(4);
+  });
+
+  it('puts certain findings first within the same severity and area', () => {
+    const a = { severity: 'notice', confidence: 'low', area: 'sleep' };
+    const b = { severity: 'notice', confidence: 'high', area: 'sleep' };
+    const c = { severity: 'notice', confidence: 'low', area: 'recovery' };
+    expect(
+      [a, b, c].sort(compareFindings as never).map((f) => f.area + f.confidence)
+    ).toEqual(['recoverylow', 'sleephigh', 'sleeplow']);
+  });
+
+  it('demotes stalls when training was reduced', () => {
+    const f = deriveFindings(
+      overview((o) => {
+        o.load.current = { ratio: 0.5, zone: 'low', provenance: 'estimated' };
+        o.strength.topLifts = [
+          {
+            exerciseId: 'e1',
+            exerciseName: 'Kniebeuge',
+            bestE1rmKg: 150,
+            bestDate: day(-40),
+            sets: 30,
+            trend: Array.from({ length: 8 }, (_, i) => ({
+              date: day(-54 + i * 7),
+              value: i === 2 ? 150 : 145,
+            })),
+          },
+        ];
+      })
+    );
+    expect(f.map((x) => x.id)).toEqual(['load.low', 'strength.stall']);
+    expect(f[1]!.severity).toBe('info');
   });
 
   it('notices short sleep over the last week', () => {

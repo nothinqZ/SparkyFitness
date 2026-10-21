@@ -118,6 +118,18 @@ export function findingText(
           ...p,
         }),
       };
+    case 'strength.stall_many':
+      return {
+        title: t('insights.rules.stallMany.title', {
+          defaultValue: '{{count}} lifts without a new best',
+          ...p,
+        }),
+        detail: t('insights.rules.stallMany.detail', {
+          defaultValue:
+            'For at least {{weeks}} weeks, e.g. {{exercises}}. Often a lighter phase or less training rather than a plateau.',
+          ...p,
+        }),
+      };
     case 'strength.progress':
       return {
         title: t('insights.rules.progress.title', {
