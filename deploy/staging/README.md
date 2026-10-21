@@ -43,6 +43,19 @@ Images default to `sparkyfitness-server:personal-rc` and
 `FRONTEND_IMAGE`. Remove everything, including data:
 `docker compose down -v`.
 
+## Nightly refresh (permanent fitness-next)
+
+fitness-next is the permanent personal edition next to production, not a
+throwaway staging. `refresh-from-production.sh` copies production into it
+(see below) with a fixed dump directory (`/data/docker/sparky-next-refresh`,
+latest dump only) and keeps paired Connect IQ watches. Install the timer:
+
+```bash
+cp systemd-user/fitness-next-refresh.* ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now fitness-next-refresh.timer
+```
+
 ## Copy an existing SparkyFitness into staging
 
 ```bash

@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly copy of production SparkyFitness into fitness-next
+
+[Timer]
+OnCalendar=*-*-* 03:30
+RandomizedDelaySec=10min
+Persistent=true
+Unit=fitness-next-refresh.service
+
+[Install]
+WantedBy=timers.target

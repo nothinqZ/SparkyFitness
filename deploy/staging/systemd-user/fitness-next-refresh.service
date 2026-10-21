@@ -1,0 +1,7 @@
+[Unit]
+Description=Refresh fitness-next (SparkyFitness personal edition) from production
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env bash -lc 'cd /repos/sparkyfitness-personal/deploy/staging && ./refresh-from-production.sh'
+TimeoutStartSec=1h

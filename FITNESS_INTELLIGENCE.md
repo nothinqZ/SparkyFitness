@@ -33,7 +33,9 @@ nicht von einer offiziellen Garmin-Seite.
    Schlafeinträgen (#3003), Garmin-MFA-Fix (#2995). Wer jetzt Analytics im Fork
    baut, baut vieles doppelt.
 
-3. **Produktion läuft nicht auf dem Fork.** `sparkyfitness-server` ist Upstream
+3. **Produktion läuft nicht auf dem Fork** – und soll es laut Entscheidung vom
+   21.10.2026 auch nicht: fitness-next läuft dauerhaft daneben (nächtliche Kopie).
+   Ursprünglicher Befund: `sparkyfitness-server` ist Upstream
    v1.8.0 plus Patch-Overlays aus `apps/sparkyfitness/patches/` (Garmin-Session-
    Merge, Sync-Scheduler, Tageszusammenfassung …). Der Fork läuft nur auf Staging
    (`fitness-next`). Fork-Features (Uhr, Performance) erreichen dich im Alltag erst
@@ -181,7 +183,7 @@ Chat-Fragen.
 | # | Schritt | Nutzen | Aufwand | Risiko | Warum jetzt |
 |---|---|---|---|---|---|
 | 0 | Garmin-Live-Sync auf Uhr + iPhone testen und nachbessern | sehr hoch | klein–mittel | mittel | läuft gerade, dein akutes Problem |
-| 1 | **Upstream einarbeiten** (v1.8.0 → aktuell), Patch-Overlays in den Fork übernehmen, Produktion auf den Fork umstellen | sehr hoch | mittel–groß | mittel | ohne das baust du Upstream-Features doppelt und Fork-Features erreichen den Alltag nicht |
+| 1 | ✅ **Upstream eingearbeitet** (v1.8.0 → 1.9.0), Produktions-Overlays im Fork. Entscheidung 21.10.: Produktion bleibt das normale Sparky; fitness-next läuft dauerhaft parallel und wird jede Nacht aus der Produktion kopiert | sehr hoch | erledigt | – | ohne das hätten wir Upstream-Features doppelt gebaut |
 | 2 | `FitnessFinding`-Schema + Tabelle + Route; homelab-agent liefert Session-/Block-/Reflexionsbefunde an Sparky | hoch | mittel | klein | vereint die beste vorhandene Logik mit der zentralen App |
 | 3 | Dashboard-Karte „Heute wichtig“ (Web + App) aus Befunden + Erholungsfaktoren | hoch | klein | klein | direkter, täglicher Nutzen |
 | 4 | SparkyAI: `sparky_get_findings`, Quellen-Fußzeile, Plan-Vorschläge mit Bestätigung | hoch | mittel | mittel | ein Coach statt drei |

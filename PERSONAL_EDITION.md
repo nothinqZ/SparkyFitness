@@ -61,9 +61,26 @@ status/readiness/load and race predictions, with chunked incremental sync.
 - The release server has no upload endpoint; it pulls from GitHub and
   verifies SHA-256. No secrets are in the repository or the IPA.
 
-## Deploy (your homelab)
+## How it runs in the homelab
 
-Nothing in this repository touches your running stack. To switch to it:
+The personal edition runs **next to** the normal SparkyFitness, not instead
+of it: production (`apps/sparkyfitness` in the homeserver repo, upstream
+images) stays the system where training is logged; this edition runs as
+`fitness-next` (`deploy/staging`, https://fitness-next.<domain>) for analysis
+and for testing the watch and live sync. A systemd user timer
+(`deploy/staging/systemd-user/fitness-next-refresh.timer`, 03:30) replaces
+its database with a fresh copy of production every night
+(`refresh-from-production.sh`); paired watches are kept across the copy,
+anything entered in fitness-next itself is overwritten. External providers
+(Garmin, Withings, ...) stay switched off there, so Garmin is polled once.
+
+The homeserver's former production overlays (Garmin session merge, exercise
+and sleep source policies, staggered provider syncs, Garmin link indexes)
+are part of this fork since the 1.9.0 merge.
+
+### Switching production to the fork (not planned)
+
+Kept for reference; nothing in this repository touches your running stack:
 
 1. **Build the images** from this fork:
 

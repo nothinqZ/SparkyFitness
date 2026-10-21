@@ -17,6 +17,12 @@
 #                      so two-factor login keeps working in the copy; skipped
 #                      if the file is missing or unreadable
 #   DUMP_DIR           [/data/docker/sparky-next-import-<timestamp>]
+#   KEEP_WATCH_PAIRING [1]  keep paired Connect IQ watches across the copy:
+#                      their API keys and watch_devices rows are exported from
+#                      staging first and restored after the migrations, so a
+#                      nightly refresh does not unpair the watch
+#
+# refresh-from-production.sh runs this nightly with a fixed DUMP_DIR.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -24,6 +30,7 @@ SRC_DB_CONTAINER="${SRC_DB_CONTAINER:-sparkyfitness-db}"
 SRC_UPLOADS="${SRC_UPLOADS:-/data/docker/sparkyfitness/uploads}"
 SRC_ENV_FILE="${SRC_ENV_FILE:-/data/docker/env/sparkyfitness.env}"
 DUMP_DIR="${DUMP_DIR:-/data/docker/sparky-next-import-$(date +%Y%m%d-%H%M%S)}"
+KEEP_WATCH_PAIRING="${KEEP_WATCH_PAIRING:-1}"
 COMPOSE=(docker compose -f docker-compose.yml)
 [ -f docker-compose.proxy.yml ] && COMPOSE+=(-f docker-compose.proxy.yml)
 
@@ -71,6 +78,22 @@ else
 fi
 set_env SPARKY_FITNESS_DISABLE_SIGNUP true
 
+# Paired watches live only in staging (production has no watch API). Their
+# keys would vanish with the database, so keep them aside.
+watch_saved=0
+if [ "$KEEP_WATCH_PAIRING" = 1 ] && "${COMPOSE[@]}" exec -T next-db psql -U "$STAGING_USER" -d "$DB" -tAc \
+    "SELECT to_regclass('public.watch_devices') IS NOT NULL" 2>/dev/null | grep -q t; then
+  step "Keeping paired watches"
+  "${COMPOSE[@]}" exec -T next-db psql -v ON_ERROR_STOP=1 -U "$STAGING_USER" -d "$DB" -c \
+    "\\copy (SELECT k.* FROM api_key k WHERE k.id IN (SELECT api_key_id FROM watch_devices) OR k.name LIKE 'Garmin watch %') TO STDOUT WITH CSV HEADER" \
+    > "$DUMP_DIR/watch_keys.csv"
+  "${COMPOSE[@]}" exec -T next-db psql -v ON_ERROR_STOP=1 -U "$STAGING_USER" -d "$DB" -c \
+    "\\copy watch_devices TO STDOUT WITH CSV HEADER" > "$DUMP_DIR/watch_devices.csv"
+  chmod 600 "$DUMP_DIR"/watch_*.csv
+  echo "  keys: $(($(wc -l < "$DUMP_DIR/watch_keys.csv") - 1)), watches: $(($(wc -l < "$DUMP_DIR/watch_devices.csv") - 1))"
+  watch_saved=1
+fi
+
 step "Stopping staging app containers"
 "${COMPOSE[@]}" stop next-frontend next-server
 
@@ -108,6 +131,30 @@ for _ in $(seq 1 90); do
   sleep 2
 done
 "${COMPOSE[@]}" logs next-server 2>&1 | grep -E "Applying migration|Successfully applied migration|ERROR" | tail -20 || true
+
+if [ "$watch_saved" = 1 ]; then
+  step "Restoring paired watches"
+  # Columns come from the CSV header, so a newer api_key table still loads.
+  key_cols="$(head -1 "$DUMP_DIR/watch_keys.csv")"
+  dev_cols="$(head -1 "$DUMP_DIR/watch_devices.csv")"
+  next_db="$("${COMPOSE[@]}" ps -q next-db)"
+  docker cp "$DUMP_DIR/watch_keys.csv" "$next_db:/tmp/watch_keys.csv"
+  docker cp "$DUMP_DIR/watch_devices.csv" "$next_db:/tmp/watch_devices.csv"
+  "${COMPOSE[@]}" exec -T next-db psql -v ON_ERROR_STOP=1 -U "$STAGING_USER" -d "$DB" <<SQL
+BEGIN;
+CREATE TEMP TABLE keep_keys (LIKE api_key);
+\\copy keep_keys ($key_cols) FROM '/tmp/watch_keys.csv' WITH CSV HEADER
+INSERT INTO api_key ($key_cols) SELECT $key_cols FROM keep_keys
+  WHERE reference_id IN (SELECT id FROM "user") ON CONFLICT (id) DO NOTHING;
+CREATE TEMP TABLE keep_devices (LIKE watch_devices);
+\\copy keep_devices ($dev_cols) FROM '/tmp/watch_devices.csv' WITH CSV HEADER
+INSERT INTO watch_devices ($dev_cols) SELECT $dev_cols FROM keep_devices
+  WHERE api_key_id IN (SELECT id FROM api_key) ON CONFLICT (api_key_id) DO NOTHING;
+COMMIT;
+SELECT 'watch keys: ' || count(*) FROM api_key WHERE id IN (SELECT api_key_id FROM watch_devices) OR name LIKE 'Garmin watch %';
+SQL
+  "${COMPOSE[@]}" exec -T next-db rm -f /tmp/watch_keys.csv /tmp/watch_devices.csv
+fi
 "${COMPOSE[@]}" ps
 
 step "Done"
