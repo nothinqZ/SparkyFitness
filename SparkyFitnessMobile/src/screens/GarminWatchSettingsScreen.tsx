@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -73,7 +73,15 @@ const GarminWatchSettingsScreen: React.FC<
   const { data: status } = useWatchSyncStatus();
   const claim = useClaimWatchPairing();
   const unpair = useUnpairWatch();
-  useRefetchOnFocus(refetch);
+  // "Now" for the sync dot, taken when the screen is shown rather than on
+  // every render (render must stay pure).
+  const [now, setNow] = useState(() => Date.now());
+  useRefetchOnFocus(
+    useCallback(() => {
+      setNow(Date.now());
+      void refetch();
+    }, [refetch])
+  );
 
   const header = useScreenHeader({
     title: t('screens.garminWatchSettings', { defaultValue: 'Garmin watch' }),
@@ -212,6 +220,7 @@ const GarminWatchSettingsScreen: React.FC<
             // while it is the only one.
             status={devices!.length === 1 ? status : undefined}
             lastSync={relative(device.last_used_at)}
+            now={now}
             accentColor={accentPrimary}
             successColor={success}
             mutedColor={textMuted}
@@ -297,6 +306,7 @@ interface DeviceCardProps {
   name: string;
   status: WatchSyncStatusResponse | undefined;
   lastSync: string;
+  now: number;
   accentColor: string;
   successColor: string;
   mutedColor: string;
@@ -309,6 +319,7 @@ function DeviceCard({
   name,
   status,
   lastSync,
+  now,
   accentColor,
   successColor,
   mutedColor,
@@ -318,7 +329,7 @@ function DeviceCard({
   const { t } = useTranslation();
   const recent =
     device.last_used_at !== null &&
-    Date.now() - new Date(device.last_used_at).getTime() < RECENT_SYNC_MS;
+    now - new Date(device.last_used_at).getTime() < RECENT_SYNC_MS;
 
   return (
     <View

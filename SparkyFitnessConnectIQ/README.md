@@ -202,20 +202,19 @@ uploaded it, needs no store review, and installs and updates through the
 Garmin Connect app like any store app (settings can then also be edited there).
 
 ```bash
-PRODUCTS=fr265 SPARKY_SERVER_URL=https://… tools/build.sh all --package --release
+SPARKY_SERVER_URL=https://… tools/build.sh all --package --release
 # -> bin/SparkyStrength.iq
 ```
 
-`PRODUCTS` limits the package to the watches whose device definitions are
-installed (each one comes from the SDK Manager). Upload the `.iq` at
+The app is built for the Forerunner 265 only (`manifest.xml`); `PRODUCTS`
+can still limit a package to installed device definitions. Upload the `.iq` at
 https://apps.garmin.com/developer as a **beta app**, signed in with the same
 Garmin account the watch uses, then install it from the Connect IQ section
 of the Garmin Connect app. Keep the developer key: every update must be signed
 with the same key.
 
 The watch reports its product name ("Forerunner 265") from
-`resources-<device>/strings`; add a folder when you add a product to
-`manifest.xml`.
+`resources-fr265/strings`; a new product needs its own folder there.
 
 ## Status
 

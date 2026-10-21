@@ -8,16 +8,7 @@
     <iq:application id="a73dfc42657448d4befbd4312730dcdc" type="watch-app" name="@Strings.AppName" entry="SparkyApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="3.2.0">
         <iq:products>
             <!-- tools/build.sh adds its compile-check device here at build time. -->
-            <iq:product id="epix2"/>
-            <iq:product id="fenix7"/>
-            <iq:product id="fenix7s"/>
-            <iq:product id="fenix7x"/>
-            <iq:product id="fr255"/>
             <iq:product id="fr265"/>
-            <iq:product id="fr955"/>
-            <iq:product id="fr965"/>
-            <iq:product id="venu3"/>
-            <iq:product id="vivoactive5"/>
         </iq:products>
         <iq:permissions>
             <iq:uses-permission id="Communications"/>
