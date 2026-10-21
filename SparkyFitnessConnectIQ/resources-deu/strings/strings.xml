@@ -27,4 +27,6 @@
     <string id="PairWatch">Uhr koppeln</string>
     <string id="PairHint">Code in SparkyFitness eingeben: Einstellungen &gt; Garmin-Uhr</string>
     <string id="Paired">Gekoppelt</string>
+    <string id="LiveOnPhone">Läuft am Handy</string>
+    <string id="StartingOnPhone">Starte am Handy …</string>
 </strings>

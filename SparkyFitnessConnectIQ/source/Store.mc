@@ -31,6 +31,11 @@ module Store {
     const KEY_QUEUE_IDS = "queueIds";
     const QUEUE_PREFIX = "queued_";
     const KEY_FAILED_INDEX = "failedIndex";
+    // Live workout from the phone (PhoneLink) and messages waiting for it.
+    // Both stay small: one workout plan, and outbox entries of ~150 bytes,
+    // capped at MAX_OUTBOX.
+    const KEY_LIVE = "live";
+    const KEY_OUTBOX = "outbox";
     const FAILED_PREFIX = "failed_";
     // Single-value layouts of version 0.1.0, migrated or dropped on start.
     const LEGACY_MANIFEST = "manifest";
@@ -40,6 +45,8 @@ module Store {
     // Uploads that the server rejected for good are kept for inspection, but
     // only the most recent few, so they cannot fill the storage.
     const MAX_FAILED = 5;
+    // A full workout of logged sets plus slack; far below the 32 KB limit.
+    const MAX_OUTBOX = 120;
 
     // Storage.setValue throws when the value is too large or the object store
     // is full. An uncaught exception ends the app, so every write goes
@@ -165,6 +172,56 @@ module Store {
 
     function weightUnit() as String {
         return "lbs".equals(Storage.getValue(KEY_WEIGHT_UNIT)) ? "lbs" : "kg";
+    }
+
+    // --- Live workout from the phone ---------------------------------------
+
+    function live() as Dictionary or Null {
+        return Storage.getValue(KEY_LIVE) as Dictionary or Null;
+    }
+
+    function setLive(plan as Dictionary) as Boolean {
+        return trySet(KEY_LIVE, plan);
+    }
+
+    function clearLive() as Void {
+        Storage.deleteValue(KEY_LIVE);
+    }
+
+    function outbox() as Array {
+        var box = Storage.getValue(KEY_OUTBOX);
+        return box == null ? [] as Array : box as Array;
+    }
+
+    // Returns false when the outbox is full or cannot be stored.
+    function enqueueOutbox(message as Dictionary) as Boolean {
+        var box = outbox();
+        if (box.size() >= MAX_OUTBOX) {
+            return false;
+        }
+        box.add(message);
+        return trySet(KEY_OUTBOX, box);
+    }
+
+    function dequeueOutbox() as Void {
+        var box = outbox();
+        if (box.size() > 0) {
+            trySet(KEY_OUTBOX, box.slice(1, null));
+        }
+    }
+
+    // Sets logged on the watch that the phone has not received yet, as
+    // setId => [reps, weightKg] (see SparkyLogic.mergePendingSets).
+    function pendingLiveSets() as Dictionary {
+        var pending = {} as Dictionary;
+        var box = outbox();
+        for (var i = 0; i < box.size(); i++) {
+            var message = box[i] as Dictionary;
+            if ("set".equals(message["t"])) {
+                pending[message["id"]] = [message["r"], message["w"]];
+            }
+        }
+        return pending;
     }
 
     function activeSession() as Dictionary or Null {

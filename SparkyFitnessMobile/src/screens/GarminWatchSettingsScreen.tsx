@@ -18,6 +18,7 @@ import {
   type WatchSyncStatusResponse,
 } from '@workspace/shared';
 
+import GarminConnectIQ from '../../modules/garmin-connectiq';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
 import Icon from '../components/Icon';
 import Button from '../components/ui/Button';
@@ -32,6 +33,7 @@ import { useRefetchOnFocus } from '../hooks/useRefetchOnFocus';
 import { useScreenHeader } from '../hooks/useScreenHeader';
 import { ApiError } from '../services/api/errors';
 import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
+import { useGarminWatchStore } from '../stores/garminWatchStore';
 import type { RootStackScreenProps } from '../types/navigation';
 import { formatRelativeTime } from '../utils/dateUtils';
 
@@ -191,6 +193,8 @@ const GarminWatchSettingsScreen: React.FC<
           usesNativeHeader ? 'automatic' : 'never'
         }
       >
+        <BluetoothCard successColor={success} mutedColor={textMuted} />
+
         {isError && (
           <Text className="text-text-secondary text-sm mb-4">
             {t('garminWatch.devicesError', {
@@ -390,6 +394,119 @@ function DeviceCard({
           {t('garminWatch.unpair', { defaultValue: 'Remove' })}
         </Text>
       </Pressable>
+    </View>
+  );
+}
+
+/**
+ * The live Bluetooth link (Connect IQ Mobile SDK) that keeps a running
+ * workout in step between phone and watch without internet. Picking the
+ * watch happens once, in Garmin Connect.
+ */
+function BluetoothCard({
+  successColor,
+  mutedColor,
+}: {
+  successColor: string;
+  mutedColor: string;
+}) {
+  const { t } = useTranslation();
+  const ready = useGarminWatchStore((s) => s.ready);
+  const devices = useGarminWatchStore((s) => s.devices);
+  const setDevices = useGarminWatchStore((s) => s.setDevices);
+  if (!ready || GarminConnectIQ == null) return null;
+  const sdk = GarminConnectIQ;
+
+  const select = () => {
+    void sdk.showDeviceSelection();
+  };
+  const forget = () => {
+    Alert.alert(
+      t('garminWatch.bluetoothForgetTitle', {
+        defaultValue: 'Disconnect the watch?',
+      }),
+      t('garminWatch.bluetoothForgetMessage', {
+        defaultValue:
+          'Workouts no longer sync live with the watch. Pairing for uploads stays as it is.',
+      }),
+      [
+        {
+          text: t('common.cancel', { defaultValue: 'Cancel' }),
+          style: 'cancel',
+        },
+        {
+          text: t('garminWatch.bluetoothForget', {
+            defaultValue: 'Disconnect',
+          }),
+          style: 'destructive',
+          onPress: () => {
+            void sdk.forgetDevices().then(() => setDevices([]));
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <View testID="garmin-bluetooth" className="bg-surface rounded-2xl p-4 mb-4">
+      <Text className="text-text-primary text-lg font-bold mb-1">
+        {t('garminWatch.bluetoothTitle', { defaultValue: 'Live sync' })}
+      </Text>
+      <Text className="text-text-secondary text-sm mb-3">
+        {t('garminWatch.bluetoothDescription', {
+          defaultValue:
+            'Keeps a running workout in step between phone and watch over Bluetooth, also without internet: start it on either, log sets on either.',
+        })}
+      </Text>
+      {devices.map((device) => {
+        const connected = device.status === 'connected';
+        return (
+          <View key={device.id} className="flex-row items-center mb-3">
+            <View
+              className="w-2 h-2 rounded-full mr-2"
+              style={{ backgroundColor: connected ? successColor : mutedColor }}
+            />
+            <Text className="flex-1 text-text-primary">
+              {device.name || device.model}
+            </Text>
+            <Text className="text-text-secondary text-sm">
+              {connected
+                ? t('garminWatch.bluetoothConnected', {
+                    defaultValue: 'Connected',
+                  })
+                : t('garminWatch.bluetoothNotConnected', {
+                    defaultValue: 'Not connected',
+                  })}
+            </Text>
+          </View>
+        );
+      })}
+      <Button
+        testID="garmin-bluetooth-select"
+        variant={devices.length === 0 ? 'primary' : 'secondary'}
+        className="py-3"
+        onPress={select}
+      >
+        {devices.length === 0
+          ? t('garminWatch.bluetoothConnect', {
+              defaultValue: 'Connect with Garmin Connect',
+            })
+          : t('garminWatch.bluetoothChange', {
+              defaultValue: 'Choose another watch',
+            })}
+      </Button>
+      {devices.length > 0 && (
+        <Pressable
+          testID="garmin-bluetooth-forget"
+          accessibilityRole="button"
+          onPress={forget}
+          className="py-3 items-center active:opacity-70"
+        >
+          <Text className="text-icon-danger font-medium">
+            {t('garminWatch.bluetoothForget', { defaultValue: 'Disconnect' })}
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 }

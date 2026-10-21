@@ -84,6 +84,29 @@ certificate the phone trusts** (plain HTTP and self-signed certificates are
 refused by the phone). Tailscale works if the phone runs Tailscale: use the
 MagicDNS name with a certificate from `tailscale cert` or `tailscale serve`.
 
+## Live sync with the iPhone app (Bluetooth, no internet)
+
+A workout runs in step on watch and phone, like the Apple Watch integration,
+over Bluetooth through the Connect IQ Mobile SDK (`source/PhoneLink.mc` here,
+`SparkyFitnessMobile/modules/garmin-connectiq` and
+`src/hooks/useGarminWatchBridge.ts` on the phone). No internet is needed in
+the gym; the phone only has to be in Bluetooth range.
+
+- Started on the phone: opening Sparky Strength shows it at the top of the
+  start menu ("Running on the phone"), with the phone's resolved targets.
+- Started on the watch with the phone connected: the watch asks the phone to
+  start it and waits up to 15 s for its plan, then shows it; otherwise it
+  starts on the watch alone (uploaded later, as before).
+- A set logged on the watch goes to the phone's live workout (rest timer, PR
+  detection, saving); sets logged on the phone show as done on the watch.
+- Finish on the watch finishes on the phone; finishing or discarding on the
+  phone ends it on the watch. Undo and adding sets stay on the phone.
+- Messages wait in an outbox on the watch until the phone acknowledges them.
+
+One-time setup on the phone: Settings → Garmin watch → Live sync → Connect
+with Garmin Connect (picks the watch in Garmin Connect). Message format:
+`SparkyFitnessMobile/src/utils/garminWatchPlan.ts`.
+
 ## Storage on the watch
 
 A single `Application.Storage` value may hold at most 32 KB. Version 0.1.0

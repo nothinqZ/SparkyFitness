@@ -17,6 +17,7 @@ few conflicts.
 | Paired watches: list and unpair, re-pairing revokes the old key | `routes/v2/watchPairingRoutes.ts` (`/devices`), `models/watchDeviceRepository.ts`, migration `20261021100000_*` | Unit tested |
 | Web: Settings > Garmin watch (pair, status, unpair) | `SparkyFitnessFrontend/src/pages/Settings/GarminWatchSettings.tsx` | Unit tested |
 | Mobile: Settings > Garmin watch (pair, paired watches, unpair, status) | `SparkyFitnessMobile/src/screens/GarminWatchSettingsScreen.tsx` | Unit tested |
+| Live workout sync phone <-> Garmin watch over Bluetooth (Connect IQ Mobile SDK, no internet) | `SparkyFitnessMobile/modules/garmin-connectiq`, `src/hooks/useGarminWatchBridge.ts`, `SparkyFitnessConnectIQ/source/PhoneLink.mc` | JS unit tested; native module built in CI only, **not yet run on a device** |
 | Web: `/performance` desktop dashboard | `SparkyFitnessFrontend/src/pages/Performance/` | Unit tested, rendered at 2560 px light/dark |
 | Mobile: Library > Performance | `SparkyFitnessMobile/src/screens/PerformanceScreen.tsx` | Unit tested |
 | Mobile: `sideload` variant (single App ID, free-Apple-ID entitlements, custom bundle id) | `SparkyFitnessMobile/app.sideload.js`, `plugins/withSideloadEntitlements.ts` | Config tests + Linux `expo prebuild` verified |

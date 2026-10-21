@@ -215,7 +215,17 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
         // silent track playing during a rest, so the chime still sounds with
         // the app in the background. Nothing plays in the background unless
         // that setting is on and a rest is running.
-        UIBackgroundModes: ['audio'],
+        //
+        // `bluetooth-central` lets iOS wake the app when the Garmin watch
+        // (Sparky Strength) sends a logged set over Bluetooth while the phone
+        // is locked; see modules/garmin-connectiq.
+        UIBackgroundModes: ['audio', 'bluetooth-central'],
+        // The Connect IQ SDK checks for Garmin Connect to pick the watch.
+        LSApplicationQueriesSchemes: ['gcm-ciq'],
+        NSBluetoothAlwaysUsageDescription:
+          'SparkyFitness connects to your Garmin watch over Bluetooth to keep workouts in sync.',
+        NSBluetoothPeripheralUsageDescription:
+          'SparkyFitness connects to your Garmin watch over Bluetooth to keep workouts in sync.',
       },
       entitlements: {
         'com.apple.security.application-groups': [iosAppGroup],

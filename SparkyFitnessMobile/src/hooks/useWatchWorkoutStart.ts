@@ -25,29 +25,29 @@ import type { StartLiveWorkoutArgs } from './useStartLiveWorkout';
 type StartFn = (args: StartLiveWorkoutArgs) => Promise<void>;
 
 /**
- * Starts a saved workout when the watch asks. The phone builds the session
- * the same way its own preset list does, then arms the watch with the usual
- * `workoutStart`. A preset id the phone cannot load is ignored.
- *
- * The listener stays up while the server is offline. A tap that arrives
- * then is kept and run once the connection is back, instead of being
- * dropped because nothing was listening. A second delivery while that
- * preset's session is already live is ignored, so a queued copy or the
- * watch's retry does not open the "workout in progress" prompt.
+ * The phone side of "start this saved workout" from a watch: loads the
+ * preset, links it to today's plan assignment when one is due, and starts it
+ * like the phone's own preset list. A preset id the phone cannot load, one
+ * from another server, or a second request while that preset is already live
+ * is ignored. Shared by the Apple Watch (`useWatchWorkoutStart`) and the
+ * Garmin watch (`useGarminWatchBridge`); each passes its own trigger.
  */
-export function useWatchWorkoutStart(
-  enabled: boolean,
-  connected: boolean,
-  start: StartFn
-): void {
+export function useWatchPresetStarter(start: StartFn): {
+  run: (payload: WatchWorkoutStartRequestedPayload) => Promise<void>;
+  /** Drops starts still in flight, e.g. when the trigger is switched off. */
+  cancel: () => void;
+} {
   const startRef = useRef(start);
-  const connectedRef = useRef(connected);
   useEffect(() => {
     startRef.current = start;
-    connectedRef.current = connected;
   });
-  const pendingRef = useRef<WatchWorkoutStartRequestedPayload | null>(null);
   const generationRef = useRef(0);
+  useEffect(
+    () => () => {
+      generationRef.current += 1;
+    },
+    []
+  );
 
   const run = useCallback(
     async (payload: WatchWorkoutStartRequestedPayload) => {
@@ -134,6 +134,35 @@ export function useWatchWorkoutStart(
     []
   );
 
+  const cancel = useCallback(() => {
+    generationRef.current += 1;
+  }, []);
+  return { run, cancel };
+}
+
+/**
+ * Starts a saved workout when the Apple Watch asks. The phone builds the
+ * session the same way its own preset list does, then arms the watch with
+ * the usual `workoutStart`.
+ *
+ * The listener stays up while the server is offline. A tap that arrives
+ * then is kept and run once the connection is back, instead of being
+ * dropped because nothing was listening. A second delivery while that
+ * preset's session is already live is ignored, so a queued copy or the
+ * watch's retry does not open the "workout in progress" prompt.
+ */
+export function useWatchWorkoutStart(
+  enabled: boolean,
+  connected: boolean,
+  start: StartFn
+): void {
+  const { run, cancel } = useWatchPresetStarter(start);
+  const connectedRef = useRef(connected);
+  useEffect(() => {
+    connectedRef.current = connected;
+  });
+  const pendingRef = useRef<WatchWorkoutStartRequestedPayload | null>(null);
+
   useEffect(() => {
     if (!enabled || !WatchConnectivity?.isSupported()) return;
     const watch = WatchConnectivity;
@@ -145,10 +174,10 @@ export function useWatchWorkoutStart(
       void run(payload);
     });
     return () => {
-      generationRef.current += 1;
+      cancel();
       sub.remove();
     };
-  }, [enabled, run]);
+  }, [enabled, run, cancel]);
 
   useEffect(() => {
     if (!enabled || !connected) return;

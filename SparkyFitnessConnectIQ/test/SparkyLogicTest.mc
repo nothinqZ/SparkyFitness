@@ -149,3 +149,36 @@ function testCompactWorkout(logger as Logger) as Boolean {
     Test.assertEqual(summary["exercises"], 2);
     return true;
 }
+
+(:test)
+function testLivePlan(logger as Logger) as Boolean {
+    var plan = {
+        "t" => "plan", "sid" => "s1", "n" => "Torso A", "a" => "12",
+        "x" => [
+            { "n" => "Bench", "s" => [["11", 12, 75, 90, 1, 10, 77.5], ["12", 8, 100, 120, 0, null, null]] },
+            { "n" => "Row", "s" => [["21", 10, 60, 90, 0, null, null]] }
+        ]
+    };
+    var session = SparkyLogic.sessionFromLive(plan, null);
+    Test.assertEqual(session["live"], "s1");
+    // The exercise holding the phone's active set is shown first.
+    Test.assertEqual(session["ex_idx"], 0);
+    var bench = (session["exercises"] as Array)[0] as Dictionary;
+    Test.assertEqual((bench["logged"] as Array).size(), 1);
+    Test.assertEqual(((bench["planned"] as Array)[1] as Dictionary)["id"], "12");
+
+    // A set logged on the watch but not yet confirmed stays done in a newer plan.
+    Test.assert(SparkyLogic.markLiveSetDone(plan, "21", 10, 62.5));
+    Test.assert(!SparkyLogic.markLiveSetDone(plan, "99", 1, 1));
+    var fresh = {
+        "sid" => "s1", "n" => "Torso A", "a" => null,
+        "x" => [{ "n" => "Row", "s" => [["21", 10, 60, 90, 0, null, null]] }]
+    };
+    SparkyLogic.mergePendingSets(fresh, { "21" => [10, 62.5] });
+    var row = ((fresh["x"] as Array)[0] as Dictionary)["s"] as Array;
+    Test.assertEqual((row[0] as Array)[4], 1);
+    Test.assertEqual((row[0] as Array)[6], 62.5);
+    // Kept exercise index survives a refresh.
+    Test.assertEqual(SparkyLogic.sessionFromLive(plan, 1)["ex_idx"], 1);
+    return true;
+}

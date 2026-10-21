@@ -5647,7 +5647,16 @@
     "unpair": "Remove",
     "unpairTitle": "Remove {{name}}?",
     "unpairMessage": "The watch can no longer download workouts or upload sessions until it is paired again. Workouts it has not uploaded yet stay on the watch.",
-    "unpairError": "The watch could not be removed"
+    "unpairError": "The watch could not be removed",
+    "bluetoothTitle": "Live sync",
+    "bluetoothDescription": "Keeps a running workout in step between phone and watch over Bluetooth, also without internet: start it on either, log sets on either.",
+    "bluetoothConnect": "Connect with Garmin Connect",
+    "bluetoothChange": "Choose another watch",
+    "bluetoothConnected": "Connected",
+    "bluetoothNotConnected": "Not connected",
+    "bluetoothForget": "Disconnect",
+    "bluetoothForgetTitle": "Disconnect the watch?",
+    "bluetoothForgetMessage": "Workouts no longer sync live with the watch. Pairing for uploads stays as it is."
   },
   "progressPhotos": {
     "card": {

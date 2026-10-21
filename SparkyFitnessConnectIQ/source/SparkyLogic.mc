@@ -255,6 +255,81 @@ module SparkyLogic {
         return summary;
     }
 
+    // --- Live workout from the phone (PhoneLink.mc) -------------------------
+    // The phone's plan message: { "sid", "n" (name), "x" => [ { "n", "s" =>
+    // [ [setId, targetReps, targetWeightKg, rest, done, reps, weightKg] ] } ],
+    // "a" (active set id) }. See SparkyFitnessMobile/src/utils/garminWatchPlan.ts.
+
+    // Marks a set done in the plan with the values logged on the watch.
+    // Returns false when the plan has no such set.
+    function markLiveSetDone(plan as Dictionary, setId as String, reps as Number or Null,
+            weightKg as Float or Number or Null) as Boolean {
+        var exercises = plan["x"] as Array;
+        for (var i = 0; i < exercises.size(); i++) {
+            var sets = (exercises[i] as Dictionary)["s"] as Array;
+            for (var j = 0; j < sets.size(); j++) {
+                var set = sets[j] as Array;
+                if (setId.equals(set[0])) {
+                    set[4] = 1;
+                    set[5] = reps;
+                    set[6] = weightKg;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // Keeps sets the watch logged but the phone has not confirmed yet done in
+    // a newer plan. `pending` is setId => [reps, weightKg].
+    function mergePendingSets(plan as Dictionary, pending as Dictionary) as Dictionary {
+        var ids = pending.keys();
+        for (var i = 0; i < ids.size(); i++) {
+            var values = pending[ids[i]] as Array;
+            markLiveSetDone(plan, ids[i] as String, values[0] as Number or Null,
+                values[1] as Float or Number or Null);
+        }
+        return plan;
+    }
+
+    // The plan in the shape WorkoutSession works on. `exIdx` keeps the
+    // exercise on screen; null picks the one holding the phone's active set,
+    // else the first with a set left.
+    function sessionFromLive(plan as Dictionary, exIdx as Number or Null) as Dictionary {
+        var exercises = [] as Array;
+        var source = plan["x"] as Array;
+        var activeIdx = null;
+        var firstOpen = null;
+        for (var i = 0; i < source.size(); i++) {
+            var ex = source[i] as Dictionary;
+            var planned = [] as Array;
+            var logged = [] as Array;
+            var sets = ex["s"] as Array;
+            for (var j = 0; j < sets.size(); j++) {
+                var set = sets[j] as Array;
+                var done = set[4] == 1;
+                planned.add({ "id" => set[0], "reps" => set[1], "weight" => set[2],
+                    "rest_time" => set[3], "done" => done });
+                if (done) {
+                    logged.add({ "reps" => set[5], "weight" => set[6] });
+                } else if (firstOpen == null) {
+                    firstOpen = i;
+                }
+                if (activeIdx == null && plan["a"] != null && (set[0] as String).equals(plan["a"])) {
+                    activeIdx = i;
+                }
+            }
+            exercises.add({ "name" => ex["n"], "planned" => planned, "logged" => logged,
+                "previous" => null });
+        }
+        var idx = exIdx;
+        if (idx == null || idx >= exercises.size()) {
+            idx = activeIdx != null ? activeIdx : (firstOpen != null ? firstOpen : 0);
+        }
+        return { "live" => plan["sid"], "name" => plan["n"], "ex_idx" => idx,
+            "exercises" => exercises };
+    }
+
     // Seconds as "m:ss".
     function formatClock(seconds as Number) as String {
         if (seconds < 0) {

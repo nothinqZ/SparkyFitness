@@ -34,6 +34,11 @@ module MainMenu {
     function build() as [WatchUi.Views, WatchUi.InputDelegates] {
         var menu = new WatchUi.Menu2({ :title => WatchUi.loadResource(Rez.Strings.AppName) as String });
         var active = Store.activeSession();
+        var live = Store.live();
+        if (live != null) {
+            menu.addItem(new WatchUi.MenuItem(live["n"] as String,
+                WatchUi.loadResource(Rez.Strings.LiveOnPhone) as String, :live, null));
+        }
         if (Store.hasServerUrl() && Store.apiKey() == null) {
             menu.addItem(new WatchUi.MenuItem(
                 WatchUi.loadResource(Rez.Strings.PairWatch) as String,
@@ -87,6 +92,10 @@ class MainMenuDelegate extends WatchUi.Menu2InputDelegate {
         if (id == :none) {
             return;
         }
+        if (id == :live) {
+            getApp().phone.openLiveWorkout(false);
+            return;
+        }
         if (id == :pair) {
             MainMenu.visible = false;
             WatchUi.pushView(new PairingView(), new PairingDelegate(), WatchUi.SLIDE_LEFT);
@@ -102,6 +111,18 @@ class MainMenuDelegate extends WatchUi.Menu2InputDelegate {
         } else {
             var workout = Store.workout(id as Number);
             if (workout == null) {
+                return;
+            }
+            // With the phone in reach, start it there so both run the same
+            // workout; StartWaitView falls back to the watch alone.
+            if (PhoneLink.phoneConnected() && Store.live() == null
+                    && workout["workout_preset_id"] != null) {
+                var link = getApp().phone;
+                link.enqueue({ "t" => "start", "p" => workout["workout_preset_id"],
+                    "at" => Time.now().value(), "c" => Store.newUuid() });
+                link.awaitingStartUntil = Time.now().value() + 15;
+                MainMenu.visible = false;
+                WatchUi.pushView(new StartWaitView(workout), new StartWaitDelegate(), WatchUi.SLIDE_LEFT);
                 return;
             }
             session = WorkoutSession.start(workout);

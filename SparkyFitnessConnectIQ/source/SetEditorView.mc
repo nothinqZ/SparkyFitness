@@ -56,7 +56,6 @@ class SetEditorView extends WatchUi.View {
         var rest = session.restSecondsForNextSet();
         session.logSet(reps, SparkyLogic.toKg(weight, unit),
             rpe == null ? null : (rpe as Float), rest);
-        getApp().recorder.lap();
         var timer = new RestView(rest);
         WatchUi.switchToView(timer, new RestDelegate(), WatchUi.SLIDE_UP);
     }

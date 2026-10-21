@@ -10,12 +10,38 @@ import Toybox.Time;
 //   "exercises" => [ { "exercise_id", "name", "planned" => [..manifest sets..],
 //                      "previous" => [..] or null, "logged" => [ {reps, weight,
 //                      rpe, rest_time, completed_at} ] } ] }
+//
+// A live session mirrors the phone's workout (PhoneLink): `data` is rebuilt
+// from Store.live() by refresh(), carries "live" => session id, its planned
+// sets carry "id" and "done", and logging a set sends it to the phone
+// instead of building an upload. The phone owns saving it.
 class WorkoutSession {
 
     var data as Dictionary;
 
     function initialize(data as Dictionary) {
         self.data = data;
+    }
+
+    // The phone's live workout, or null when there is none.
+    static function live() as WorkoutSession or Null {
+        var plan = Store.live();
+        return plan == null ? null : new WorkoutSession(SparkyLogic.sessionFromLive(plan, null));
+    }
+
+    function isLive() as Boolean {
+        return data["live"] != null;
+    }
+
+    // Picks up a newer plan from the phone, keeping the exercise on screen.
+    function refresh() as Void {
+        if (!isLive()) {
+            return;
+        }
+        var plan = Store.live();
+        if (plan != null && (data["live"] as String).equals(plan["sid"])) {
+            data = SparkyLogic.sessionFromLive(plan, data["ex_idx"] as Number);
+        }
     }
 
     static function start(workout as Dictionary) as WorkoutSession {
@@ -48,6 +74,9 @@ class WorkoutSession {
     }
 
     function save() as Void {
+        if (isLive()) {
+            return;
+        }
         if (!Store.saveActiveSession(data)) {
             Store.setLastError("Watch storage full, workout not saved");
         }
@@ -101,6 +130,15 @@ class WorkoutSession {
         if (planned == null || planned.size() == 0) {
             return null;
         }
+        if (isLive()) {
+            // The phone may log sets out of order: the next is the first open.
+            for (var i = 0; i < planned.size(); i++) {
+                if ((planned[i] as Dictionary)["done"] != true) {
+                    return planned[i] as Dictionary;
+                }
+            }
+            return null;
+        }
         var idx = loggedCount();
         if (idx >= planned.size()) {
             idx = planned.size() - 1;
@@ -137,6 +175,10 @@ class WorkoutSession {
     }
 
     function logSet(reps as Number, weightKg as Float, rpe as Float or Null, restSeconds as Number) as Void {
+        if (isLive()) {
+            logLiveSet(reps, weightKg, rpe);
+            return;
+        }
         var entry = {
             "reps" => reps,
             "weight" => weightKg,
@@ -150,7 +192,36 @@ class WorkoutSession {
         save();
     }
 
+    // Marks the next open set done here and sends it to the phone, which
+    // completes it in its live workout (rest, PRs, saving). Every planned set
+    // done means the phone has to add more; nothing is logged then.
+    private function logLiveSet(reps as Number, weightKg as Float, rpe as Float or Null) as Void {
+        var next = nextPlannedSet();
+        var plan = Store.live();
+        if (next == null || plan == null) {
+            return;
+        }
+        var setId = next["id"] as String;
+        SparkyLogic.markLiveSetDone(plan, setId, reps, weightKg);
+        Store.setLive(plan);
+        var message = {
+            "t" => "set", "sid" => data["live"], "id" => setId, "r" => reps,
+            "w" => weightKg, "at" => Time.now().value(), "c" => Store.newUuid()
+        } as Dictionary;
+        if (rpe != null) {
+            message["rpe"] = rpe;
+        }
+        if (!getApp().phone.enqueue(message)) {
+            Store.setLastError("Watch storage full, set not sent");
+        }
+        refresh();
+    }
+
     function undoLastSet() as Void {
+        if (isLive()) {
+            // Undo is the phone's: a set already sent cannot be withdrawn.
+            return;
+        }
         var logged = current()["logged"] as Array;
         if (logged.size() > 0) {
             current()["logged"] = logged.slice(0, logged.size() - 1);
@@ -168,6 +239,11 @@ class WorkoutSession {
     // once it is in the queue; if the queue cannot store it, it stays as the
     // active workout so it can be finished again after the next sync.
     function finishAndQueue() as Boolean {
+        if (isLive()) {
+            getApp().phone.enqueue({ "t" => "finish", "sid" => data["live"], "c" => Store.newUuid() });
+            Store.clearLive();
+            return true;
+        }
         var upload = SparkyLogic.buildUpload(
             data,
             SparkyLogic.isoUtc(Time.now()),
@@ -188,6 +264,10 @@ class WorkoutSession {
     }
 
     function discard() as Void {
+        if (isLive()) {
+            // Leaving the watch view; the workout keeps running on the phone.
+            return;
+        }
         Store.clearActiveSession();
     }
 }

@@ -1,5 +1,7 @@
 {
   "ios": {
+    "NSBluetoothAlwaysUsageDescription": "SparkyFitness connects to your Garmin watch over Bluetooth to keep workouts in sync.",
+    "NSBluetoothPeripheralUsageDescription": "SparkyFitness connects to your Garmin watch over Bluetooth to keep workouts in sync.",
     "NSCameraUsageDescription": "SparkyFitness needs access to your camera to scan food barcodes and labels.",
     "NSHealthShareUsageDescription": "SparkyFitness reads Health data (such as activity, workouts, and body measurements) to display it in the app and sync it to your self-hosted SparkyFitness server.",
     "NSHealthUpdateUsageDescription": "SparkyFitness writes the nutrition and hydration you log in the app to Apple Health, keeping the two in sync.",

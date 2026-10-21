@@ -30,4 +30,6 @@
     <!-- Overridden per product in resources-<device>/strings; empty means
          "send the part number instead". -->
     <string id="DeviceName"></string>
+    <string id="LiveOnPhone">Running on the phone</string>
+    <string id="StartingOnPhone">Starting on the phone…</string>
 </strings>

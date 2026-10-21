@@ -19,9 +19,18 @@ class WorkoutView extends WatchUi.View {
 
     function onShow() as Void {
         MainMenu.visible = false;
+        if (_session.isLive()) {
+            getApp().phone.liveViewOpen = true;
+        }
+    }
+
+    function onHide() as Void {
+        getApp().phone.liveViewOpen = false;
     }
 
     function onUpdate(dc as Graphics.Dc) as Void {
+        // A live workout follows the phone: sets logged there show up here.
+        _session.refresh();
         var w = dc.getWidth();
         var h = dc.getHeight();
         var unit = Store.weightUnit();
@@ -124,7 +133,9 @@ class WorkoutDelegate extends WatchUi.BehaviorDelegate {
                 (ex["logged"] as Array).size() + " / " + (ex["planned"] == null ? 0 : (ex["planned"] as Array).size()),
                 i, null));
         }
-        menu.addItem(new WatchUi.MenuItem("Undo last set", null, :undo, null));
+        if (!_session.isLive()) {
+            menu.addItem(new WatchUi.MenuItem("Undo last set", null, :undo, null));
+        }
         WatchUi.pushView(menu, new ExerciseMenuDelegate(_session), WatchUi.SLIDE_UP);
         return true;
     }

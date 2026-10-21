@@ -78,6 +78,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Garmin's SDK is fetched, not committed (Garmin license).
+      - name: Fetch Connect IQ Mobile SDK
+        working-directory: SparkyFitnessMobile
+        run: scripts/ios/fetch-connectiq-sdk.sh
+
       - name: Prebuild iOS project (sideload variant)
         working-directory: SparkyFitnessMobile
         env:

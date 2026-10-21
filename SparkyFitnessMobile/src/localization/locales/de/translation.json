@@ -5348,6 +5348,15 @@
     "unpair": "Entfernen",
     "unpairTitle": "{{name}} entfernen?",
     "unpairMessage": "Die Uhr kann dann keine Workouts mehr laden oder hochladen, bis sie wieder gekoppelt ist. Noch nicht hochgeladene Workouts bleiben auf der Uhr.",
-    "unpairError": "Die Uhr konnte nicht entfernt werden"
+    "unpairError": "Die Uhr konnte nicht entfernt werden",
+    "bluetoothTitle": "Live-Synchronisation",
+    "bluetoothDescription": "Hält ein laufendes Workout zwischen Handy und Uhr per Bluetooth synchron, auch ohne Internet: Starten und Sätze erfassen geht auf beiden.",
+    "bluetoothConnect": "Mit Garmin Connect verbinden",
+    "bluetoothChange": "Andere Uhr wählen",
+    "bluetoothConnected": "Verbunden",
+    "bluetoothNotConnected": "Nicht verbunden",
+    "bluetoothForget": "Trennen",
+    "bluetoothForgetTitle": "Uhr trennen?",
+    "bluetoothForgetMessage": "Workouts werden dann nicht mehr live mit der Uhr synchronisiert. Die Kopplung für Uploads bleibt bestehen."
   }
 }

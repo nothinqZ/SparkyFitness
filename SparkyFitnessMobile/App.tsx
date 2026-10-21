@@ -22,6 +22,7 @@ import { Uniwind, useUniwind, useCSSVariable } from 'uniwind';
 
 import { queryClient, serverConnectionQueryKey, serverConfigsQueryKey, useSyncHealthData, useCycleMode, useServerConnection, drainQuickActionNavigation, useQuickActions, useWatchCheckInBridge, useWatchPlanSync, useWatchSetTargetsSync, useWatchWorkoutBridge } from './src/hooks';
 import { useWatchWorkoutStart } from './src/hooks/useWatchWorkoutStart';
+import { useGarminWatchBridge } from './src/hooks/useGarminWatchBridge';
 import {
   useStartLiveWorkout,
   type StartLiveWorkoutNavigation,
@@ -207,26 +208,23 @@ function handleWatchFinishedWorkout(celebration: WorkoutCelebration | null) {
   }
 }
 
+// Starting from the wrist must not replace whatever screen the phone is on.
+// The active-workout bar appears on its own once the session exists.
+// `navigate` is only the conflict prompt's "Go to Workout".
+const watchStartNavigation = {
+  isFocused: () => false,
+  replace: () => {},
+  navigate: (screen: 'ActiveWorkout') => {
+    if (rootNavigationRef.isReady()) rootNavigationRef.navigate(screen);
+  },
+} as unknown as StartLiveWorkoutNavigation;
+
 function WatchWorkoutGate() {
   const watchSupported = WatchConnectivity?.isSupported() === true;
   const [telemetryPending, setTelemetryPending] = useState(false);
   const { isConnected: isServerConnected } = useServerConnection({
     enablePolling: watchSupported && telemetryPending,
   });
-  const watchStartNavigation = useMemo(
-    () =>
-      ({
-        // Starting from the wrist must not replace whatever screen the phone
-        // is on. The active-workout bar appears on its own once the session
-        // exists. `navigate` is only the conflict prompt's "Go to Workout".
-        isFocused: () => false,
-        replace: () => {},
-        navigate: (screen: 'ActiveWorkout') => {
-          if (rootNavigationRef.isReady()) rootNavigationRef.navigate(screen);
-        },
-      }) as unknown as StartLiveWorkoutNavigation,
-    []
-  );
   const { startLiveWorkout } = useStartLiveWorkout(watchStartNavigation);
   useWatchWorkoutBridge(
     watchSupported,
@@ -237,6 +235,13 @@ function WatchWorkoutGate() {
   useWatchSetTargetsSync(watchSupported);
   useWatchWorkoutStart(watchSupported, isServerConnected, startLiveWorkout);
   useWatchPlanSync(watchSupported);
+  return null;
+}
+
+/** Garmin watch (Sparky Strength) over Bluetooth; a no-op without the SDK. */
+function GarminWatchGate() {
+  const { startLiveWorkout } = useStartLiveWorkout(watchStartNavigation);
+  useGarminWatchBridge(startLiveWorkout, handleWatchFinishedWorkout);
   return null;
 }
 
@@ -419,6 +424,7 @@ function AppContent() {
       <WatchCheckInGate />
       <QuickActionsGate />
       <WatchWorkoutGate />
+      <GarminWatchGate />
       <SafeAreaProvider>
         {/* Inside SafeAreaProvider on purpose: the viewer positions its close
             button against the insets, so mounting it at the app root crashes
