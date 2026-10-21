@@ -1,4 +1,6 @@
 import {
+  applyGarminAdd,
+  applyGarminRest,
   applyGarminSet,
   finishFromGarmin,
 } from '../../src/hooks/useGarminWatchBridge';
@@ -21,6 +23,9 @@ const actions = {
   updateSetField: jest.fn(),
   completeSet: jest.fn(),
   clearWorkout: jest.fn(),
+  addSetToExercise: jest.fn(),
+  adjustRest: jest.fn(),
+  dismissRest: jest.fn(),
 };
 const liveState = (overrides: Record<string, unknown> = {}) => ({
   sessionId: 'session-1',
@@ -92,5 +97,70 @@ describe('finishFromGarmin', () => {
     await expect(finishFromGarmin('session-1')).resolves.toBeUndefined();
     await expect(finishFromGarmin('other')).resolves.toBeUndefined();
     expect(actions.clearWorkout).not.toHaveBeenCalled();
+  });
+});
+
+describe('applyGarminAdd', () => {
+  it('adds a set to the exercise and completes it with the watch values', async () => {
+    const before = liveState({
+      session: { exercises: [{ id: 'entry-1', sets: [{ id: 11 }] }] },
+    });
+    const after = liveState({
+      session: {
+        exercises: [{ id: 'entry-1', sets: [{ id: 11 }, { id: -1 }] }],
+      },
+      steps: [{ setId: '11' }, { setId: '-1' }],
+    });
+    jest
+      .mocked(useActiveWorkoutStore.getState)
+      .mockReturnValueOnce(before as never)
+      .mockReturnValue(after as never);
+    await applyGarminAdd({
+      t: 'add',
+      sid: 'session-1',
+      e: 'entry-1',
+      r: 6,
+      w: 80,
+      c: 'c',
+    });
+    expect(actions.addSetToExercise).toHaveBeenCalledWith('entry-1');
+    expect(actions.updateSetField).toHaveBeenCalledWith('-1', {
+      reps: 6,
+      weight: 80,
+    });
+    expect(actions.completeSet).toHaveBeenCalledWith('-1', undefined);
+  });
+
+  it('ignores unknown exercises and other sessions', async () => {
+    jest
+      .mocked(useActiveWorkoutStore.getState)
+      .mockReturnValue(liveState({ session: { exercises: [] } }) as never);
+    await applyGarminAdd({ t: 'add', sid: 'session-1', e: 'nope', c: 'c' });
+    await applyGarminAdd({ t: 'add', sid: 'other', e: 'nope', c: 'c' });
+    expect(actions.addSetToExercise).not.toHaveBeenCalled();
+  });
+});
+
+describe('applyGarminRest', () => {
+  const resting = (endsAtMs: number) =>
+    liveState({ rest: { state: 'resting', endsAt: endsAtMs } });
+
+  it('moves or skips the phone rest the watch saw', () => {
+    jest
+      .mocked(useActiveWorkoutStore.getState)
+      .mockReturnValue(resting(100_000) as never);
+    applyGarminRest({ t: 'rest', sid: 'session-1', pre: 100, re: 115, c: 'c' });
+    expect(actions.adjustRest).toHaveBeenCalledWith(15);
+    applyGarminRest({ t: 'rest', sid: 'session-1', pre: 100, re: 0, c: 'c' });
+    expect(actions.dismissRest).toHaveBeenCalled();
+  });
+
+  it('leaves a different rest alone', () => {
+    jest
+      .mocked(useActiveWorkoutStore.getState)
+      .mockReturnValue(resting(200_000) as never);
+    applyGarminRest({ t: 'rest', sid: 'session-1', pre: 100, re: 115, c: 'c' });
+    expect(actions.adjustRest).not.toHaveBeenCalled();
+    expect(actions.dismissRest).not.toHaveBeenCalled();
   });
 });

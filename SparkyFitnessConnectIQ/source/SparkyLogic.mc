@@ -421,6 +421,101 @@ module SparkyLogic {
         return plan;
     }
 
+    // Sets added on the watch beyond the plan that the phone has not
+    // confirmed yet, shown as done sets of their exercise until the phone's
+    // plan carries them. `adds` are the outbox "add" messages.
+    function mergePendingAdds(plan as Dictionary, adds as Array) as Dictionary {
+        var exercises = plan["x"] as Array;
+        for (var i = 0; i < adds.size(); i++) {
+            var add = adds[i] as Dictionary;
+            for (var j = 0; j < exercises.size(); j++) {
+                var ex = exercises[j] as Dictionary;
+                if (ex["e"] != null && (ex["e"] as String).equals(add["e"])) {
+                    (ex["s"] as Array).add(["tmp-" + add["c"], add["r"], add["w"], 0, 1,
+                        add["r"], add["w"], null, 0]);
+                }
+            }
+        }
+        return plan;
+    }
+
+    // Ids of the sets the phone marked as personal records.
+    function prSetIds(plan as Dictionary or Null) as Array {
+        var ids = [] as Array;
+        if (plan == null) {
+            return ids;
+        }
+        var exercises = plan["x"] as Array;
+        for (var i = 0; i < exercises.size(); i++) {
+            var sets = (exercises[i] as Dictionary)["s"] as Array;
+            for (var j = 0; j < sets.size(); j++) {
+                var set = sets[j] as Array;
+                if (set.size() > 8 && set[8] == 1) {
+                    ids.add(set[0]);
+                }
+            }
+        }
+        return ids;
+    }
+
+    // True when a set beats last session's best working set: more weight,
+    // or the same top weight for more reps. Used without a phone, which
+    // knows the full history; the watch only knows last time.
+    function beatsLastTime(previous as Array or Null, reps as Number, weightKg as Float) as Boolean {
+        var working = workingSets(previous);
+        if (working == null || working.size() == 0 || weightKg <= 0.0) {
+            return false;
+        }
+        var bestWeight = 0.0;
+        var bestReps = 0;
+        for (var i = 0; i < working.size(); i++) {
+            var set = working[i] as Dictionary;
+            var w = toFloatOrNull(set["weight"]);
+            var r = toInt(set["reps"]);
+            if (w == null || r == null) {
+                continue;
+            }
+            if (w > bestWeight || (w == bestWeight && r > bestReps)) {
+                bestWeight = w;
+                bestReps = r;
+            }
+        }
+        if (bestWeight <= 0.0) {
+            return false;
+        }
+        return weightKg > bestWeight + 0.01 || (weightKg > bestWeight - 0.01 && reps > bestReps);
+    }
+
+    // Plates per side for a barbell, heaviest first, in display units: a
+    // 20 kg bar and 25 / 20 / 15 / 10 / 5 / 2.5 / 1.25 kg plates, or a
+    // 45 lb bar and 45 / 35 / 25 / 10 / 5 / 2.5 lb. Empty when the load is
+    // the bar alone (or less); a remainder smaller than the smallest plate
+    // is dropped.
+    function platesPerSide(total as Float, unit as String) as Array {
+        var lbs = unit.equals("lbs");
+        var bar = lbs ? 45.0 : 20.0;
+        var plates = lbs ? [45.0, 35.0, 25.0, 10.0, 5.0, 2.5] : [25.0, 20.0, 15.0, 10.0, 5.0, 2.5, 1.25];
+        var side = (total - bar) / 2.0;
+        var out = [] as Array;
+        for (var i = 0; i < plates.size() && side > 0.001; i++) {
+            var plate = plates[i] as Float;
+            while (side >= plate - 0.001) {
+                out.add(plate);
+                side -= plate;
+            }
+        }
+        return out;
+    }
+
+    // "20 + 10 + 2.5" from platesPerSide().
+    function formatPlates(plates as Array) as String {
+        var text = "";
+        for (var i = 0; i < plates.size(); i++) {
+            text += (i > 0 ? " + " : "") + formatWeight(plates[i] as Float);
+        }
+        return text;
+    }
+
     // The plan in the shape WorkoutSession works on. `exIdx` keeps the
     // exercise on screen; null picks the one holding the phone's active set,
     // else the first with a set left.
@@ -439,7 +534,8 @@ module SparkyLogic {
                 var done = set[4] == 1;
                 planned.add({ "id" => set[0], "reps" => toInt(set[1]),
                     "weight" => toFloatOrNull(set[2]), "rest_time" => toInt(set[3]), "done" => done,
-                    "type" => set.size() > 7 ? setTypeCode(set[7]) : null });
+                    "type" => set.size() > 7 ? setTypeCode(set[7]) : null,
+                    "pr" => set.size() > 8 && set[8] == 1 });
                 if (done) {
                     logged.add({ "reps" => toInt(set[5]), "weight" => toFloatOrNull(set[6]),
                         "type" => set.size() > 7 ? setTypeCode(set[7]) : null });
@@ -462,7 +558,7 @@ module SparkyLogic {
             }
             exercises.add({ "name" => ex["n"], "planned" => planned, "logged" => logged,
                 "previous" => previous, "superset" => toInt(ex["ss"]),
-                "step" => toFloatOrNull(ex["st"]) });
+                "step" => toFloatOrNull(ex["st"]), "entry" => ex["e"], "barbell" => ex["bb"] == 1 });
         }
         var idx = exIdx;
         if (idx == null || idx >= exercises.size()) {

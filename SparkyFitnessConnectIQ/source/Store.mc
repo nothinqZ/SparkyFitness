@@ -224,6 +224,20 @@ module Store {
         return pending;
     }
 
+    // Sets added on the watch beyond the plan, not yet received by the phone
+    // (outbox "add" messages; see SparkyLogic.mergePendingAdds).
+    function pendingLiveAdds() as Array {
+        var adds = [] as Array;
+        var box = outbox();
+        for (var i = 0; i < box.size(); i++) {
+            var message = box[i] as Dictionary;
+            if ("add".equals(message["t"])) {
+                adds.add(message);
+            }
+        }
+        return adds;
+    }
+
     function activeSession() as Dictionary or Null {
         return Storage.getValue(KEY_ACTIVE) as Dictionary or Null;
     }

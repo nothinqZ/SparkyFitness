@@ -116,8 +116,18 @@ class SetEditorView extends WatchUi.View {
         dc.drawText(cx, h * 0.44, Graphics.FONT_XTINY, WatchUi.loadResource(Rez.Strings.Reps) as String,
             Graphics.TEXT_JUSTIFY_CENTER);
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.57, Graphics.FONT_MEDIUM, SparkyLogic.formatWeight(weight) + " " + unit,
+        dc.drawText(cx, h * 0.55, Graphics.FONT_MEDIUM, SparkyLogic.formatWeight(weight) + " " + unit,
             Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // Barbell: what goes on each side of the bar.
+        if (session.current()["barbell"] == true) {
+            var plates = SparkyLogic.platesPerSide(weight, unit);
+            var text = plates.size() == 0
+                ? WatchUi.loadResource(Rez.Strings.BarOnly) as String
+                : (WatchUi.loadResource(Rez.Strings.PerSide) as String) + " " + SparkyLogic.formatPlates(plates);
+            dc.setColor(WorkoutView.COLOR_WARMUP, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.64, Graphics.FONT_XTINY, text, Graphics.TEXT_JUSTIFY_CENTER);
+        }
 
         // The check: a filled accent circle with a tick drawn as two lines.
         var cy = (h * 0.76).toNumber();

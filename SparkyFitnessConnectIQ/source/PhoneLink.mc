@@ -5,6 +5,7 @@ import Toybox.System;
 import Toybox.Time;
 import Toybox.Timer;
 import Toybox.WatchUi;
+import Toybox.Attention;
 
 // Bluetooth link to the SparkyFitness iPhone app (Connect IQ Mobile SDK on
 // the phone, modules/garmin-connectiq). Needs no internet: messages go
@@ -29,6 +30,12 @@ class PhoneLink {
     var awaitingStartUntil as Number or Null = null;
     // True while a live WorkoutView is on screen, so "end" can leave it.
     var liveViewOpen as Boolean = false;
+    // The live session on screen, to open the phone's rest over it.
+    var liveSession as WorkoutSession or Null = null;
+    // The rest screen while one is shown, to follow the phone's rest.
+    var restView as RestView or Null = null;
+    // The phone's rest end in the last plan (epoch s), or null.
+    private var _lastRestEnd as Number or Null = null;
 
     function initialize() {
     }
@@ -68,11 +75,17 @@ class PhoneLink {
         }
         var type = data["t"];
         if ("plan".equals(type)) {
-            var plan = SparkyLogic.mergePendingSets(data as Dictionary, Store.pendingLiveSets());
+            var plan = SparkyLogic.mergePendingAdds(
+                SparkyLogic.mergePendingSets(data as Dictionary, Store.pendingLiveSets()),
+                Store.pendingLiveAdds());
+            var knownPrs = SparkyLogic.prSetIds(Store.live());
             Store.setLive(plan);
+            celebrateNewPrs(knownPrs, SparkyLogic.prSetIds(plan));
             if (awaitingStartUntil != null) {
                 awaitingStartUntil = null;
                 openLiveWorkout(true);
+            } else {
+                followRest(SparkyLogic.toInt(plan["re"]));
             }
         } else if ("end".equals(type) || "none".equals(type)) {
             var hadLive = Store.live() != null;
@@ -85,6 +98,51 @@ class PhoneLink {
         WatchUi.requestUpdate();
         // The phone is reachable now; send anything still waiting.
         flush();
+    }
+
+    // A set the phone just marked as a personal record: buzz and say so.
+    private function celebrateNewPrs(known as Array, now as Array) as Void {
+        for (var i = 0; i < now.size(); i++) {
+            if (known.indexOf(now[i]) < 0) {
+                PhoneLink.celebrate(WatchUi.loadResource(Rez.Strings.NewPr) as String);
+                return;
+            }
+        }
+    }
+
+    static function celebrate(text as String) as Void {
+        if (Attention has :vibrate) {
+            Attention.vibrate([new Attention.VibeProfile(100, 150), new Attention.VibeProfile(0, 100),
+                new Attention.VibeProfile(100, 150), new Attention.VibeProfile(0, 100),
+                new Attention.VibeProfile(100, 300)]);
+        }
+        if (WatchUi has :showToast) {
+            WatchUi.showToast(text, null);
+        }
+    }
+
+    // Keeps the watch's rest in step with the phone's: a rest started,
+    // moved or skipped on the phone shows up here.
+    private function followRest(phoneEnd as Number or Null) as Void {
+        var previous = _lastRestEnd;
+        _lastRestEnd = phoneEnd;
+        var view = restView;
+        if (view != null) {
+            if (phoneEnd != null) {
+                view.followPhone(phoneEnd);
+            } else if (previous != null) {
+                // The phone had a rest and ended it (Skip there).
+                view.closeFromPhone();
+            }
+            return;
+        }
+        var session = liveSession;
+        if (phoneEnd != null && phoneEnd != previous && liveViewOpen && session != null
+                && phoneEnd > Time.now().value() + 2) {
+            // A set logged on the phone: rest here as well.
+            var rest = new RestView(session, phoneEnd - Time.now().value());
+            WatchUi.pushView(rest, new RestDelegate(rest), WatchUi.SLIDE_UP);
+        }
     }
 
     // Queues a message for the phone and tries to send it.

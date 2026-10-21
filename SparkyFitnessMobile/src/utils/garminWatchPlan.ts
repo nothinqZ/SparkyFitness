@@ -11,8 +11,9 @@ import type { ActiveWorkoutState } from '../stores/activeWorkoutStore';
 
 /**
  * One set: [setId, targetReps, targetWeightKg, restSeconds, done (0/1),
- * reps, weightKg, type]. Reps/weight are the logged values of a done set;
- * type is a GarminSetType code, null for a normal working set.
+ * reps, weightKg, type, pr (0/1)]. Reps/weight are the logged values of a
+ * done set; type is a GarminSetType code, null for a normal working set; pr
+ * marks a set the phone detected as a personal record.
  */
 export type GarminPlanSet = [
   string,
@@ -23,6 +24,7 @@ export type GarminPlanSet = [
   number | null,
   number | null,
   GarminSetType | null,
+  0 | 1,
 ];
 
 /** Set types the watch shows differently: warm-up, drop set, to failure. */
@@ -37,8 +39,12 @@ const SET_TYPE_CODES: Record<string, GarminSetType> = {
 
 /** One exercise of the plan. */
 export interface GarminPlanExercise {
+  /** Exercise entry id, for sets added on the watch. */
+  e: string;
   n: string;
   s: GarminPlanSet[];
+  /** 1 for a barbell exercise: the watch shows plates per side. */
+  bb?: 1;
   /** Superset group (0 = A, 1 = B, ...) when the exercise is in one. */
   ss?: number;
   /** Last session's sets as [reps, weightKg, type] for "last time" and the overload hint. */
@@ -88,10 +94,44 @@ export interface GarminWatchSetMessage {
 export type GarminWatchMessage =
   | { t: 'hello' }
   | GarminWatchSetMessage
+  | GarminWatchAddMessage
+  | GarminWatchRestMessage
   | { t: 'start'; p: number; at?: number; c: string }
   | { t: 'finish'; sid: string; c: string };
 
-const MESSAGE_TYPES = new Set(['hello', 'set', 'start', 'finish']);
+/** A set logged on the watch beyond the plan: the phone adds and completes it. */
+export interface GarminWatchAddMessage {
+  t: 'add';
+  sid: string;
+  /** Exercise entry id from the plan. */
+  e: string;
+  r?: number | null;
+  w?: number | null;
+  rpe?: number | null;
+  at?: number;
+  c: string;
+}
+
+/**
+ * ±15 s or skip on the watch's rest: the rest's end before (`pre`) and
+ * after (`re`, 0 = skipped), epoch seconds.
+ */
+export interface GarminWatchRestMessage {
+  t: 'rest';
+  sid: string;
+  pre: number;
+  re: number;
+  c: string;
+}
+
+const MESSAGE_TYPES = new Set([
+  'hello',
+  'set',
+  'add',
+  'rest',
+  'start',
+  'finish',
+]);
 
 /** Narrows an incoming SDK message; anything else is ignored by the caller. */
 export function parseGarminWatchMessage(
@@ -123,6 +163,37 @@ export function parseGarminWatchMessage(
         at: finiteOrNull(record.at) ?? undefined,
         c: record.c,
       };
+    case 'add':
+      if (
+        typeof record.sid !== 'string' ||
+        typeof record.e !== 'string' ||
+        typeof record.c !== 'string'
+      ) {
+        return null;
+      }
+      return {
+        t: 'add',
+        sid: record.sid,
+        e: record.e,
+        r: finiteOrNull(record.r),
+        w: finiteOrNull(record.w),
+        rpe: finiteOrNull(record.rpe),
+        at: finiteOrNull(record.at) ?? undefined,
+        c: record.c,
+      };
+    case 'rest': {
+      const pre = finiteOrNull(record.pre);
+      const re = finiteOrNull(record.re);
+      if (
+        typeof record.sid !== 'string' ||
+        pre == null ||
+        re == null ||
+        typeof record.c !== 'string'
+      ) {
+        return null;
+      }
+      return { t: 'rest', sid: record.sid, pre, re, c: record.c };
+    }
     case 'start': {
       const presetId = finiteOrNull(record.p);
       if (presetId == null || typeof record.c !== 'string') return null;
@@ -157,11 +228,24 @@ export function buildGarminPlanMessage(
     ActiveWorkoutState,
     'session' | 'completedSetIds' | 'activeSetId' | 'rest'
   > &
-    Partial<Pick<ActiveWorkoutState, 'previousSessionSets' | 'exerciseConfigs'>>
+    Partial<
+      Pick<
+        ActiveWorkoutState,
+        'previousSessionSets' | 'exerciseConfigs' | 'prSetIds'
+      >
+    >
 ): GarminPlanMessage {
   const exerciseIdByEntry = new Map<string, string>();
+  const barbellEntries = new Set<string>();
   for (const exercise of state.session?.exercises ?? []) {
     exerciseIdByEntry.set(String(exercise.id), String(exercise.exercise_id));
+    if (
+      exercise.exercise_snapshot?.equipment?.some(
+        (item) => item.toLowerCase() === 'barbell'
+      )
+    ) {
+      barbellEntries.add(String(exercise.id));
+    }
   }
   const logged = new Map<
     string,
@@ -181,6 +265,7 @@ export function buildGarminPlanMessage(
     n: plan.workoutName,
     x: plan.exercises.map((exercise) => {
       const entry: GarminPlanExercise = {
+        e: exercise.exerciseEntryId,
         n: exercise.name,
         s: exercise.sets.map((set): GarminPlanSet => {
           const done = state.completedSetIds[set.setId] != null;
@@ -194,9 +279,11 @@ export function buildGarminPlanMessage(
             done ? (values?.reps ?? null) : null,
             done ? (values?.weight ?? null) : null,
             SET_TYPE_CODES[set.setType ?? ''] ?? null,
+            state.prSetIds?.[set.setId] ? 1 : 0,
           ];
         }),
       };
+      if (barbellEntries.has(exercise.exerciseEntryId)) entry.bb = 1;
       if (exercise.supersetRun != null) entry.ss = exercise.supersetRun;
       const exerciseId = exerciseIdByEntry.get(exercise.exerciseEntryId);
       const previous =

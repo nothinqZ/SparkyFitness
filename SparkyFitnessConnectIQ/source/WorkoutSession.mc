@@ -1,5 +1,6 @@
 import Toybox.Lang;
 import Toybox.Time;
+import Toybox.WatchUi;
 
 // The workout in progress. State is a plain Dictionary so it can be written to
 // Application.Storage as-is after every change; this class only wraps it.
@@ -197,6 +198,11 @@ class WorkoutSession {
         if (rpe != null) {
             entry["rpe"] = rpe;
         }
+        // Without the phone the watch only knows last session, so it can say
+        // "stronger than last time", not "record".
+        if (SparkyLogic.beatsLastTime(current()["previous"] as Array or Null, reps, weightKg)) {
+            PhoneLink.celebrate(WatchUi.loadResource(Rez.Strings.BeatLastTime) as String);
+        }
         (current()["logged"] as Array).add(entry);
         // Undo must find this set after the view moved on to the next exercise.
         data["last_ex"] = exerciseIndex();
@@ -266,7 +272,11 @@ class WorkoutSession {
     private function logLiveSet(reps as Number, weightKg as Float, rpe as Float or Null) as Void {
         var next = nextPlannedSet();
         var plan = Store.live();
-        if (next == null || plan == null) {
+        if (plan == null) {
+            return;
+        }
+        if (next == null) {
+            addLiveSet(plan, reps, weightKg, rpe);
             return;
         }
         var setId = next["id"] as String;
@@ -282,6 +292,29 @@ class WorkoutSession {
         if (!getApp().phone.enqueue(message)) {
             Store.setLastError("Watch storage full, set not sent");
         }
+        refresh();
+    }
+
+    // Every planned set is done: ask the phone to add one to this exercise
+    // and complete it. Shown here at once; the phone's plan takes over.
+    private function addLiveSet(plan as Dictionary, reps as Number, weightKg as Float,
+            rpe as Float or Null) as Void {
+        var entry = current()["entry"];
+        if (entry == null) {
+            return;
+        }
+        var message = {
+            "t" => "add", "sid" => data["live"], "e" => entry, "r" => reps, "w" => weightKg,
+            "at" => Time.now().value(), "c" => Store.newUuid()
+        } as Dictionary;
+        if (rpe != null) {
+            message["rpe"] = rpe;
+        }
+        if (!getApp().phone.enqueue(message)) {
+            Store.setLastError("Watch storage full, set not sent");
+            return;
+        }
+        Store.setLive(SparkyLogic.mergePendingAdds(plan, [message]));
         refresh();
     }
 

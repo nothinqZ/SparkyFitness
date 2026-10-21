@@ -14,6 +14,8 @@ import {
   buildGarminPlanMessage,
   parseGarminWatchMessage,
   type GarminPhoneMessage,
+  type GarminWatchAddMessage,
+  type GarminWatchRestMessage,
   type GarminWatchSetMessage,
 } from '../utils/garminWatchPlan';
 import { boundedWatchCompletedAt } from '../utils/watchTelemetryAttribution';
@@ -108,6 +110,74 @@ export async function applyGarminSet(
  * phone's own Finish: save, snapshot the completion screen, clear. A failed
  * save keeps the workout open so the phone's Finish can retry it.
  */
+export async function applyGarminAdd(
+  message: GarminWatchAddMessage
+): Promise<void> {
+  const state = useActiveWorkoutStore.getState();
+  if (state.sessionId !== message.sid) {
+    addLog(
+      `Garmin added set ignored: no matching active session (${message.sid})`,
+      'WARNING'
+    );
+    return;
+  }
+  const before = state.session?.exercises.find(
+    (exercise) => String(exercise.id) === message.e
+  );
+  if (before == null) {
+    addLog(
+      `Garmin added set ignored: unknown exercise ${message.e}`,
+      'WARNING'
+    );
+    return;
+  }
+  state.addSetToExercise(message.e);
+  // The new set is the exercise's last; it has a temporary id until the
+  // save below swaps in the server id, which the store handles.
+  const after = useActiveWorkoutStore
+    .getState()
+    .session?.exercises.find((exercise) => String(exercise.id) === message.e);
+  const added = after?.sets[after.sets.length - 1];
+  if (added == null || after!.sets.length === before.sets.length) return;
+  await applyGarminSet({
+    t: 'set',
+    sid: message.sid,
+    id: String(added.id),
+    r: message.r,
+    w: message.w,
+    rpe: message.rpe,
+    at: message.at,
+    c: message.c,
+  });
+}
+
+/** Tolerance between the watch's and the phone's clocks for "same rest". */
+const SAME_REST_TOLERANCE_S = 3;
+
+/**
+ * Mirrors ±15 s or Skip pressed on the watch onto the phone's rest, like
+ * the Apple Watch bridge: applied only while the phone's rest still ends
+ * where the watch saw it, so a repeated or late message changes nothing.
+ */
+export function applyGarminRest(message: GarminWatchRestMessage): void {
+  const state = useActiveWorkoutStore.getState();
+  const { rest } = state;
+  if (
+    state.sessionId !== message.sid ||
+    rest.state !== 'resting' ||
+    rest.endsAt == null ||
+    Math.abs(rest.endsAt / 1000 - message.pre) > SAME_REST_TOLERANCE_S
+  ) {
+    return;
+  }
+  if (message.re === 0) {
+    state.dismissRest();
+    return;
+  }
+  const deltaSec = Math.round(message.re - rest.endsAt / 1000);
+  if (deltaSec !== 0) state.adjustRest(deltaSec);
+}
+
 export async function finishFromGarmin(
   sessionId: string
 ): Promise<WorkoutCelebration | null | undefined> {
@@ -229,6 +299,14 @@ export function useGarminWatchBridge(
         await applyGarminSet(message);
         return;
       }
+      if (message.t === 'add') {
+        await applyGarminAdd(message);
+        return;
+      }
+      if (message.t === 'rest') {
+        applyGarminRest(message);
+        return;
+      }
       if (message.t === 'start') {
         if (
           message.at != null &&
@@ -275,7 +353,8 @@ export function useGarminWatchBridge(
         state.sessionId === prev.sessionId &&
         state.completedSetIds === prev.completedSetIds &&
         state.activeSetId === prev.activeSetId &&
-        state.rest === prev.rest
+        state.rest === prev.rest &&
+        state.prSetIds === prev.prSetIds
       ) {
         return;
       }

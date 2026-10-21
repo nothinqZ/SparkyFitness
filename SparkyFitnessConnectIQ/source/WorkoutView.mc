@@ -48,6 +48,7 @@ class WorkoutView extends WatchUi.View {
         MainMenu.visible = false;
         if (_session.isLive()) {
             getApp().phone.liveViewOpen = true;
+            getApp().phone.liveSession = _session;
         }
         var timer = new Timer.Timer();
         timer.start(method(:onTick), 1000, true);
@@ -56,6 +57,7 @@ class WorkoutView extends WatchUi.View {
 
     function onHide() as Void {
         getApp().phone.liveViewOpen = false;
+        getApp().phone.liveSession = null;
         var timer = _timer;
         if (timer != null) {
             timer.stop();

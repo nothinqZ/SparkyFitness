@@ -58,10 +58,11 @@ describe('buildGarminPlanMessage', () => {
       n: 'Torso A',
       x: [
         {
+          e: 'entry-1',
           n: 'Brustpresse',
           s: [
-            ['11', 12, 75, 90, 1, 10, 77.5, 'w'],
-            ['12', 8, 100, 120, 0, null, null, null],
+            ['11', 12, 75, 90, 1, 10, 77.5, 'w', 0],
+            ['12', 8, 100, 120, 0, null, null, null, 0],
           ],
         },
       ],
@@ -78,7 +79,17 @@ describe('buildGarminPlanMessage', () => {
       rest: { state: 'paused', endsAt: null } as never,
     });
     expect(message.re).toBeNull();
-    expect(message.x[0]!.s[0]).toEqual(['11', 12, 75, 90, 0, null, null, 'w']);
+    expect(message.x[0]!.s[0]).toEqual([
+      '11',
+      12,
+      75,
+      90,
+      0,
+      null,
+      null,
+      'w',
+      0,
+    ]);
   });
 });
 
@@ -90,8 +101,16 @@ describe('buildGarminPlanMessage extras', () => {
     } as unknown as WatchWorkoutStartPayload;
     const message = buildGarminPlanMessage(superset, {
       session: {
-        exercises: [{ id: 'entry-1', exercise_id: 'ex-9', sets: [] }],
+        exercises: [
+          {
+            id: 'entry-1',
+            exercise_id: 'ex-9',
+            sets: [],
+            exercise_snapshot: { equipment: ['Barbell'] },
+          },
+        ],
       } as never,
+      prSetIds: { '12': true },
       completedSetIds: {},
       activeSetId: null,
       rest: { state: 'ready', endsAt: null } as never,
@@ -105,7 +124,9 @@ describe('buildGarminPlanMessage extras', () => {
         'entry-1': { increment_type: 'weight', increment_value: 5 },
       },
     });
+    expect(message.x[0]!.s[1]![8]).toBe(1);
     expect(message.x[0]).toMatchObject({
+      bb: 1,
       ss: 1,
       p: [
         [12, 60, 'w'],
@@ -160,6 +181,28 @@ describe('parseGarminWatchMessage', () => {
       at: undefined,
       c: 'c2',
     });
+    expect(
+      parseGarminWatchMessage({
+        t: 'add',
+        sid: 's',
+        e: 'entry-1',
+        r: 6,
+        w: 80,
+        c: 'c4',
+      })
+    ).toEqual({
+      t: 'add',
+      sid: 's',
+      e: 'entry-1',
+      r: 6,
+      w: 80,
+      rpe: null,
+      at: undefined,
+      c: 'c4',
+    });
+    expect(
+      parseGarminWatchMessage({ t: 'rest', sid: 's', pre: 100, re: 0, c: 'c5' })
+    ).toEqual({ t: 'rest', sid: 's', pre: 100, re: 0, c: 'c5' });
     expect(parseGarminWatchMessage({ t: 'finish', sid: 's', c: 'c3' })).toEqual(
       {
         t: 'finish',

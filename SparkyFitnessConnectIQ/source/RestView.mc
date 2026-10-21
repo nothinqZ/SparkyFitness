@@ -9,6 +9,8 @@ import Toybox.Time;
 // a short buzz 10 s before the end, a full alert (vibration, and a tone
 // where available) at zero, then it counts into overtime. Shows the heart
 // rate in its zone colour and the next set. SELECT or BACK ends the rest.
+// In a live workout the rest follows the phone's (PhoneLink.followRest) and
+// ±15 s / ending it here are sent to the phone.
 class RestView extends WatchUi.View {
 
     const ADJUST_SECONDS = 15;
@@ -31,15 +33,56 @@ class RestView extends WatchUi.View {
 
     function onShow() as Void {
         _timer.start(method(:tick), 1000, true);
+        getApp().phone.restView = self;
     }
 
     function onHide() as Void {
         _timer.stop();
+        var link = getApp().phone;
+        if (link.restView == self) {
+            link.restView = null;
+        }
+    }
+
+    // The phone's rest ends at `endsAt` (epoch s): adopt it, unless the two
+    // clocks merely disagree by a moment.
+    function followPhone(endsAt as Number) as Void {
+        var delta = endsAt - _endsAt;
+        if (delta > 2 || delta < -2) {
+            _total += delta;
+            if (_total < 1) {
+                _total = 1;
+            }
+            _endsAt = endsAt;
+            if (remaining() > WARN_SECONDS) {
+                _warned = false;
+            }
+            if (remaining() > 0) {
+                _alerted = false;
+            }
+            WatchUi.requestUpdate();
+        }
+    }
+
+    // The phone skipped the rest: leave without telling it again.
+    function closeFromPhone() as Void {
+        _session.markSetStart();
+        WatchUi.popView(WatchUi.SLIDE_DOWN);
+    }
+
+    // Tells the phone about a change made here (0 = rest ended).
+    private function sendToPhone(previousEnd as Number, newEnd as Number) as Void {
+        if (!_session.isLive()) {
+            return;
+        }
+        getApp().phone.enqueue({ "t" => "rest", "sid" => _session.data["live"], "pre" => previousEnd,
+            "re" => newEnd, "c" => Store.newUuid() });
     }
 
     // +15 s / -15 s; never below zero remaining.
     function adjust(direction as Number) as Void {
         var now = Time.now().value();
+        var previousEnd = _endsAt;
         _endsAt += direction * ADJUST_SECONDS;
         if (_endsAt < now) {
             _endsAt = now;
@@ -55,10 +98,14 @@ class RestView extends WatchUi.View {
         if (remaining() > 0) {
             _alerted = false;
         }
+        sendToPhone(previousEnd, _endsAt);
         WatchUi.requestUpdate();
     }
 
     function finish() as Void {
+        if (remaining() > 0) {
+            sendToPhone(_endsAt, 0);
+        }
         _session.markSetStart();
         WatchUi.popView(WatchUi.SLIDE_DOWN);
     }

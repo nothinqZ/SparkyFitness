@@ -256,3 +256,32 @@ function testWorkoutStats(logger as Logger) as Boolean {
     Test.assertEqual(SparkyLogic.formatVolume(850.0, "kg"), "850 kg");
     return true;
 }
+
+(:test)
+function testPrPlatesAndAdds(logger as Logger) as Boolean {
+    var plan = { "sid" => "s", "n" => "A", "a" => null, "x" => [
+        { "e" => "entry-1", "n" => "Bench", "bb" => 1,
+          "s" => [["1", 8, 100, 90, 1, 8, 100, null, 1], ["2", 8, 100, 90, 0, null, null, null, 0]] }] };
+    var ids = SparkyLogic.prSetIds(plan);
+    Test.assertEqual(ids.size(), 1);
+    Test.assertEqual(ids[0], "1");
+
+    SparkyLogic.mergePendingAdds(plan, [{ "e" => "entry-1", "r" => 6, "w" => 80.0, "c" => "x" }]);
+    var ex = (SparkyLogic.sessionFromLive(plan, null)["exercises"] as Array)[0] as Dictionary;
+    Test.assertEqual((ex["planned"] as Array).size(), 3);
+    Test.assertEqual((ex["logged"] as Array).size(), 2);
+    Test.assert(ex["barbell"] == true);
+    Test.assertEqual(ex["entry"], "entry-1");
+
+    var previous = [{ "reps" => 12, "weight" => 60.0, "type" => "w" }, { "reps" => 8, "weight" => 100.0 }];
+    Test.assert(SparkyLogic.beatsLastTime(previous, 8, 102.5));
+    Test.assert(SparkyLogic.beatsLastTime(previous, 9, 100.0));
+    Test.assert(!SparkyLogic.beatsLastTime(previous, 8, 100.0));
+    Test.assert(!SparkyLogic.beatsLastTime(null, 8, 200.0));
+
+    // 100 kg: 20 kg bar, 40 kg per side.
+    Test.assertEqual(SparkyLogic.formatPlates(SparkyLogic.platesPerSide(100.0, "kg")), "25 + 15");
+    Test.assertEqual(SparkyLogic.formatPlates(SparkyLogic.platesPerSide(62.5, "kg")), "20 + 1.25");
+    Test.assertEqual(SparkyLogic.platesPerSide(20.0, "kg").size(), 0);
+    return true;
+}
