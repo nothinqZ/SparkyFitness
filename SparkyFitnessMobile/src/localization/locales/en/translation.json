@@ -8287,6 +8287,9 @@
       "hrv": "HRV",
       "sleep": "Sleep (average)",
       "bodyBattery": "Body Battery",
+      "deviceSummary": "From your Garmin today",
+      "dataDate": "Latest watch data: {{date}}",
+      "noDeviceData": "No watch data for this period yet.",
       "bodyBatteryLow": "low {{value}}",
       "stress": "Stress",
       "average": "average",
@@ -8325,6 +8328,9 @@
       "device": "Device"
     },
     "sections": {
+      "training": "Training",
+      "recoveryShort": "Recovery",
+      "analysis": "Analysis",
       "recovery": "Sleep & recovery",
       "running": "Running",
       "body": "Body"

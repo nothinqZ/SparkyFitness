@@ -163,24 +163,32 @@ describe('PerformanceScreen', () => {
     });
   });
 
-  it('shows readiness, recovery, running and watch status', () => {
+  it('separates today, training, recovery and analysis', () => {
     const screen = render(<PerformanceScreen {...props} />);
     expect(screen.getByText('33')).toBeTruthy();
     expect(screen.getByText('64')).toBeTruthy();
     expect(screen.getByText('1.60 · Very high (> 1.5)')).toBeTruthy();
-    expect(screen.getByText('45 ms · Below baseline')).toBeTruthy();
-    expect(screen.getByText('58 bpm · Above baseline')).toBeTruthy();
+    expect(screen.getByText('Body Battery')).toBeTruthy();
+    expect(screen.queryByText('25.0 km · 4×')).toBeNull();
+
+    fireEvent.press(screen.getByText('Training'));
     expect(screen.getByText('25.0 km · 4×')).toBeTruthy();
     expect(screen.getByText('5:02 /km')).toBeTruthy();
-    expect(screen.getByText('3:20:00  ·  ~3:50:01')).toBeTruthy();
     expect(screen.getByText('116.7 kg')).toBeTruthy();
-    expect(screen.getByText('-0.70 kg/wk')).toBeTruthy();
-    expect(screen.getByText('5')).toBeTruthy();
     expect(screen.getByText('fenix7')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('Recovery'));
+    expect(screen.getByText('45 ms · Below baseline')).toBeTruthy();
+    expect(screen.getByText('58 bpm · Above baseline')).toBeTruthy();
+    expect(screen.getByText('-0.70 kg/wk')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('Analysis'));
+    expect(screen.getByText('3:20:00  ·  ~3:50:01')).toBeTruthy();
   });
 
   it('requests the chosen range', () => {
     const screen = render(<PerformanceScreen {...props} />);
+    fireEvent.press(screen.getByText('Training'));
     fireEvent.press(screen.getByText('180d'));
     expect(usePerformanceOverview).toHaveBeenLastCalledWith(180);
   });
@@ -196,6 +204,7 @@ describe('PerformanceScreen', () => {
       .mocked(useWatchSyncStatus)
       .mockReturnValue({ data: undefined, isError: false });
     const screen = render(<PerformanceScreen {...props} />);
+    fireEvent.press(screen.getByText('Training'));
     expect(
       screen.getByText(
         'Pair the watch in SparkyFitness web: Settings > Garmin watch.'

@@ -20,6 +20,7 @@ import StatusView from '../components/StatusView';
 import CompareCard from '../components/CompareCard';
 import { weightFromKg } from '../utils/unitConversions';
 import { getAppLocale } from '../localization';
+import { formatLocalizedDate } from '../utils/insightDates';
 import {
   acwrTone,
   averagePace,
@@ -33,6 +34,7 @@ import type { RootStackScreenProps } from '../types/navigation';
 
 type PerformanceScreenProps = RootStackScreenProps<'Performance'>;
 type Range = '30' | '90' | '180';
+type Section = 'today' | 'training' | 'recovery' | 'analysis';
 
 const TONE_CLASS: Record<Tone, string> = {
   good: 'text-text-success',
@@ -104,6 +106,7 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = ({
   const activeWorkoutBarPadding = useActiveWorkoutBarPadding('stack');
   const usesNativeHeader = useNativeIOSHeadersActive();
   const [range, setRange] = useState<Range>('90');
+  const [section, setSection] = useState<Section>('today');
   const header = useScreenHeader({
     title: t('performance.title', { defaultValue: 'Performance' }),
     left: { kind: 'back' },
@@ -159,134 +162,214 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = ({
     ] as const;
     return (
       <>
-        <Card
-          title={t('performance.kpi.readiness', { defaultValue: 'Readiness' })}
-          provenance={['estimated', 'device']}
-        >
-          <Row
-            label={t('performance.provenance.estimated', {
-              defaultValue: 'Estimated',
-            })}
-            value={
-              d.recovery.readiness.estimated
-                ? String(d.recovery.readiness.estimated.score)
-                : '–'
-            }
-          />
-          <Row
-            label={t('performance.readiness.garmin', {
-              defaultValue: 'Garmin',
-            })}
-            value={
-              d.recovery.readiness.device !== null
-                ? String(d.recovery.readiness.device)
-                : '–'
-            }
-          />
-          <Row
-            label={t('performance.kpi.acwr', {
-              defaultValue: 'Load ratio (ACWR)',
-            })}
-            value={
-              d.load.current
-                ? `${d.load.current.ratio.toFixed(2)} · ${zoneText(d.load.current.zone)}`
-                : '–'
-            }
-            tone={acwrTone(d.load.current?.zone)}
-            last
-          />
-        </Card>
+        {section === 'today' && (
+          <>
+            <Card
+              title={t('performance.kpi.readiness', {
+                defaultValue: 'Readiness',
+              })}
+              provenance={['estimated', 'device']}
+            >
+              <Row
+                label={t('performance.provenance.estimated', {
+                  defaultValue: 'Estimated',
+                })}
+                value={
+                  d.recovery.readiness.estimated
+                    ? String(d.recovery.readiness.estimated.score)
+                    : '–'
+                }
+              />
+              <Row
+                label={t('performance.readiness.garmin', {
+                  defaultValue: 'Garmin',
+                })}
+                value={
+                  d.recovery.readiness.device !== null
+                    ? String(d.recovery.readiness.device)
+                    : '–'
+                }
+              />
+              <Row
+                label={t('performance.kpi.acwr', {
+                  defaultValue: 'Load ratio (ACWR)',
+                })}
+                value={
+                  d.load.current
+                    ? `${d.load.current.ratio.toFixed(2)} · ${zoneText(d.load.current.zone)}`
+                    : '–'
+                }
+                tone={acwrTone(d.load.current?.zone)}
+                last
+              />
+            </Card>
 
-        <Card
-          title={t('performance.sections.recovery', {
-            defaultValue: 'Sleep & recovery',
-          })}
-          provenance={['measured']}
-        >
-          <Row
-            label="HRV"
-            value={
-              d.recovery.hrv.status.recent !== null
-                ? `${d.recovery.hrv.status.recent} ms · ${baselineText(d.recovery.hrv.status.status)}`
-                : baselineText(d.recovery.hrv.status.status)
-            }
-            tone={baselineTone(d.recovery.hrv.status.status, true)}
-          />
-          <Row
-            label={t('performance.restingHrShort', {
-              defaultValue: 'Resting HR',
-            })}
-            value={
-              d.recovery.restingHr.status.recent !== null
-                ? `${d.recovery.restingHr.status.recent} bpm · ${baselineText(d.recovery.restingHr.status.status)}`
-                : baselineText(d.recovery.restingHr.status.status)
-            }
-            tone={baselineTone(d.recovery.restingHr.status.status, false)}
-          />
-          <Row
-            label={t('performance.kpi.sleep', { defaultValue: 'Sleep (avg)' })}
-            value={
-              d.recovery.sleep.avgSleepHours !== null
-                ? `${d.recovery.sleep.avgSleepHours.toFixed(1)} h`
-                : '–'
-            }
-          />
-          <Row
-            label={t('performance.bedtimeSpreadLabel', {
-              defaultValue: 'Bedtime spread',
-            })}
-            value={
-              d.recovery.sleep.bedtimeStdDevMinutes !== null
-                ? `±${d.recovery.sleep.bedtimeStdDevMinutes} min`
-                : '–'
-            }
-            last
-          />
-        </Card>
+            <Card
+              title={t('performance.today.deviceSummary', {
+                defaultValue: 'From your Garmin today',
+              })}
+              provenance={['device']}
+            >
+              <Text className="text-text-muted text-xs mb-2">
+                {d.today
+                  ? t('performance.today.dataDate', {
+                      defaultValue: 'Latest watch data: {{date}}',
+                      date: formatLocalizedDate(d.today.date),
+                    })
+                  : t('performance.today.noDeviceData', {
+                      defaultValue: 'No watch data for this period yet.',
+                    })}
+              </Text>
+              <Row
+                label={t('performance.today.bodyBattery', {
+                  defaultValue: 'Body Battery',
+                })}
+                value={
+                  d.today?.bodyBatteryHighest !== null &&
+                  d.today?.bodyBatteryHighest !== undefined
+                    ? String(d.today.bodyBatteryHighest)
+                    : '–'
+                }
+              />
+              <Row
+                label={t('performance.today.stress', {
+                  defaultValue: 'Stress',
+                })}
+                value={
+                  d.today?.avgStress !== null &&
+                  d.today?.avgStress !== undefined
+                    ? String(Math.round(d.today.avgStress))
+                    : '–'
+                }
+              />
+              <Row
+                label={t('performance.today.steps', { defaultValue: 'Steps' })}
+                value={
+                  d.today?.steps !== null && d.today?.steps !== undefined
+                    ? String(d.today.steps)
+                    : '–'
+                }
+              />
+              <Row
+                label={t('performance.today.recovery', {
+                  defaultValue: 'Recovery',
+                })}
+                value={
+                  d.today?.recoveryTimeHours !== null &&
+                  d.today?.recoveryTimeHours !== undefined
+                    ? `${d.today.recoveryTimeHours} h`
+                    : '–'
+                }
+                last
+              />
+            </Card>
+          </>
+        )}
 
-        <Card
-          title={t('performance.sections.running', { defaultValue: 'Running' })}
-          provenance={['measured', 'device']}
-        >
-          <Row
-            label={t('performance.kpi.distance', {
-              defaultValue: 'Running distance',
+        {section === 'recovery' && (
+          <Card
+            title={t('performance.sections.recovery', {
+              defaultValue: 'Sleep & recovery',
             })}
-            value={`${distanceFromKm(d.running.totals.distanceKm, distUnit).toFixed(1)} ${distUnit === 'miles' ? 'mi' : 'km'} · ${d.running.totals.runs}×`}
-          />
-          <Row
-            label={t('performance.kpi.pace', { defaultValue: 'Average pace' })}
-            value={formatPacePerUnit(averagePace(d.running.totals), distUnit)}
-          />
-          <Row
-            label={t('performance.kpi.vo2max', { defaultValue: 'VO2max' })}
-            value={vo2 ? vo2.value.toFixed(1) : '–'}
-            last
-          />
-        </Card>
-
-        <Card
-          title={t('performance.racePredictions', {
-            defaultValue: 'Race predictions',
-          })}
-          provenance={['device', 'estimated']}
-        >
-          {races.map(([key, label], i) => (
+            provenance={['measured']}
+          >
             <Row
-              key={key}
-              label={label}
-              value={`${formatDurationSeconds(d.running.predictions.device?.[key])}  ·  ~${formatDurationSeconds(d.running.predictions.estimated[key])}`}
-              last={i === races.length - 1}
+              label="HRV"
+              value={
+                d.recovery.hrv.status.recent !== null
+                  ? `${d.recovery.hrv.status.recent} ms · ${baselineText(d.recovery.hrv.status.status)}`
+                  : baselineText(d.recovery.hrv.status.status)
+              }
+              tone={baselineTone(d.recovery.hrv.status.status, true)}
             />
-          ))}
-          <Text className="text-text-muted text-xs mt-2">
-            {t('performance.raceLegend', {
-              defaultValue: 'Garmin · ~Estimate (Riegel, best run ≥ 3 km)',
-            })}
-          </Text>
-        </Card>
+            <Row
+              label={t('performance.restingHrShort', {
+                defaultValue: 'Resting HR',
+              })}
+              value={
+                d.recovery.restingHr.status.recent !== null
+                  ? `${d.recovery.restingHr.status.recent} bpm · ${baselineText(d.recovery.restingHr.status.status)}`
+                  : baselineText(d.recovery.restingHr.status.status)
+              }
+              tone={baselineTone(d.recovery.restingHr.status.status, false)}
+            />
+            <Row
+              label={t('performance.kpi.sleep', {
+                defaultValue: 'Sleep (avg)',
+              })}
+              value={
+                d.recovery.sleep.avgSleepHours !== null
+                  ? `${d.recovery.sleep.avgSleepHours.toFixed(1)} h`
+                  : '–'
+              }
+            />
+            <Row
+              label={t('performance.bedtimeSpreadLabel', {
+                defaultValue: 'Bedtime spread',
+              })}
+              value={
+                d.recovery.sleep.bedtimeStdDevMinutes !== null
+                  ? `±${d.recovery.sleep.bedtimeStdDevMinutes} min`
+                  : '–'
+              }
+              last
+            />
+          </Card>
+        )}
 
-        {d.strength.topLifts.length > 0 && (
+        {section === 'training' && (
+          <Card
+            title={t('performance.sections.running', {
+              defaultValue: 'Running',
+            })}
+            provenance={['measured', 'device']}
+          >
+            <Row
+              label={t('performance.kpi.distance', {
+                defaultValue: 'Running distance',
+              })}
+              value={`${distanceFromKm(d.running.totals.distanceKm, distUnit).toFixed(1)} ${distUnit === 'miles' ? 'mi' : 'km'} · ${d.running.totals.runs}×`}
+            />
+            <Row
+              label={t('performance.kpi.pace', {
+                defaultValue: 'Average pace',
+              })}
+              value={formatPacePerUnit(averagePace(d.running.totals), distUnit)}
+            />
+            <Row
+              label={t('performance.kpi.vo2max', { defaultValue: 'VO2max' })}
+              value={vo2 ? vo2.value.toFixed(1) : '–'}
+              last
+            />
+          </Card>
+        )}
+
+        {section === 'analysis' && <CompareCard overview={d} />}
+
+        {section === 'analysis' && (
+          <Card
+            title={t('performance.racePredictions', {
+              defaultValue: 'Race predictions',
+            })}
+            provenance={['device', 'estimated']}
+          >
+            {races.map(([key, label], i) => (
+              <Row
+                key={key}
+                label={label}
+                value={`${formatDurationSeconds(d.running.predictions.device?.[key])}  ·  ~${formatDurationSeconds(d.running.predictions.estimated[key])}`}
+                last={i === races.length - 1}
+              />
+            ))}
+            <Text className="text-text-muted text-xs mt-2">
+              {t('performance.raceLegend', {
+                defaultValue: 'Garmin · ~Estimate (Riegel, best run ≥ 3 km)',
+              })}
+            </Text>
+          </Card>
+        )}
+
+        {section === 'training' && d.strength.topLifts.length > 0 && (
           <Card
             title={t('performance.topLifts', {
               defaultValue: 'Estimated 1RM by lift',
@@ -304,44 +387,44 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = ({
           </Card>
         )}
 
-        <CompareCard overview={d} />
-
-        <Card
-          title={t('performance.sections.body', { defaultValue: 'Body' })}
-          provenance={['estimated']}
-        >
-          <Row
-            label={t('performance.kpi.weightTrend', {
-              defaultValue: 'Weight trend',
-            })}
-            value={
-              d.body.trendKgPerWeek !== null
-                ? `${d.body.trendKgPerWeek > 0 ? '+' : ''}${weightFromKg(d.body.trendKgPerWeek, weightUnit).toFixed(2)} ${weightUnit}/${t('performance.weekShort', { defaultValue: 'wk' })}`
-                : '–'
-            }
-          />
-          <Row
-            label={t('performance.calories', {
-              defaultValue: 'Calories (kcal)',
-            })}
-            value={
-              d.nutrition.averages.calories !== null
-                ? String(Math.round(d.nutrition.averages.calories))
-                : '–'
-            }
-          />
-          <Row
-            label={t('performance.proteinTitle', {
-              defaultValue: 'Protein (g)',
-            })}
-            value={
-              d.nutrition.averages.protein !== null
-                ? String(Math.round(d.nutrition.averages.protein))
-                : '–'
-            }
-            last
-          />
-        </Card>
+        {section === 'recovery' && (
+          <Card
+            title={t('performance.sections.body', { defaultValue: 'Body' })}
+            provenance={['estimated']}
+          >
+            <Row
+              label={t('performance.kpi.weightTrend', {
+                defaultValue: 'Weight trend',
+              })}
+              value={
+                d.body.trendKgPerWeek !== null
+                  ? `${d.body.trendKgPerWeek > 0 ? '+' : ''}${weightFromKg(d.body.trendKgPerWeek, weightUnit).toFixed(2)} ${weightUnit}/${t('performance.weekShort', { defaultValue: 'wk' })}`
+                  : '–'
+              }
+            />
+            <Row
+              label={t('performance.calories', {
+                defaultValue: 'Calories (kcal)',
+              })}
+              value={
+                d.nutrition.averages.calories !== null
+                  ? String(Math.round(d.nutrition.averages.calories))
+                  : '–'
+              }
+            />
+            <Row
+              label={t('performance.proteinTitle', {
+                defaultValue: 'Protein (g)',
+              })}
+              value={
+                d.nutrition.averages.protein !== null
+                  ? String(Math.round(d.nutrition.averages.protein))
+                  : '–'
+              }
+              last
+            />
+          </Card>
+        )}
       </>
     );
   };
@@ -363,38 +446,72 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = ({
         <View className="mb-4">
           <SegmentedControl
             segments={[
-              { key: '30', label: t('ranges.30d', { defaultValue: '30d' }) },
-              { key: '90', label: t('ranges.90d', { defaultValue: '90d' }) },
               {
-                key: '180',
-                label: t('performance.range180', { defaultValue: '180d' }),
+                key: 'today',
+                label: t('insights.tabs.today', { defaultValue: 'Today' }),
+              },
+              {
+                key: 'training',
+                label: t('performance.sections.training', {
+                  defaultValue: 'Training',
+                }),
+              },
+              {
+                key: 'recovery',
+                label: t('performance.sections.recoveryShort', {
+                  defaultValue: 'Recovery',
+                }),
+              },
+              {
+                key: 'analysis',
+                label: t('performance.sections.analysis', {
+                  defaultValue: 'Analysis',
+                }),
               },
             ]}
-            activeKey={range}
-            onSelect={setRange}
+            activeKey={section}
+            onSelect={setSection}
           />
         </View>
-        <TouchableOpacity
-          testID="performance-open-insights"
-          accessibilityRole="button"
-          onPress={() => navigation.navigate('Insights')}
-          className="bg-surface rounded-xl p-4 mb-4 shadow-sm flex-row justify-between items-center"
-          activeOpacity={0.7}
-        >
-          <View className="flex-1">
-            <Text className="text-text-primary text-base font-bold">
-              {t('insights.entry.title', {
-                defaultValue: 'Insights & reports',
-              })}
-            </Text>
-            <Text className="text-text-secondary text-sm">
-              {t('insights.entry.subtitle', {
-                defaultValue: 'Today, last week and last month at a glance',
-              })}
-            </Text>
+        {section !== 'today' && (
+          <View className="mb-4">
+            <SegmentedControl
+              segments={[
+                { key: '30', label: t('ranges.30d', { defaultValue: '30d' }) },
+                { key: '90', label: t('ranges.90d', { defaultValue: '90d' }) },
+                {
+                  key: '180',
+                  label: t('performance.range180', { defaultValue: '180d' }),
+                },
+              ]}
+              activeKey={range}
+              onSelect={setRange}
+            />
           </View>
-          <Text className="text-text-muted text-lg">›</Text>
-        </TouchableOpacity>
+        )}
+        {(section === 'today' || section === 'analysis') && (
+          <TouchableOpacity
+            testID="performance-open-insights"
+            accessibilityRole="button"
+            onPress={() => navigation.navigate('Insights')}
+            className="bg-surface rounded-xl p-4 mb-4 shadow-sm flex-row justify-between items-center"
+            activeOpacity={0.7}
+          >
+            <View className="flex-1">
+              <Text className="text-text-primary text-base font-bold">
+                {t('insights.entry.title', {
+                  defaultValue: 'Insights & reports',
+                })}
+              </Text>
+              <Text className="text-text-secondary text-sm">
+                {t('insights.entry.subtitle', {
+                  defaultValue: 'Today, last week and last month at a glance',
+                })}
+              </Text>
+            </View>
+            <Text className="text-text-muted text-lg">›</Text>
+          </TouchableOpacity>
+        )}
         {isLoading ? (
           <StatusView inline loading />
         ) : data ? (
@@ -413,61 +530,63 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = ({
           />
         )}
 
-        <Card
-          title={t('performance.watchTitle', {
-            defaultValue: 'Garmin watch (Sparky Strength)',
-          })}
-        >
-          {watch.data ? (
-            <>
-              <Row
-                label={t('performance.watchUploads', {
-                  defaultValue: 'Workouts uploaded',
-                })}
-                value={String(watch.data.sessions_total)}
-              />
-              <Row
-                label={t('performance.watchLinked', {
-                  defaultValue: 'Linked to Garmin activities',
-                })}
-                value={String(watch.data.sessions_linked_to_garmin)}
-              />
-              <Row
-                label={t('performance.watchLastUpload', {
-                  defaultValue: 'Last upload',
-                })}
-                value={
-                  watch.data.last_upload_at
-                    ? new Date(watch.data.last_upload_at).toLocaleString(
-                        getAppLocale(),
-                        { dateStyle: 'medium', timeStyle: 'short' }
-                      )
-                    : '–'
-                }
-                last={watch.data.devices.length === 0}
-              />
-              {watch.data.devices.map((device, i) => (
+        {section === 'training' && (
+          <Card
+            title={t('performance.watchTitle', {
+              defaultValue: 'Garmin watch (Sparky Strength)',
+            })}
+          >
+            {watch.data ? (
+              <>
                 <Row
-                  key={device.device_id}
-                  label={device.device_model ?? device.device_id.slice(0, 8)}
-                  value={device.app_version ? `v${device.app_version}` : ''}
-                  last={i === watch.data!.devices.length - 1}
-                />
-              ))}
-            </>
-          ) : (
-            <Text className="text-text-secondary text-sm">
-              {watch.isError
-                ? t('performance.watchUnavailable', {
-                    defaultValue: 'Watch status unavailable on this server.',
-                  })
-                : t('performance.watchNone', {
-                    defaultValue:
-                      'Pair the watch in SparkyFitness web: Settings > Garmin watch.',
+                  label={t('performance.watchUploads', {
+                    defaultValue: 'Workouts uploaded',
                   })}
-            </Text>
-          )}
-        </Card>
+                  value={String(watch.data.sessions_total)}
+                />
+                <Row
+                  label={t('performance.watchLinked', {
+                    defaultValue: 'Linked to Garmin activities',
+                  })}
+                  value={String(watch.data.sessions_linked_to_garmin)}
+                />
+                <Row
+                  label={t('performance.watchLastUpload', {
+                    defaultValue: 'Last upload',
+                  })}
+                  value={
+                    watch.data.last_upload_at
+                      ? new Date(watch.data.last_upload_at).toLocaleString(
+                          getAppLocale(),
+                          { dateStyle: 'medium', timeStyle: 'short' }
+                        )
+                      : '–'
+                  }
+                  last={watch.data.devices.length === 0}
+                />
+                {watch.data.devices.map((device, i) => (
+                  <Row
+                    key={device.device_id}
+                    label={device.device_model ?? device.device_id.slice(0, 8)}
+                    value={device.app_version ? `v${device.app_version}` : ''}
+                    last={i === watch.data!.devices.length - 1}
+                  />
+                ))}
+              </>
+            ) : (
+              <Text className="text-text-secondary text-sm">
+                {watch.isError
+                  ? t('performance.watchUnavailable', {
+                      defaultValue: 'Watch status unavailable on this server.',
+                    })
+                  : t('performance.watchNone', {
+                      defaultValue:
+                        'Pair the watch in SparkyFitness web: Settings > Garmin watch.',
+                    })}
+              </Text>
+            )}
+          </Card>
+        )}
       </ScrollView>
     </View>
   );
