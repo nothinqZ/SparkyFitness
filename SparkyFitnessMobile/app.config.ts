@@ -169,7 +169,12 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
     ...config,
     name: APP_NAME,
     slug: APP_SLUG,
-    version: packageJson.version,
+    // SideStore compares the version string only: a higher build number alone
+    // does not offer an update. Sideload tag builds therefore carry the tag
+    // suffix as a fourth component (sideload-v1.9.0-3 -> 1.9.0.3), set in CI
+    // only, so package.json stays on the upstream release-please version.
+    version:
+      (isSideload && process.env.IOS_SIDELOAD_VERSION) || packageJson.version,
     locales: Object.fromEntries(
       nativeLanguageTags().map((language) => [
         language,
@@ -178,8 +183,7 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
     ),
     ios: {
       bundleIdentifier: iosBundleIdentifier,
-      // CFBundleVersion. SideStore offers an update only when version or build
-      // increases, so CI passes its run number for sideload builds.
+      // CFBundleVersion: CI passes its run number for sideload builds.
       ...(isSideload && process.env.IOS_BUILD_NUMBER
         ? { buildNumber: process.env.IOS_BUILD_NUMBER }
         : {}),

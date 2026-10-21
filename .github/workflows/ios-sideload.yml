@@ -90,8 +90,20 @@ jobs:
           IOS_SIDELOAD_BUNDLE_IDENTIFIER: ${{ env.BUNDLE_ID }}
           IOS_BUILD_NUMBER: ${{ github.run_number }}
           SIDELOAD_STRIP_HEALTHKIT_BACKGROUND: ${{ inputs.strip_healthkit_background && '1' || '' }}
-        # Runs `pod install` itself.
-        run: npx expo prebuild --platform ios --clean
+        # Runs `pod install` itself. Tag builds get the tag as version
+        # (sideload-v1.9.0-3 -> 1.9.0.3): SideStore offers an update only when
+        # the version string changes, a higher build number is not enough.
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/sideload-v* ]]; then
+            v="${GITHUB_REF_NAME#sideload-v}"
+            if [[ ! "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
+              echo "::error::tag must look like sideload-v1.9.0-3"
+              exit 1
+            fi
+            export IOS_SIDELOAD_VERSION="${v/-/.}"
+            echo "version $IOS_SIDELOAD_VERSION"
+          fi
+          npx expo prebuild --platform ios --clean
 
       - name: Check generated project
         working-directory: SparkyFitnessMobile
