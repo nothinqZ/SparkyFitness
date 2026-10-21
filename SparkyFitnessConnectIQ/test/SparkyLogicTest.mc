@@ -178,6 +178,16 @@ function testLivePlan(logger as Logger) as Boolean {
     var row = ((fresh["x"] as Array)[0] as Dictionary)["s"] as Array;
     Test.assertEqual((row[0] as Array)[4], 1);
     Test.assertEqual((row[0] as Array)[6], 62.5);
+    // Numbers from the phone are floats; reps must come out whole.
+    var floats = { "sid" => "s2", "n" => "W", "a" => null,
+        "x" => [{ "n" => "Press", "s" => [["31", 8.0, 100, 90.0, 1, 7.0, 97.5]] }] };
+    var press = (SparkyLogic.sessionFromLive(floats, null)["exercises"] as Array)[0] as Dictionary;
+    var target = (press["planned"] as Array)[0] as Dictionary;
+    Test.assertEqual(target["reps"], 8);
+    Test.assertEqual(target["reps"].toString(), "8");
+    Test.assertEqual(target["rest_time"], 90);
+    Test.assertEqual(((press["logged"] as Array)[0] as Dictionary)["reps"].toString(), "7");
+    Test.assertEqual(SparkyLogic.toInt(null), null);
     // Kept exercise index survives a refresh.
     Test.assertEqual(SparkyLogic.sessionFromLive(plan, 1)["ex_idx"], 1);
     return true;

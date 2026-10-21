@@ -308,10 +308,10 @@ module SparkyLogic {
             for (var j = 0; j < sets.size(); j++) {
                 var set = sets[j] as Array;
                 var done = set[4] == 1;
-                planned.add({ "id" => set[0], "reps" => set[1], "weight" => set[2],
-                    "rest_time" => set[3], "done" => done });
+                planned.add({ "id" => set[0], "reps" => toInt(set[1]),
+                    "weight" => toFloatOrNull(set[2]), "rest_time" => toInt(set[3]), "done" => done });
                 if (done) {
-                    logged.add({ "reps" => set[5], "weight" => set[6] });
+                    logged.add({ "reps" => toInt(set[5]), "weight" => toFloatOrNull(set[6]) });
                 } else if (firstOpen == null) {
                     firstOpen = i;
                 }
@@ -328,6 +328,28 @@ module SparkyLogic {
         }
         return { "live" => plan["sid"], "name" => plan["n"], "ex_idx" => idx,
             "exercises" => exercises };
+    }
+
+    // Whole number from any numeric value, or null. Numbers from the phone
+    // arrive as floats (JavaScript has no integers), and an 8.0 printed as is
+    // shows up on the watch as "8.000000".
+    function toInt(value) as Number or Null {
+        if (value instanceof Number) {
+            return value as Number;
+        }
+        if (value instanceof Float || value instanceof Double || value instanceof Long) {
+            return Math.round(value).toNumber();
+        }
+        return null;
+    }
+
+    // Float from any numeric value, or null.
+    function toFloatOrNull(value) as Float or Null {
+        if (value instanceof Number || value instanceof Float || value instanceof Double
+                || value instanceof Long) {
+            return value.toFloat();
+        }
+        return null;
     }
 
     // Seconds as "m:ss".

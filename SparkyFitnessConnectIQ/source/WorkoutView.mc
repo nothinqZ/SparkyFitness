@@ -33,65 +33,108 @@ class WorkoutView extends WatchUi.View {
         _session.refresh();
         var w = dc.getWidth();
         var h = dc.getHeight();
+        var cx = w / 2;
         var unit = Store.weightUnit();
         var ex = _session.current();
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
         dc.clear();
 
+        drawSetRing(dc, w, h);
+
+        // Exercise counter, and a green dot while the phone is connected.
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, h * 0.10, Graphics.FONT_XTINY,
+        dc.drawText(cx, h * 0.11, Graphics.FONT_XTINY,
             (_session.exerciseIndex() + 1) + "/" + _session.exerciseCount(),
             Graphics.TEXT_JUSTIFY_CENTER);
+        if (_session.isLive()) {
+            dc.setColor(PhoneLink.phoneConnected() ? Graphics.COLOR_GREEN : Graphics.COLOR_DK_GRAY,
+                Graphics.COLOR_TRANSPARENT);
+            dc.fillCircle(cx + dc.getTextWidthInPixels("00/00", Graphics.FONT_XTINY) / 2 + 10,
+                (h * 0.11 + dc.getFontHeight(Graphics.FONT_XTINY) / 2).toNumber(), 5);
+        }
 
+        var name = ex["name"] as String;
+        var nameFont = name.length() > 16 ? Graphics.FONT_TINY : Graphics.FONT_SMALL;
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, h * 0.20, Graphics.FONT_SMALL, ex["name"] as String,
-            Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx, h * 0.21, nameFont, name, Graphics.TEXT_JUSTIFY_CENTER);
 
         var logged = _session.loggedCount();
         var planned = _session.plannedCount();
+        if (_session.isExerciseComplete()) {
+            dc.setColor(Graphics.COLOR_GREEN, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.48, Graphics.FONT_MEDIUM,
+                WatchUi.loadResource(Rez.Strings.Done) as String,
+                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            return;
+        }
+
         var setLabel = WatchUi.loadResource(Rez.Strings.Set) as String;
         var progress = planned > 0
-            ? setLabel + " " + (logged < planned ? logged + 1 : planned) + "/" + planned
+            ? setLabel + " " + (logged + 1) + "/" + planned
             : setLabel + " " + (logged + 1);
-        if (_session.isExerciseComplete()) {
-            progress = WatchUi.loadResource(Rez.Strings.Done) as String;
-            dc.setColor(Graphics.COLOR_GREEN, Graphics.COLOR_TRANSPARENT);
-        } else {
-            dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
-        }
-        dc.drawText(w / 2, h * 0.36, Graphics.FONT_MEDIUM, progress, Graphics.TEXT_JUSTIFY_CENTER);
+        dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.34, Graphics.FONT_TINY, progress, Graphics.TEXT_JUSTIFY_CENTER);
 
+        // The target for the next set, large: "8 x 100 kg".
         var plan = _session.nextPlannedSet();
         if (plan != null) {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(w / 2, h * 0.52, Graphics.FONT_SMALL, describeSet(plan, unit),
-                Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(cx, h * 0.53, Graphics.FONT_LARGE, describeSet(plan, unit),
+                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
 
         var previous = ex["previous"] as Array or Null;
         if (previous != null && previous.size() > 0) {
             var idx = logged < previous.size() ? logged : previous.size() - 1;
             dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(w / 2, h * 0.66, Graphics.FONT_XTINY,
+            dc.drawText(cx, h * 0.66, Graphics.FONT_XTINY,
                 (WatchUi.loadResource(Rez.Strings.Last) as String) + " " + describeSet(previous[idx] as Dictionary, unit),
                 Graphics.TEXT_JUSTIFY_CENTER);
             var suggestion = SparkyLogic.suggestWeight(
-                plan == null ? null : plan["reps"] as Number or Null, previous, unit);
+                plan == null ? null : SparkyLogic.toInt(plan["reps"]), previous, unit);
             if (suggestion != null) {
                 dc.setColor(Graphics.COLOR_BLUE, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(w / 2, h * 0.76, Graphics.FONT_XTINY,
+                dc.drawText(cx, h * 0.76, Graphics.FONT_XTINY,
                     (WatchUi.loadResource(Rez.Strings.Suggest) as String) + " " + SparkyLogic.formatWeight(suggestion) + " " + unit,
                     Graphics.TEXT_JUSTIFY_CENTER);
             }
         }
     }
 
+    // One segment per planned set around the edge: done green, next orange,
+    // open grey. A plain ring when the exercise has no planned sets.
+    private function drawSetRing(dc as Graphics.Dc, w as Number, h as Number) as Void {
+        var radius = (w < h ? w : h) / 2 - 5;
+        dc.setPenWidth(6);
+        var planned = _session.current()["planned"] as Array or Null;
+        var count = planned == null ? 0 : planned.size();
+        if (count == 0) {
+            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawCircle(w / 2, h / 2, radius);
+            return;
+        }
+        var logged = _session.loggedCount();
+        var next = _session.nextPlannedSet();
+        var gap = count > 1 ? 4 : 0;
+        var span = 360 / count;
+        for (var i = 0; i < count; i++) {
+            var set = (planned as Array)[i] as Dictionary;
+            var done = _session.isLive() ? set["done"] == true : i < logged;
+            var color = done ? Graphics.COLOR_GREEN
+                : (set == next ? Graphics.COLOR_ORANGE : Graphics.COLOR_DK_GRAY);
+            dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+            var from = 90 - i * span - gap / 2;
+            var to = 90 - (i + 1) * span + gap / 2;
+            dc.drawArc(w / 2, h / 2, radius, Graphics.ARC_CLOCKWISE, from, to);
+        }
+    }
+
     static function describeSet(set as Dictionary, unit as String) as String {
-        var reps = set["reps"] as Number or Null;
-        var weight = set["weight"] as Float or Number or Null;
+        var reps = SparkyLogic.toInt(set["reps"]);
+        var weight = SparkyLogic.toFloatOrNull(set["weight"]);
         var text = reps == null ? "-" : reps.toString();
-        if (weight != null && (weight as Float or Number).toFloat() > 0.0) {
-            text += " × " + SparkyLogic.formatWeight(SparkyLogic.toDisplayWeight(weight as Float or Number, unit)) + " " + unit;
+        if (weight != null && weight > 0.0) {
+            text += " × " + SparkyLogic.formatWeight(SparkyLogic.toDisplayWeight(weight, unit)) + " " + unit;
         }
         return text;
     }

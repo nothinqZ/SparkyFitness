@@ -13,9 +13,12 @@ class RestView extends WatchUi.View {
     private var _total as Number;
     private var _timer as Timer.Timer;
     private var _alerted as Boolean = false;
+    // The next set's target ("8 × 100 kg"), or null after the last one.
+    private var _next as String or Null;
 
-    function initialize(seconds as Number) {
+    function initialize(seconds as Number, next as String or Null) {
         View.initialize();
+        _next = next;
         _total = seconds;
         _endsAt = Time.now().value() + seconds;
         _timer = new Timer.Timer();
@@ -72,9 +75,18 @@ class RestView extends WatchUi.View {
         var text = left >= 0 ? SparkyLogic.formatClock(left) : "+" + SparkyLogic.formatClock(-left);
         dc.drawText(w / 2, h / 2, Graphics.FONT_NUMBER_MEDIUM, text,
             Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, h * 0.70, Graphics.FONT_XTINY, WatchUi.loadResource(Rez.Strings.Skip) as String,
-            Graphics.TEXT_JUSTIFY_CENTER);
+        if (_next != null) {
+            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(w / 2, h * 0.66, Graphics.FONT_XTINY,
+                WatchUi.loadResource(Rez.Strings.Next) as String, Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(w / 2, h * 0.66 + dc.getFontHeight(Graphics.FONT_XTINY), Graphics.FONT_SMALL,
+                _next as String, Graphics.TEXT_JUSTIFY_CENTER);
+        } else {
+            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(w / 2, h * 0.70, Graphics.FONT_XTINY, WatchUi.loadResource(Rez.Strings.Skip) as String,
+                Graphics.TEXT_JUSTIFY_CENTER);
+        }
     }
 }
 
