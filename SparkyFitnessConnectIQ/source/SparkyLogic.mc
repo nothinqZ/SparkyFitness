@@ -219,6 +219,79 @@ module SparkyLogic {
         return out;
     }
 
+    // Short code for a set type the watch shows differently: "w" warm-up,
+    // "d" drop set, "f" to failure; null for a normal working set. Accepts
+    // Sparky's names and the codes the phone already sends.
+    function setTypeCode(type) as String or Null {
+        if (!(type instanceof String)) {
+            return null;
+        }
+        if (type.equals("w") || type.equals("warmup")) {
+            return "w";
+        }
+        if (type.equals("d") || type.equals("drop") || type.equals("dropset")) {
+            return "d";
+        }
+        if (type.equals("f") || type.equals("failure")) {
+            return "f";
+        }
+        return null;
+    }
+
+    function compactSets(sets as Array or Null) as Array {
+        var out = pickEach(sets, ["reps", "weight", "rest_time"]);
+        if (sets != null) {
+            for (var i = 0; i < sets.size(); i++) {
+                var code = setTypeCode((sets[i] as Dictionary)["set_type"]);
+                if (code != null) {
+                    var set = out[i] as Dictionary;
+                    set["type"] = code;
+                }
+            }
+        }
+        return out;
+    }
+
+    // Previous sets without warm-ups, for the overload hint: a light warm-up
+    // with few reps must not count as "missed the planned reps".
+    function workingSets(sets as Array or Null) as Array or Null {
+        if (sets == null) {
+            return null;
+        }
+        var out = [] as Array;
+        for (var i = 0; i < sets.size(); i++) {
+            if (!"w".equals((sets[i] as Dictionary)["type"])) {
+                out.add(sets[i]);
+            }
+        }
+        return out;
+    }
+
+    // Counter for the set label: [index, count] of `next` among the sets of
+    // its own kind (warm-ups are counted apart from working sets, as on the
+    // phone), index 1-based. `planned` are the exercise's planned sets.
+    function setCounter(planned as Array, next as Dictionary) as Array {
+        var warmup = "w".equals(next["type"]);
+        var index = 0;
+        var count = 0;
+        for (var i = 0; i < planned.size(); i++) {
+            var set = planned[i] as Dictionary;
+            if ("w".equals(set["type"]) != warmup) {
+                continue;
+            }
+            count++;
+            if (set == next) {
+                index = count;
+            }
+        }
+        return [index, count];
+    }
+
+    // Letter of a superset group: 0 -> "A".
+    function supersetLetter(group as Number) as String {
+        return "ABCDEFGHIJKLMNOPQRSTUVWXYZ".substring(group % 26, group % 26 + 1) as String;
+    }
+
     // A manifest workout reduced to the fields the watch reads, so each one
     // fits comfortably into a single Storage value (32 KB at most) and into
     // the active session that is rewritten after every set. Same shape as
@@ -232,7 +305,7 @@ module SparkyLogic {
                 var out = {
                     "exercise_id" => ex["exercise_id"],
                     "name" => ex["name"],
-                    "sets" => pickEach(ex["sets"] as Array or Null, ["reps", "weight", "rest_time"])
+                    "sets" => compactSets(ex["sets"] as Array or Null)
                 } as Dictionary;
                 var previous = ex["previous"] as Dictionary or Null;
                 if (previous != null) {
@@ -309,7 +382,8 @@ module SparkyLogic {
                 var set = sets[j] as Array;
                 var done = set[4] == 1;
                 planned.add({ "id" => set[0], "reps" => toInt(set[1]),
-                    "weight" => toFloatOrNull(set[2]), "rest_time" => toInt(set[3]), "done" => done });
+                    "weight" => toFloatOrNull(set[2]), "rest_time" => toInt(set[3]), "done" => done,
+                    "type" => set.size() > 7 ? setTypeCode(set[7]) : null });
                 if (done) {
                     logged.add({ "reps" => toInt(set[5]), "weight" => toFloatOrNull(set[6]) });
                 } else if (firstOpen == null) {
@@ -319,8 +393,19 @@ module SparkyLogic {
                     activeIdx = i;
                 }
             }
+            var previous = null;
+            var lastTime = ex["p"] as Array or Null;
+            if (lastTime != null) {
+                previous = [] as Array;
+                for (var k = 0; k < lastTime.size(); k++) {
+                    var p = lastTime[k] as Array;
+                    previous.add({ "reps" => toInt(p[0]), "weight" => toFloatOrNull(p[1]),
+                        "type" => setTypeCode(p[2]) });
+                }
+            }
             exercises.add({ "name" => ex["n"], "planned" => planned, "logged" => logged,
-                "previous" => null });
+                "previous" => previous, "superset" => toInt(ex["ss"]),
+                "step" => toFloatOrNull(ex["st"]) });
         }
         var idx = exIdx;
         if (idx == null || idx >= exercises.size()) {

@@ -11,7 +11,8 @@ import type { ActiveWorkoutState } from '../stores/activeWorkoutStore';
 
 /**
  * One set: [setId, targetReps, targetWeightKg, restSeconds, done (0/1),
- * reps, weightKg]. The last two are the logged values of a done set.
+ * reps, weightKg, type]. Reps/weight are the logged values of a done set;
+ * type is a GarminSetType code, null for a normal working set.
  */
 export type GarminPlanSet = [
   string,
@@ -21,7 +22,36 @@ export type GarminPlanSet = [
   0 | 1,
   number | null,
   number | null,
+  GarminSetType | null,
 ];
+
+/** Set types the watch shows differently: warm-up, drop set, to failure. */
+export type GarminSetType = 'w' | 'd' | 'f';
+
+const SET_TYPE_CODES: Record<string, GarminSetType> = {
+  warmup: 'w',
+  drop: 'd',
+  dropset: 'd',
+  failure: 'f',
+};
+
+/** One exercise of the plan. */
+export interface GarminPlanExercise {
+  n: string;
+  s: GarminPlanSet[];
+  /** Superset group (0 = A, 1 = B, ...) when the exercise is in one. */
+  ss?: number;
+  /** Last session's sets as [reps, weightKg, type] for "last time" and the overload hint. */
+  p?: [number | null, number | null, GarminSetType | null][];
+  /**
+   * Weight step from the exercise's progression settings, in the user's
+   * weight unit (the unit the watch displays), e.g. 5 for a machine.
+   */
+  st?: number;
+}
+
+/** Previous sessions are cut to this many sets to keep the message small. */
+const MAX_PREVIOUS_SETS = 8;
 
 export interface GarminPlanMessage {
   t: 'plan';
@@ -29,8 +59,8 @@ export interface GarminPlanMessage {
   sid: string;
   /** Workout name. */
   n: string;
-  /** Exercises in workout order: name and sets. */
-  x: { n: string; s: GarminPlanSet[] }[];
+  /** Exercises in workout order. */
+  x: GarminPlanExercise[];
   /** The set the phone is on, or null when every set is done. */
   a: string | null;
   /** End of the running rest, epoch seconds, or null. */
@@ -126,8 +156,13 @@ export function buildGarminPlanMessage(
   state: Pick<
     ActiveWorkoutState,
     'session' | 'completedSetIds' | 'activeSetId' | 'rest'
-  >
+  > &
+    Partial<Pick<ActiveWorkoutState, 'previousSessionSets' | 'exerciseConfigs'>>
 ): GarminPlanMessage {
+  const exerciseIdByEntry = new Map<string, string>();
+  for (const exercise of state.session?.exercises ?? []) {
+    exerciseIdByEntry.set(String(exercise.id), String(exercise.exercise_id));
+  }
   const logged = new Map<
     string,
     { reps: number | null; weight: number | null }
@@ -144,22 +179,49 @@ export function buildGarminPlanMessage(
     t: 'plan',
     sid: plan.sessionId,
     n: plan.workoutName,
-    x: plan.exercises.map((exercise) => ({
-      n: exercise.name,
-      s: exercise.sets.map((set): GarminPlanSet => {
-        const done = state.completedSetIds[set.setId] != null;
-        const values = logged.get(set.setId);
-        return [
-          set.setId,
-          set.targetReps ?? null,
-          set.targetWeightKg ?? null,
-          set.restSeconds ?? 0,
-          done ? 1 : 0,
-          done ? (values?.reps ?? null) : null,
-          done ? (values?.weight ?? null) : null,
-        ];
-      }),
-    })),
+    x: plan.exercises.map((exercise) => {
+      const entry: GarminPlanExercise = {
+        n: exercise.name,
+        s: exercise.sets.map((set): GarminPlanSet => {
+          const done = state.completedSetIds[set.setId] != null;
+          const values = logged.get(set.setId);
+          return [
+            set.setId,
+            set.targetReps ?? null,
+            set.targetWeightKg ?? null,
+            set.restSeconds ?? 0,
+            done ? 1 : 0,
+            done ? (values?.reps ?? null) : null,
+            done ? (values?.weight ?? null) : null,
+            SET_TYPE_CODES[set.setType ?? ''] ?? null,
+          ];
+        }),
+      };
+      if (exercise.supersetRun != null) entry.ss = exercise.supersetRun;
+      const exerciseId = exerciseIdByEntry.get(exercise.exerciseEntryId);
+      const previous =
+        exerciseId != null
+          ? state.previousSessionSets?.[exerciseId]
+          : undefined;
+      if (previous != null && previous.length > 0) {
+        entry.p = previous
+          .slice(0, MAX_PREVIOUS_SETS)
+          .map((set) => [
+            set.reps ?? null,
+            set.weight ?? null,
+            SET_TYPE_CODES[set.setType ?? ''] ?? null,
+          ]);
+      }
+      const config = state.exerciseConfigs?.[exercise.exerciseEntryId];
+      if (
+        config?.increment_type === 'weight' &&
+        config.increment_value != null &&
+        config.increment_value > 0
+      ) {
+        entry.st = config.increment_value;
+      }
+      return entry;
+    }),
     a: state.activeSetId,
     re:
       state.rest.state === 'resting' && state.rest.endsAt != null

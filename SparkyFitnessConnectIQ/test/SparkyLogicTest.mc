@@ -192,3 +192,45 @@ function testLivePlan(logger as Logger) as Boolean {
     Test.assertEqual(SparkyLogic.sessionFromLive(plan, 1)["ex_idx"], 1);
     return true;
 }
+
+(:test)
+function testSetTypesAndCounters(logger as Logger) as Boolean {
+    Test.assertEqual(SparkyLogic.setTypeCode("warmup"), "w");
+    Test.assertEqual(SparkyLogic.setTypeCode("d"), "d");
+    Test.assertEqual(SparkyLogic.setTypeCode("normal"), null);
+    Test.assertEqual(SparkyLogic.setTypeCode(null), null);
+
+    // Warm-ups are counted apart from working sets: W1 W2 | 1 2 3.
+    var planned = [
+        { "type" => "w" }, { "type" => "w" }, { "type" => null }, { "type" => null }, { "type" => null }
+    ];
+    var c = SparkyLogic.setCounter(planned, planned[1] as Dictionary);
+    Test.assertEqual(c[0], 2);
+    Test.assertEqual(c[1], 2);
+    c = SparkyLogic.setCounter(planned, planned[3] as Dictionary);
+    Test.assertEqual(c[0], 2);
+    Test.assertEqual(c[1], 3);
+
+    // The overload hint ignores warm-ups.
+    var working = SparkyLogic.workingSets([{ "type" => "w", "reps" => 5 }, { "type" => null, "reps" => 8 }]);
+    Test.assertEqual((working as Array).size(), 1);
+
+    // The manifest keeps set types; the phone plan carries type, superset, previous and step.
+    var compact = SparkyLogic.compactWorkout({ "name" => "A", "exercises" => [
+        { "exercise_id" => "e", "name" => "Bench", "sets" => [
+            { "reps" => 12, "weight" => 60, "set_type" => "warmup" }, { "reps" => 8, "weight" => 100, "set_type" => "normal" }] }] });
+    var sets = ((compact["exercises"] as Array)[0] as Dictionary)["sets"] as Array;
+    Test.assertEqual((sets[0] as Dictionary)["type"], "w");
+    Test.assert(!(sets[1] as Dictionary).hasKey("type"));
+
+    var plan = { "sid" => "s", "n" => "A", "a" => null, "x" => [
+        { "n" => "Bench", "ss" => 0.0, "st" => 5.0, "p" => [[8.0, 97.5, null]],
+          "s" => [["1", 12.0, 60.0, 60.0, 0, null, null, "w"]] }] };
+    var ex = (SparkyLogic.sessionFromLive(plan, null)["exercises"] as Array)[0] as Dictionary;
+    Test.assertEqual(ex["superset"], 0);
+    Test.assertEqual(ex["step"], 5.0);
+    Test.assertEqual((((ex["previous"] as Array)[0]) as Dictionary)["reps"], 8);
+    Test.assertEqual((((ex["planned"] as Array)[0]) as Dictionary)["type"], "w");
+    Test.assertEqual(SparkyLogic.supersetLetter(1), "B");
+    return true;
+}

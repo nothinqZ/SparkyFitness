@@ -30,4 +30,8 @@
     <string id="LiveOnPhone">Läuft am Handy</string>
     <string id="StartingOnPhone">Starte am Handy …</string>
     <string id="Next">Nächster Satz</string>
+    <string id="WarmUp">Aufwärmen</string>
+    <string id="DropSet">Drop-Satz</string>
+    <string id="ToFailure">Bis Versagen</string>
+    <string id="Superset">Supersatz</string>
 </strings>

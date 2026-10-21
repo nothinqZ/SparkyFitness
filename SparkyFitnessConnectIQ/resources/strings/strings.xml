@@ -33,4 +33,8 @@
     <string id="LiveOnPhone">Running on the phone</string>
     <string id="StartingOnPhone">Starting on the phone…</string>
     <string id="Next">Next</string>
+    <string id="WarmUp">Warm-up</string>
+    <string id="DropSet">Drop set</string>
+    <string id="ToFailure">To failure</string>
+    <string id="Superset">Superset</string>
 </strings>

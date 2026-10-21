@@ -177,6 +177,7 @@ class WorkoutSession {
     function logSet(reps as Number, weightKg as Float, rpe as Float or Null, restSeconds as Number) as Void {
         if (isLive()) {
             logLiveSet(reps, weightKg, rpe);
+            advanceAfterLog();
             return;
         }
         var entry = {
@@ -189,7 +190,66 @@ class WorkoutSession {
             entry["rpe"] = rpe;
         }
         (current()["logged"] as Array).add(entry);
+        // Undo must find this set after the view moved on to the next exercise.
+        data["last_ex"] = exerciseIndex();
+        advanceAfterLog();
         save();
+    }
+
+    function hasOpenSet(ex as Dictionary) as Boolean {
+        var planned = ex["planned"] as Array or Null;
+        if (planned == null || planned.size() == 0) {
+            return false;
+        }
+        if (isLive()) {
+            for (var i = 0; i < planned.size(); i++) {
+                if ((planned[i] as Dictionary)["done"] != true) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return (ex["logged"] as Array).size() < planned.size();
+    }
+
+    // After a set: in a superset, go to the next exercise of the same group
+    // that still has a set (A1 -> B1 -> A2 ...); otherwise, once the
+    // exercise is done, go to the next exercise with a set left.
+    private function advanceAfterLog() as Void {
+        var list = exercises();
+        var n = list.size();
+        var idx = exerciseIndex();
+        var group = current()["superset"];
+        if (group != null) {
+            for (var step = 1; step < n; step++) {
+                var j = (idx + step) % n;
+                var ex = list[j] as Dictionary;
+                if (group == ex["superset"] && hasOpenSet(ex)) {
+                    data["ex_idx"] = j;
+                    return;
+                }
+            }
+        }
+        if (hasOpenSet(current())) {
+            return;
+        }
+        for (var step = 1; step < n; step++) {
+            var j = (idx + step) % n;
+            if (hasOpenSet(list[j] as Dictionary)) {
+                data["ex_idx"] = j;
+                return;
+            }
+        }
+    }
+
+    // Weight step of the current exercise in display units: its own from
+    // Sparky's progression settings when known, else the default.
+    function weightStep(unit as String) as Float {
+        var step = current()["step"];
+        if (step instanceof Float && step > 0.0) {
+            return step as Float;
+        }
+        return SparkyLogic.weightStep(unit);
     }
 
     // Marks the next open set done here and sends it to the phone, which
@@ -221,6 +281,10 @@ class WorkoutSession {
         if (isLive()) {
             // Undo is the phone's: a set already sent cannot be withdrawn.
             return;
+        }
+        var last = data["last_ex"];
+        if (last instanceof Number && last >= 0 && last < exerciseCount()) {
+            data["ex_idx"] = last;
         }
         var logged = current()["logged"] as Array;
         if (logged.size() > 0) {

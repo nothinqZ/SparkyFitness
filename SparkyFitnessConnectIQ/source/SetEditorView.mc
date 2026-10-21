@@ -37,7 +37,7 @@ class SetEditorView extends WatchUi.View {
                 reps = 0;
             }
         } else if (field == FIELD_WEIGHT) {
-            weight = weight + direction * SparkyLogic.weightStep(unit);
+            weight = weight + direction * session.weightStep(unit);
             if (weight < 0.0) {
                 weight = 0.0;
             }
@@ -68,10 +68,13 @@ class SetEditorView extends WatchUi.View {
         var h = dc.getHeight();
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
         dc.clear();
-        // "Satz 2 · Bankdrücken" so it is clear what is being logged.
-        var title = (WatchUi.loadResource(Rez.Strings.Set) as String) + " " + (session.loggedCount() + 1)
-            + " · " + (session.current()["name"] as String);
-        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        // "Aufwärmen 1/2 · Bankdrücken" so it is clear what is being logged.
+        var next = session.nextPlannedSet();
+        var label = next == null
+            ? (WatchUi.loadResource(Rez.Strings.Set) as String) + " " + (session.loggedCount() + 1)
+            : WorkoutView.setLabel(session, next);
+        var title = label + " · " + (session.current()["name"] as String);
+        dc.setColor(next == null ? Graphics.COLOR_LT_GRAY : WorkoutView.setColor(next), Graphics.COLOR_TRANSPARENT);
         dc.drawText(w / 2, h * 0.09, Graphics.FONT_XTINY, title, Graphics.TEXT_JUSTIFY_CENTER);
 
         drawField(dc, w, (h * 0.21).toNumber(), WatchUi.loadResource(Rez.Strings.Reps) as String,

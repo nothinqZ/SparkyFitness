@@ -60,8 +60,8 @@ describe('buildGarminPlanMessage', () => {
         {
           n: 'Brustpresse',
           s: [
-            ['11', 12, 75, 90, 1, 10, 77.5],
-            ['12', 8, 100, 120, 0, null, null],
+            ['11', 12, 75, 90, 1, 10, 77.5, 'w'],
+            ['12', 8, 100, 120, 0, null, null, null],
           ],
         },
       ],
@@ -78,7 +78,56 @@ describe('buildGarminPlanMessage', () => {
       rest: { state: 'paused', endsAt: null } as never,
     });
     expect(message.re).toBeNull();
-    expect(message.x[0]!.s[0]).toEqual(['11', 12, 75, 90, 0, null, null]);
+    expect(message.x[0]!.s[0]).toEqual(['11', 12, 75, 90, 0, null, null, 'w']);
+  });
+});
+
+describe('buildGarminPlanMessage extras', () => {
+  it('adds superset group, last session and the weight step when known', () => {
+    const superset = {
+      ...plan,
+      exercises: [{ ...plan.exercises[0]!, supersetRun: 1 }],
+    } as unknown as WatchWorkoutStartPayload;
+    const message = buildGarminPlanMessage(superset, {
+      session: {
+        exercises: [{ id: 'entry-1', exercise_id: 'ex-9', sets: [] }],
+      } as never,
+      completedSetIds: {},
+      activeSetId: null,
+      rest: { state: 'ready', endsAt: null } as never,
+      previousSessionSets: {
+        'ex-9': [
+          { setNumber: 1, setType: 'warmup', reps: 12, weight: 60 },
+          { setNumber: 2, setType: 'normal', reps: 8, weight: 97.5 },
+        ],
+      } as never,
+      exerciseConfigs: {
+        'entry-1': { increment_type: 'weight', increment_value: 5 },
+      },
+    });
+    expect(message.x[0]).toMatchObject({
+      ss: 1,
+      p: [
+        [12, 60, 'w'],
+        [8, 97.5, null],
+      ],
+      st: 5,
+    });
+  });
+
+  it('leaves the extras out when there is nothing to say', () => {
+    const message = buildGarminPlanMessage(plan, {
+      session: null,
+      completedSetIds: {},
+      activeSetId: null,
+      rest: { state: 'ready', endsAt: null } as never,
+      exerciseConfigs: {
+        'entry-1': { increment_type: 'reps', increment_value: 1 },
+      },
+    });
+    expect(message.x[0]).not.toHaveProperty('ss');
+    expect(message.x[0]).not.toHaveProperty('p');
+    expect(message.x[0]).not.toHaveProperty('st');
   });
 });
 
