@@ -1,6 +1,8 @@
 import Toybox.Lang;
 import Toybox.ActivityRecording;
 import Toybox.Sensor;
+import Toybox.Activity;
+import Toybox.Time;
 
 // Optional Garmin activity recording (setting "Record Garmin activity"). The
 // recording gives Garmin Connect heart rate, calories and training load for
@@ -15,11 +17,17 @@ import Toybox.Sensor;
 class Recorder {
 
     private var _session as ActivityRecording.Session or Null = null;
+    // When the workout started on the watch, for the elapsed time when no
+    // activity is being recorded (setting off, or not supported).
+    private var _startedAt as Number or Null = null;
 
     function initialize() {
     }
 
     function start(name as String) as Void {
+        if (_startedAt == null) {
+            _startedAt = Time.now().value();
+        }
         if (!Store.recordActivity() || _session != null) {
             return;
         }
@@ -45,6 +53,31 @@ class Recorder {
         return session != null && session.isRecording();
     }
 
+    // Workout time in seconds: Garmin's own activity timer while recording,
+    // else the time since the workout was opened on the watch.
+    function elapsedSeconds() as Number {
+        if (isRecording()) {
+            var info = Activity.getActivityInfo();
+            if (info != null && info.timerTime != null) {
+                return (info.timerTime as Number) / 1000;
+            }
+        }
+        var started = _startedAt;
+        return started == null ? 0 : Time.now().value() - started;
+    }
+
+    // Garmin's calorie and average heart-rate figures for the recording, or
+    // null without one. These are the values Garmin Connect will show.
+    function calories() as Number or Null {
+        var info = isRecording() ? Activity.getActivityInfo() : null;
+        return info == null ? null : info.calories;
+    }
+
+    function averageHeartRate() as Number or Null {
+        var info = isRecording() ? Activity.getActivityInfo() : null;
+        return info == null ? null : info.averageHeartRate;
+    }
+
     function save() as Void {
         var session = _session;
         if (session != null) {
@@ -54,6 +87,7 @@ class Recorder {
             session.save();
             _session = null;
         }
+        _startedAt = null;
     }
 
     function discard() as Void {
@@ -65,5 +99,6 @@ class Recorder {
             session.discard();
             _session = null;
         }
+        _startedAt = null;
     }
 }

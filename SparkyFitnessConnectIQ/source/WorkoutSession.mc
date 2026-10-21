@@ -18,9 +18,17 @@ import Toybox.Time;
 class WorkoutSession {
 
     var data as Dictionary;
+    // When the current set began (epoch s): after the last rest, or when the
+    // workout was opened. Shown as "set time" like Garmin's set timer.
+    var setStartedAt as Number;
 
     function initialize(data as Dictionary) {
         self.data = data;
+        setStartedAt = Time.now().value();
+    }
+
+    function markSetStart() as Void {
+        setStartedAt = Time.now().value();
     }
 
     // The phone's live workout, or null when there is none.

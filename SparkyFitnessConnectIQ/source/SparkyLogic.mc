@@ -287,6 +287,62 @@ module SparkyLogic {
         return [index, count];
     }
 
+    // --- Workout statistics for the data and summary screens ----------------
+
+    // Volume in kg (reps x weight) of the logged working sets; warm-ups are
+    // left out, as Hevy does.
+    function volumeKg(exercises as Array) as Float {
+        var total = 0.0;
+        for (var i = 0; i < exercises.size(); i++) {
+            var logged = (exercises[i] as Dictionary)["logged"] as Array;
+            for (var j = 0; j < logged.size(); j++) {
+                var set = logged[j] as Dictionary;
+                var reps = toInt(set["reps"]);
+                var weight = toFloatOrNull(set["weight"]);
+                if (reps != null && weight != null && !"w".equals(set["type"])) {
+                    total += reps * weight;
+                }
+            }
+        }
+        return total;
+    }
+
+    // [logged, planned] sets over the whole workout.
+    function setTotals(exercises as Array) as Array {
+        var logged = 0;
+        var planned = 0;
+        for (var i = 0; i < exercises.size(); i++) {
+            var ex = exercises[i] as Dictionary;
+            logged += (ex["logged"] as Array).size();
+            var p = ex["planned"] as Array or Null;
+            planned += p == null ? 0 : p.size();
+        }
+        return [logged, planned];
+    }
+
+    // Heart-rate zone 0-5 from Garmin's zone thresholds (UserProfile
+    // getHeartRateZones: [z1 min, z1 max, z2 max, z3 max, z4 max, z5 max]).
+    function heartRateZone(hr as Number, zones as Array or Null) as Number {
+        if (zones == null || zones.size() < 6) {
+            return 0;
+        }
+        for (var z = 5; z >= 1; z--) {
+            if (hr > (zones[z - 1] as Number)) {
+                return z;
+            }
+        }
+        return 0;
+    }
+
+    // "12.4 t" from 12 400 kg, "850 kg" below a tonne; display units.
+    function formatVolume(kg as Float, unit as String) as String {
+        var value = toDisplayWeight(kg, unit);
+        if (unit.equals("kg") && value >= 1000.0) {
+            return (value / 1000.0).format("%.1f") + " t";
+        }
+        return value.toNumber().toString() + " " + unit;
+    }
+
     // Letter of a superset group: 0 -> "A".
     function supersetLetter(group as Number) as String {
         return "ABCDEFGHIJKLMNOPQRSTUVWXYZ".substring(group % 26, group % 26 + 1) as String;
@@ -385,7 +441,8 @@ module SparkyLogic {
                     "weight" => toFloatOrNull(set[2]), "rest_time" => toInt(set[3]), "done" => done,
                     "type" => set.size() > 7 ? setTypeCode(set[7]) : null });
                 if (done) {
-                    logged.add({ "reps" => toInt(set[5]), "weight" => toFloatOrNull(set[6]) });
+                    logged.add({ "reps" => toInt(set[5]), "weight" => toFloatOrNull(set[6]),
+                        "type" => set.size() > 7 ? setTypeCode(set[7]) : null });
                 } else if (firstOpen == null) {
                     firstOpen = i;
                 }

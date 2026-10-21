@@ -131,10 +131,11 @@ class PhoneLink {
         var app = getApp();
         app.recorder.start(session.data["name"] as String);
         MainMenu.visible = false;
+        var view = new WorkoutView(session);
         if (replace) {
-            WatchUi.switchToView(new WorkoutView(session), new WorkoutDelegate(session), WatchUi.SLIDE_LEFT);
+            WatchUi.switchToView(view, new WorkoutDelegate(session, view), WatchUi.SLIDE_LEFT);
         } else {
-            WatchUi.pushView(new WorkoutView(session), new WorkoutDelegate(session), WatchUi.SLIDE_LEFT);
+            WatchUi.pushView(view, new WorkoutDelegate(session, view), WatchUi.SLIDE_LEFT);
         }
     }
 
@@ -210,7 +211,8 @@ class StartWaitView extends WatchUi.View {
             link.awaitingStartUntil = null;
             var session = WorkoutSession.start(_workout);
             getApp().recorder.start(_workout["name"] as String);
-            WatchUi.switchToView(new WorkoutView(session), new WorkoutDelegate(session), WatchUi.SLIDE_LEFT);
+            var view = new WorkoutView(session);
+            WatchUi.switchToView(view, new WorkoutDelegate(session, view), WatchUi.SLIDE_LEFT);
         }
     }
 

@@ -28,21 +28,29 @@ turn recording off in the app settings.
 
 ## Controls
 
+Modelled on Garmin's own strength activity (data pages, one press per set)
+and Hevy (last values, set types, ±15 s rest).
+
 | Screen | Control | Action |
 | --- | --- | --- |
-| Start menu | select | Start the workout / resume the active one / sync now |
-| Exercise | SELECT / tap | Log the next set |
-| Exercise | UP / DOWN / swipe | Previous / next exercise |
-| Exercise | MENU (hold UP) | Jump to an exercise, undo the last set |
-| Exercise | BACK | Continue / finish and save / discard |
-| Set editor | UP / DOWN | Change reps, then weight, then RPE ("-" = none) |
-| Set editor | SELECT | Next field; on RPE: log the set and start the rest timer |
-| Rest timer | any key | Back to the exercise |
+| Start menu | select | Start the workout / open the phone's live workout / resume / sync now |
+| Workout | UP / DOWN / swipe up-down | Pages: Set · Data (time, heart rate in zone colour, set time, calories, sets, volume) · Exercises |
+| Workout | swipe left / right | Next / previous exercise |
+| Workout, Set or Data page | SELECT / tap | Log the next set |
+| Workout, Exercises page | SELECT | Pick an exercise |
+| Workout | MENU (hold UP) | Jump to an exercise, undo the last set |
+| Workout | BACK | Continue / finish and save (shows a summary) / discard |
+| Log set | SELECT | Log the shown values (one press) |
+| Log set | UP / DOWN | Edit: reps, then weight (exercise's own step), then RPE ("-" = none) |
+| Rest | UP / DOWN | +15 s / -15 s |
+| Rest | SELECT / BACK | End the rest |
 
-The exercise screen shows the planned set, last time's set ("Last") and a
-progressive-overload hint ("Try"): one weight step (2.5 kg / 5 lb) heavier
-when every set last time reached the planned reps, otherwise the same weight.
-It is a hint only; the editor starts from the plan.
+The set page shows the set kind (warm-ups and drop sets counted and coloured
+apart), the target, last time and an overload hint, a ring with one segment
+per set, and heart rate and workout time. In a superset the watch moves to
+the next exercise of the group after each set; otherwise to the next
+exercise once one is done. A drop set follows without a rest. The rest
+buzzes 10 s before the end and alerts at zero.
 
 ## Pairing (device credentials)
 

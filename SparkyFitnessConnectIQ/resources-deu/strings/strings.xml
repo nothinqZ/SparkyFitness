@@ -34,4 +34,15 @@
     <string id="DropSet">Drop-Satz</string>
     <string id="ToFailure">Bis Versagen</string>
     <string id="Superset">Supersatz</string>
+    <string id="Overview">Übungen</string>
+    <string id="Elapsed">Trainingszeit</string>
+    <string id="HeartRate">Puls</string>
+    <string id="SetTime">Satzzeit</string>
+    <string id="Calories">Kalorien</string>
+    <string id="Sets">Sätze</string>
+    <string id="Volume">Volumen</string>
+    <string id="Summary">Training beendet</string>
+    <string id="Duration">Dauer</string>
+    <string id="AvgHeartRate">Ø Puls</string>
+    <string id="LogHint">Start: loggen · Hoch/Runter: ändern</string>
 </strings>

@@ -234,3 +234,25 @@ function testSetTypesAndCounters(logger as Logger) as Boolean {
     Test.assertEqual(SparkyLogic.supersetLetter(1), "B");
     return true;
 }
+
+(:test)
+function testWorkoutStats(logger as Logger) as Boolean {
+    var exercises = [
+        { "logged" => [{ "reps" => 12, "weight" => 60.0, "type" => "w" }, { "reps" => 8, "weight" => 100.0 }],
+          "planned" => [{}, {}, {}] },
+        { "logged" => [], "planned" => [{}, {}] }
+    ];
+    // The warm-up does not count towards volume.
+    Test.assertEqual(SparkyLogic.volumeKg(exercises), 800.0);
+    var totals = SparkyLogic.setTotals(exercises);
+    Test.assertEqual(totals[0], 2);
+    Test.assertEqual(totals[1], 5);
+    var zones = [100, 120, 140, 160, 175, 190];
+    Test.assertEqual(SparkyLogic.heartRateZone(90, zones), 0);
+    Test.assertEqual(SparkyLogic.heartRateZone(130, zones), 2);
+    Test.assertEqual(SparkyLogic.heartRateZone(180, zones), 5);
+    Test.assertEqual(SparkyLogic.heartRateZone(130, null), 0);
+    Test.assertEqual(SparkyLogic.formatVolume(12400.0, "kg"), "12.4 t");
+    Test.assertEqual(SparkyLogic.formatVolume(850.0, "kg"), "850 kg");
+    return true;
+}

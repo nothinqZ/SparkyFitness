@@ -37,4 +37,15 @@
     <string id="DropSet">Drop set</string>
     <string id="ToFailure">To failure</string>
     <string id="Superset">Superset</string>
+    <string id="Overview">Exercises</string>
+    <string id="Elapsed">Workout time</string>
+    <string id="HeartRate">Heart rate</string>
+    <string id="SetTime">Set time</string>
+    <string id="Calories">Calories</string>
+    <string id="Sets">Sets</string>
+    <string id="Volume">Volume</string>
+    <string id="Summary">Workout done</string>
+    <string id="Duration">Duration</string>
+    <string id="AvgHeartRate">Avg heart rate</string>
+    <string id="LogHint">Start: log · Up/Down: edit</string>
 </strings>

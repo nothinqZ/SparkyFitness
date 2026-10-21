@@ -2,14 +2,17 @@ import Toybox.Lang;
 import Toybox.Graphics;
 import Toybox.WatchUi;
 
-// Edits one set: reps, then weight, then RPE (optional, "-" skips it).
-// UP/DOWN change the highlighted value, SELECT moves on and, after RPE, logs
-// the set and starts the rest timer. BACK steps to the previous field.
+// Logs one set. Opens on a summary of what will be logged (the target, or
+// last set's values) so that one press logs it, as in Hevy; UP/DOWN start
+// editing instead: reps, then weight, then RPE (optional, "-" skips it).
+// While editing, UP/DOWN change the highlighted value, SELECT moves on and,
+// after RPE, logs the set. BACK steps back, from the summary it cancels.
 class SetEditorView extends WatchUi.View {
 
-    const FIELD_REPS = 0;
-    const FIELD_WEIGHT = 1;
-    const FIELD_RPE = 2;
+    const FIELD_SUMMARY = 0;
+    const FIELD_REPS = 1;
+    const FIELD_WEIGHT = 2;
+    const FIELD_RPE = 3;
 
     var session as WorkoutSession;
     var field as Number = 0;
@@ -31,7 +34,10 @@ class SetEditorView extends WatchUi.View {
     }
 
     function adjust(direction as Number) as Void {
-        if (field == FIELD_REPS) {
+        if (field == FIELD_SUMMARY) {
+            // The first UP/DOWN only switches to editing, starting with reps.
+            field = FIELD_REPS;
+        } else if (field == FIELD_REPS) {
             reps = reps + direction;
             if (reps < 0) {
                 reps = 0;
@@ -53,14 +59,20 @@ class SetEditorView extends WatchUi.View {
         WatchUi.requestUpdate();
     }
 
+    // Logs the set, then rests before the next one. A drop set follows
+    // straight on without a rest, as in Hevy.
     function commit() as Void {
         var rest = session.restSecondsForNextSet();
         session.logSet(reps, SparkyLogic.toKg(weight, unit),
             rpe == null ? null : (rpe as Float), rest);
         var next = session.nextPlannedSet();
-        var timer = new RestView(rest,
-            next == null ? null : WorkoutView.describeSet(next, unit));
-        WatchUi.switchToView(timer, new RestDelegate(), WatchUi.SLIDE_UP);
+        if (next != null && "d".equals(next["type"])) {
+            session.markSetStart();
+            WatchUi.popView(WatchUi.SLIDE_DOWN);
+            return;
+        }
+        var timer = new RestView(session, rest);
+        WatchUi.switchToView(timer, new RestDelegate(timer), WatchUi.SLIDE_UP);
     }
 
     function onUpdate(dc as Graphics.Dc) as Void {
@@ -74,15 +86,51 @@ class SetEditorView extends WatchUi.View {
             ? (WatchUi.loadResource(Rez.Strings.Set) as String) + " " + (session.loggedCount() + 1)
             : WorkoutView.setLabel(session, next);
         var title = label + " · " + (session.current()["name"] as String);
-        dc.setColor(next == null ? Graphics.COLOR_LT_GRAY : WorkoutView.setColor(next), Graphics.COLOR_TRANSPARENT);
+        var accent = next == null ? Graphics.COLOR_ORANGE : WorkoutView.setColor(next);
+        dc.setColor(next == null ? Graphics.COLOR_LT_GRAY : accent, Graphics.COLOR_TRANSPARENT);
         dc.drawText(w / 2, h * 0.09, Graphics.FONT_XTINY, title, Graphics.TEXT_JUSTIFY_CENTER);
 
+        if (field == FIELD_SUMMARY) {
+            drawSummary(dc, w, h, accent);
+            return;
+        }
         drawField(dc, w, (h * 0.21).toNumber(), WatchUi.loadResource(Rez.Strings.Reps) as String,
             reps.toString(), field == FIELD_REPS);
         drawField(dc, w, (h * 0.45).toNumber(), WatchUi.loadResource(Rez.Strings.Weight) as String,
             SparkyLogic.formatWeight(weight) + " " + unit, field == FIELD_WEIGHT);
         drawField(dc, w, (h * 0.69).toNumber(), WatchUi.loadResource(Rez.Strings.Rpe) as String,
             rpe == null ? "-" : SparkyLogic.formatWeight(rpe as Float), field == FIELD_RPE);
+    }
+
+    // What one press logs, large, with a check ring and the key hint.
+    private function drawSummary(dc as Graphics.Dc, w as Number, h as Number, accent as Number) as Void {
+        var cx = w / 2;
+        dc.setColor(accent, Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(6);
+        dc.drawCircle(cx, h / 2, (w < h ? w : h) / 2 - 5);
+
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.33, Graphics.FONT_NUMBER_MEDIUM, reps.toString(),
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.44, Graphics.FONT_XTINY, WatchUi.loadResource(Rez.Strings.Reps) as String,
+            Graphics.TEXT_JUSTIFY_CENTER);
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.57, Graphics.FONT_MEDIUM, SparkyLogic.formatWeight(weight) + " " + unit,
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // The check: a filled accent circle with a tick drawn as two lines.
+        var cy = (h * 0.76).toNumber();
+        dc.setColor(accent, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(cx, cy, 20);
+        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(4);
+        dc.drawLine(cx - 9, cy, cx - 2, cy + 7);
+        dc.drawLine(cx - 2, cy + 7, cx + 10, cy - 7);
+
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.84, Graphics.FONT_XTINY, WatchUi.loadResource(Rez.Strings.LogHint) as String,
+            Graphics.TEXT_JUSTIFY_CENTER);
     }
 
     // The field being edited sits on a highlighted pill; the others are dim.
@@ -127,17 +175,17 @@ class SetEditorDelegate extends WatchUi.BehaviorDelegate {
     }
 
     function onSelect() as Boolean {
-        if (_view.field < _view.FIELD_RPE) {
+        if (_view.field == _view.FIELD_SUMMARY || _view.field == _view.FIELD_RPE) {
+            _view.commit();
+        } else {
             _view.field += 1;
             WatchUi.requestUpdate();
-        } else {
-            _view.commit();
         }
         return true;
     }
 
     function onBack() as Boolean {
-        if (_view.field > 0) {
+        if (_view.field > _view.FIELD_SUMMARY) {
             _view.field -= 1;
             WatchUi.requestUpdate();
             return true;

@@ -129,7 +129,8 @@ class MainMenuDelegate extends WatchUi.Menu2InputDelegate {
             getApp().recorder.start(workout["name"] as String);
         }
         MainMenu.visible = false;
-        WatchUi.pushView(new WorkoutView(session), new WorkoutDelegate(session), WatchUi.SLIDE_LEFT);
+        var view = new WorkoutView(session);
+        WatchUi.pushView(view, new WorkoutDelegate(session, view), WatchUi.SLIDE_LEFT);
     }
 
     function onSynced(ok as Boolean) as Void {
