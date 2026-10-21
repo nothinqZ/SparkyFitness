@@ -135,6 +135,12 @@ module Store {
         return v instanceof Number && v > 0 ? v as Number : 90;
     }
 
+    // Whether logging a set also asks for RPE (off: one screen, one press).
+    function askRpe() as Boolean {
+        var v = Properties.getValue("askRpe");
+        return v instanceof Boolean ? v as Boolean : false;
+    }
+
     function recordActivity() as Boolean {
         var v = Properties.getValue("recordActivity");
         return v instanceof Boolean ? v as Boolean : true;

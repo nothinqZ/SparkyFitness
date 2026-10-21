@@ -52,4 +52,6 @@
     <string id="BeatLastTime">Stronger than last time</string>
     <string id="PerSide">Per side:</string>
     <string id="BarOnly">Bar only</string>
+    <string id="RpeSettingTitle">Ask for RPE after each set</string>
+    <string id="TapWeight">Tap or swipe: weight</string>
 </strings>

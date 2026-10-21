@@ -157,22 +157,30 @@ class WorkoutSession {
 
     // Defaults for the set editor: the last set logged in this session, else
     // the plan, else last time's values. Weight in kg.
+    // Values the log screen starts with, field by field: the plan's target
+    // (the phone's resolved one, so warm-up ramps and progression are in),
+    // else what was logged last in this exercise, else last session. With a
+    // plan this makes most sets a single press.
     function defaultsForNextSet() as Dictionary {
-        var logged = current()["logged"] as Array;
-        if (logged.size() > 0) {
-            var last = logged[logged.size() - 1] as Dictionary;
-            return { "reps" => last["reps"], "weight" => last["weight"] };
-        }
         var plan = nextPlannedSet();
-        if (plan != null && (plan["reps"] != null || plan["weight"] != null)) {
-            return { "reps" => plan["reps"], "weight" => plan["weight"] };
-        }
+        var logged = current()["logged"] as Array;
+        var last = logged.size() > 0 ? logged[logged.size() - 1] as Dictionary : null;
         var previous = current()["previous"] as Array or Null;
-        if (previous != null && previous.size() > 0) {
-            var p = previous[0] as Dictionary;
-            return { "reps" => p["reps"], "weight" => p["weight"] };
+        var before = previous != null && previous.size() > 0 ? previous[0] as Dictionary : null;
+        return {
+            "reps" => firstValue("reps", [plan, last, before], 8),
+            "weight" => firstValue("weight", [plan, last, before], 0.0)
+        };
+    }
+
+    private function firstValue(key as String, sources as Array, fallback) {
+        for (var i = 0; i < sources.size(); i++) {
+            var source = sources[i] as Dictionary or Null;
+            if (source != null && source[key] != null) {
+                return source[key];
+            }
         }
-        return { "reps" => 8, "weight" => 0.0 };
+        return fallback;
     }
 
     function restSecondsForNextSet() as Number {

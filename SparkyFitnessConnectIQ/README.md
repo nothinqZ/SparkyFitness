@@ -213,6 +213,15 @@ Garmin account the watch uses, then install it from the Connect IQ section
 of the Garmin Connect app. Keep the developer key: every update must be signed
 with the same key.
 
+New versions can be published without a browser at hand:
+`tools/publish-beta.sh <version>` builds the package and uploads it from the
+Windows PC that holds a signed-in Edge profile (`tools/ciq-upload`: sign in
+once with the `.bat`, which opens a plain, non-automated Edge because
+Garmin's sign-in rejects automated browsers; `upload.py` then fills the
+"Upload New Version" form headlessly). "Upload and publish" publishes the
+version; the store listing is left as it is. Garmin offers no upload API, so
+if Garmin changes the form, `upload.py` needs adjusting.
+
 The watch reports its product name ("Forerunner 265") from
 `resources-fr265/strings`; a new product needs its own folder there.
 

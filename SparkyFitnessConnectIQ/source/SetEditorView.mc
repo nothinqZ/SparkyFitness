@@ -1,18 +1,19 @@
 import Toybox.Lang;
 import Toybox.Graphics;
 import Toybox.WatchUi;
+import Toybox.System;
 
-// Logs one set. Opens on a summary of what will be logged (the target, or
-// last set's values) so that one press logs it, as in Hevy; UP/DOWN start
-// editing instead: reps, then weight, then RPE (optional, "-" skips it).
-// While editing, UP/DOWN change the highlighted value, SELECT moves on and,
-// after RPE, logs the set. BACK steps back, from the summary it cancels.
+// Logs one set on a single screen. It opens on the planned values, so a set
+// done as planned is one press of START. The reps are large in the middle
+// and UP / DOWN change them right away, since reps are what usually differ.
+// Tap the weight, swipe sideways or press MENU to change the weight instead
+// (and back). RPE is only asked when the "Ask for RPE" setting is on; then
+// START moves on to it and logs from there.
 class SetEditorView extends WatchUi.View {
 
-    const FIELD_SUMMARY = 0;
-    const FIELD_REPS = 1;
-    const FIELD_WEIGHT = 2;
-    const FIELD_RPE = 3;
+    const FIELD_REPS = 0;
+    const FIELD_WEIGHT = 1;
+    const FIELD_RPE = 2;
 
     var session as WorkoutSession;
     var field as Number = 0;
@@ -34,10 +35,7 @@ class SetEditorView extends WatchUi.View {
     }
 
     function adjust(direction as Number) as Void {
-        if (field == FIELD_SUMMARY) {
-            // The first UP/DOWN only switches to editing, starting with reps.
-            field = FIELD_REPS;
-        } else if (field == FIELD_REPS) {
+        if (field == FIELD_REPS) {
             reps = reps + direction;
             if (reps < 0) {
                 reps = 0;
@@ -59,6 +57,27 @@ class SetEditorView extends WatchUi.View {
         WatchUi.requestUpdate();
     }
 
+    // Reps <-> weight.
+    function toggleField() as Void {
+        field = field == FIELD_WEIGHT ? FIELD_REPS : FIELD_WEIGHT;
+        WatchUi.requestUpdate();
+    }
+
+    function selectField(f as Number) as Void {
+        field = f;
+        WatchUi.requestUpdate();
+    }
+
+    // START: log, or first ask for RPE when that setting is on.
+    function confirm() as Void {
+        if (field != FIELD_RPE && Store.askRpe()) {
+            field = FIELD_RPE;
+            WatchUi.requestUpdate();
+            return;
+        }
+        commit();
+    }
+
     // Logs the set, then rests before the next one. A drop set follows
     // straight on without a rest, as in Hevy.
     function commit() as Void {
@@ -78,90 +97,96 @@ class SetEditorView extends WatchUi.View {
     function onUpdate(dc as Graphics.Dc) as Void {
         var w = dc.getWidth();
         var h = dc.getHeight();
+        var cx = w / 2;
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
         dc.clear();
-        // "Aufwärmen 1/2 · Bankdrücken" so it is clear what is being logged.
+
+        // "Aufwärmen 1/2 · Bankdrücken", in the set kind's colour.
         var next = session.nextPlannedSet();
         var label = next == null
             ? (WatchUi.loadResource(Rez.Strings.Set) as String) + " " + (session.loggedCount() + 1)
             : WorkoutView.setLabel(session, next);
-        var title = label + " · " + (session.current()["name"] as String);
         var accent = next == null ? Graphics.COLOR_ORANGE : WorkoutView.setColor(next);
-        dc.setColor(next == null ? Graphics.COLOR_LT_GRAY : accent, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, h * 0.09, Graphics.FONT_XTINY, title, Graphics.TEXT_JUSTIFY_CENTER);
+        dc.setColor(accent, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.10, Graphics.FONT_XTINY, label, Graphics.TEXT_JUSTIFY_CENTER);
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.17, Graphics.FONT_XTINY, session.current()["name"] as String,
+            Graphics.TEXT_JUSTIFY_CENTER);
 
-        if (field == FIELD_SUMMARY) {
-            drawSummary(dc, w, h, accent);
-            return;
+        if (field == FIELD_RPE) {
+            drawValue(dc, cx, h * 0.47, rpe == null ? "-" : SparkyLogic.formatWeight(rpe as Float),
+                WatchUi.loadResource(Rez.Strings.Rpe) as String, true);
+        } else {
+            drawValue(dc, cx, h * 0.40, reps.toString(),
+                WatchUi.loadResource(Rez.Strings.Reps) as String, field == FIELD_REPS);
+            drawWeight(dc, w, h, field == FIELD_WEIGHT);
         }
-        drawField(dc, w, (h * 0.21).toNumber(), WatchUi.loadResource(Rez.Strings.Reps) as String,
-            reps.toString(), field == FIELD_REPS);
-        drawField(dc, w, (h * 0.45).toNumber(), WatchUi.loadResource(Rez.Strings.Weight) as String,
-            SparkyLogic.formatWeight(weight) + " " + unit, field == FIELD_WEIGHT);
-        drawField(dc, w, (h * 0.69).toNumber(), WatchUi.loadResource(Rez.Strings.Rpe) as String,
-            rpe == null ? "-" : SparkyLogic.formatWeight(rpe as Float), field == FIELD_RPE);
+
+        // +/- beside UP and DOWN (left side of the Forerunner 265).
+        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(w * 0.09, h * 0.42, Graphics.FONT_SMALL, "+",
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(w * 0.15, h * 0.66, Graphics.FONT_SMALL, "-",
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // The check beside START (upper right).
+        var kx = (w * 0.83).toNumber();
+        var ky = (h * 0.27).toNumber();
+        dc.setColor(accent, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(kx, ky, 18);
+        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(4);
+        dc.drawLine(kx - 8, ky, kx - 2, ky + 6);
+        dc.drawLine(kx - 2, ky + 6, kx + 9, ky - 6);
+
+        if (field != FIELD_RPE) {
+            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.86, Graphics.FONT_XTINY,
+                WatchUi.loadResource(Rez.Strings.TapWeight) as String, Graphics.TEXT_JUSTIFY_CENTER);
+        }
     }
 
-    // What one press logs, large, with a check ring and the key hint.
-    private function drawSummary(dc as Graphics.Dc, w as Number, h as Number, accent as Number) as Void {
-        var cx = w / 2;
-        dc.setColor(accent, Graphics.COLOR_TRANSPARENT);
-        dc.setPenWidth(6);
-        dc.drawCircle(cx, h / 2, (w < h ? w : h) / 2 - 5);
-
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.33, Graphics.FONT_NUMBER_MEDIUM, reps.toString(),
-            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    // A value with its label; the one the keys change is white on a pill.
+    private function drawValue(dc as Graphics.Dc, x as Number, y as Float, value as String,
+            label as String, active as Boolean) as Void {
+        var font = Graphics.FONT_NUMBER_HOT;
+        var height = dc.getFontHeight(font);
+        if (active) {
+            var boxW = dc.getWidth() * 0.44;
+            dc.setColor(0x262626, Graphics.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(x - boxW / 2, y - height / 2 - 4, boxW, height + 8, 16);
+        }
+        dc.setColor(active ? Graphics.COLOR_WHITE : Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(x, y, font, value, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.44, Graphics.FONT_XTINY, WatchUi.loadResource(Rez.Strings.Reps) as String,
-            Graphics.TEXT_JUSTIFY_CENTER);
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.55, Graphics.FONT_MEDIUM, SparkyLogic.formatWeight(weight) + " " + unit,
-            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(x, y + height / 2 + 4, Graphics.FONT_XTINY, label, Graphics.TEXT_JUSTIFY_CENTER);
+    }
 
-        // Barbell: what goes on each side of the bar.
+    // The weight line, and plates per side for a barbell.
+    private function drawWeight(dc as Graphics.Dc, w as Number, h as Number, active as Boolean) as Void {
+        var cx = w / 2;
+        var y = h * 0.68;
+        var text = SparkyLogic.formatWeight(weight) + " " + unit;
+        if (active) {
+            var boxW = w * 0.52;
+            var boxH = dc.getFontHeight(Graphics.FONT_MEDIUM) + 6;
+            dc.setColor(0x262626, Graphics.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(cx - boxW / 2, y - boxH / 2, boxW, boxH, 12);
+            dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
+            dc.setPenWidth(2);
+            dc.drawRoundedRectangle(cx - boxW / 2, y - boxH / 2, boxW, boxH, 12);
+        }
+        dc.setColor(active ? Graphics.COLOR_WHITE : Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, y, Graphics.FONT_MEDIUM, text, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         if (session.current()["barbell"] == true) {
             var plates = SparkyLogic.platesPerSide(weight, unit);
-            var text = plates.size() == 0
+            var hint = plates.size() == 0
                 ? WatchUi.loadResource(Rez.Strings.BarOnly) as String
                 : (WatchUi.loadResource(Rez.Strings.PerSide) as String) + " " + SparkyLogic.formatPlates(plates);
             dc.setColor(WorkoutView.COLOR_WARMUP, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.64, Graphics.FONT_XTINY, text, Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(cx, y + dc.getFontHeight(Graphics.FONT_MEDIUM) / 2 + 2, Graphics.FONT_XTINY, hint,
+                Graphics.TEXT_JUSTIFY_CENTER);
         }
-
-        // The check: a filled accent circle with a tick drawn as two lines.
-        var cy = (h * 0.76).toNumber();
-        dc.setColor(accent, Graphics.COLOR_TRANSPARENT);
-        dc.fillCircle(cx, cy, 20);
-        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
-        dc.setPenWidth(4);
-        dc.drawLine(cx - 9, cy, cx - 2, cy + 7);
-        dc.drawLine(cx - 2, cy + 7, cx + 10, cy - 7);
-
-        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.84, Graphics.FONT_XTINY, WatchUi.loadResource(Rez.Strings.LogHint) as String,
-            Graphics.TEXT_JUSTIFY_CENTER);
-    }
-
-    // The field being edited sits on a highlighted pill; the others are dim.
-    private function drawField(dc as Graphics.Dc, w as Number, y as Number, label as String,
-            value as String, active as Boolean) as Void {
-        var x = w / 2;
-        var labelHeight = dc.getFontHeight(Graphics.FONT_XTINY);
-        var valueFont = active ? Graphics.FONT_MEDIUM : Graphics.FONT_SMALL;
-        if (active) {
-            var boxWidth = (w * 0.62).toNumber();
-            var boxHeight = labelHeight + dc.getFontHeight(valueFont) + 6;
-            dc.setColor(0x262626, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(x - boxWidth / 2, y - 3, boxWidth, boxHeight, 12);
-            dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
-            dc.setPenWidth(2);
-            dc.drawRoundedRectangle(x - boxWidth / 2, y - 3, boxWidth, boxHeight, 12);
-        }
-        dc.setColor(active ? Graphics.COLOR_ORANGE : Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(x, y, Graphics.FONT_XTINY, label, Graphics.TEXT_JUSTIFY_CENTER);
-        dc.setColor(active ? Graphics.COLOR_WHITE : Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(x, y + labelHeight, valueFont, value, Graphics.TEXT_JUSTIFY_CENTER);
     }
 }
 
@@ -185,19 +210,36 @@ class SetEditorDelegate extends WatchUi.BehaviorDelegate {
     }
 
     function onSelect() as Boolean {
-        if (_view.field == _view.FIELD_SUMMARY || _view.field == _view.FIELD_RPE) {
-            _view.commit();
-        } else {
-            _view.field += 1;
-            WatchUi.requestUpdate();
+        _view.confirm();
+        return true;
+    }
+
+    // MENU (hold UP) switches between reps and weight.
+    function onMenu() as Boolean {
+        _view.toggleField();
+        return true;
+    }
+
+    function onSwipe(event as WatchUi.SwipeEvent) as Boolean {
+        var direction = event.getDirection();
+        if (direction == WatchUi.SWIPE_LEFT || direction == WatchUi.SWIPE_RIGHT) {
+            _view.toggleField();
+            return true;
         }
+        return false;
+    }
+
+    // Tapping the lower half edits the weight, the upper half the reps.
+    function onTap(event as WatchUi.ClickEvent) as Boolean {
+        var y = event.getCoordinates()[1];
+        var h = System.getDeviceSettings().screenHeight;
+        _view.selectField(y > h * 0.56 ? _view.FIELD_WEIGHT : _view.FIELD_REPS);
         return true;
     }
 
     function onBack() as Boolean {
-        if (_view.field > _view.FIELD_SUMMARY) {
-            _view.field -= 1;
-            WatchUi.requestUpdate();
+        if (_view.field == _view.FIELD_RPE) {
+            _view.selectField(_view.FIELD_REPS);
             return true;
         }
         WatchUi.popView(WatchUi.SLIDE_DOWN);

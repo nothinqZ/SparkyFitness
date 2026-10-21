@@ -49,4 +49,6 @@
     <string id="BeatLastTime">Stärker als letztes Mal</string>
     <string id="PerSide">Je Seite:</string>
     <string id="BarOnly">Nur Stange</string>
+    <string id="RpeSettingTitle">Nach jedem Satz RPE abfragen</string>
+    <string id="TapWeight">Tippen/Wischen: Gewicht</string>
 </strings>

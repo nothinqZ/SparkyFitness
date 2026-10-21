@@ -11,4 +11,7 @@
     <setting propertyKey="@Properties.recordActivity" title="@Strings.RecordTitle">
         <settingConfig type="boolean"/>
     </setting>
+    <setting propertyKey="@Properties.askRpe" title="@Strings.RpeSettingTitle">
+        <settingConfig type="boolean"/>
+    </setting>
 </settings>

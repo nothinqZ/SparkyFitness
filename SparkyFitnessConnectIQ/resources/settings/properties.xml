@@ -4,4 +4,5 @@
     <property id="apiKey" type="string"></property>
     <property id="defaultRestSeconds" type="number">90</property>
     <property id="recordActivity" type="boolean">true</property>
+    <property id="askRpe" type="boolean">false</property>
 </properties>

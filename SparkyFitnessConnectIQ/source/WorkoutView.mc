@@ -158,6 +158,12 @@ class WorkoutView extends WatchUi.View {
                 : SparkyLogic.suggestWeight(
                     plan == null ? null : SparkyLogic.toInt(plan["reps"]),
                     SparkyLogic.workingSets(previous), unit);
+            // Only worth a line when it says something the target does not.
+            var target = plan == null ? null : SparkyLogic.toFloatOrNull(plan["weight"]);
+            if (suggestion != null && target != null
+                    && (suggestion - SparkyLogic.toDisplayWeight(target, unit)).abs() < 0.01) {
+                suggestion = null;
+            }
             if (suggestion != null) {
                 dc.setColor(Graphics.COLOR_BLUE, Graphics.COLOR_TRANSPARENT);
                 dc.drawText(cx, h * 0.70, Graphics.FONT_XTINY,
