@@ -16,6 +16,11 @@
 const SIDELOAD_VARIANT = 'sideload';
 const DEFAULT_SIDELOAD_BUNDLE_IDENTIFIER = 'com.sparkyfitness.personal';
 
+// The personal build runs next to the official app as "Fitness Intelligence";
+// the home screen shows the short form. Only the display name changes: the
+// Xcode project keeps the upstream name the CI workflow builds.
+const SIDELOAD_DISPLAY_NAME = 'Fitness IQ';
+
 // Bundle identifiers: reverse-DNS segments of letters, digits and hyphens.
 const BUNDLE_ID_PATTERN =
   /^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z0-9][A-Za-z0-9-]*)+$/;
@@ -75,6 +80,7 @@ const sideloadStrippedEntitlements = (env = process.env) =>
 module.exports = {
   SIDELOAD_VARIANT,
   DEFAULT_SIDELOAD_BUNDLE_IDENTIFIER,
+  SIDELOAD_DISPLAY_NAME,
   SIDELOAD_STRIPPED_ENTITLEMENTS,
   HEALTHKIT_BACKGROUND_ENTITLEMENT,
   NO_TARGETS_MATCH,

@@ -1,8 +1,8 @@
 <strings>
-    <string id="AppName">Sparky Kraft</string>
+    <string id="AppName">FIQ Kraft</string>
     <string id="SyncNow">Jetzt synchronisieren</string>
     <string id="Resume">Training fortsetzen</string>
-    <string id="NoWorkouts">Keine Workouts. Lege in SparkyFitness eine Vorlage an und synchronisiere.</string>
+    <string id="NoWorkouts">Keine Workouts. Lege in Fitness Intelligence eine Vorlage an und synchronisiere.</string>
     <string id="NotConfigured">Keine Server-URL. Mit SPARKY_SERVER_URL neu bauen oder in den App-Einstellungen setzen.</string>
     <string id="Queue">Wartend</string>
     <string id="Synced">Sync</string>
@@ -25,7 +25,7 @@
     <string id="RestTitle">Standardpause (Sekunden)</string>
     <string id="RecordTitle">Garmin-Aktivität aufzeichnen</string>
     <string id="PairWatch">Uhr koppeln</string>
-    <string id="PairHint">Code in SparkyFitness eingeben: Einstellungen &gt; Garmin-Uhr</string>
+    <string id="PairHint">Code in Fitness Intelligence eingeben: Einstellungen &gt; Garmin-Uhr</string>
     <string id="Paired">Gekoppelt</string>
     <string id="LiveOnPhone">Läuft am Handy</string>
     <string id="StartingOnPhone">Starte am Handy …</string>

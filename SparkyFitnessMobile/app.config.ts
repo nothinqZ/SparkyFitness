@@ -12,6 +12,7 @@ const {
   sideloadBundleIdentifier,
   sideloadAppGroup,
   sideloadPlugins,
+  SIDELOAD_DISPLAY_NAME,
 } = require('./app.sideload.js');
 
 const APP_NAME = 'SparkyFitness';
@@ -195,6 +196,7 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
           : PROD_APPLE_TEAM_ID,
       supportsTablet: false,
       infoPlist: {
+        ...(isSideload ? { CFBundleDisplayName: SIDELOAD_DISPLAY_NAME } : {}),
         NSLocalNetworkUsageDescription:
           'SparkyFitness connects to self-hosted servers on your local network.',
         // Required by the food/meal photo picker and the label/barcode

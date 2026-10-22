@@ -44,6 +44,16 @@ describe('sideload variant (SideStore, free Apple ID)', () => {
     expect(config.extra?.iosAppGroup).toBe('group.com.sparkyfitness.personal');
   });
 
+  it('shows its own name next to the official app', () => {
+    const config = loadConfig({ APP_VARIANT: 'sideload' });
+    expect(config.ios?.infoPlist?.CFBundleDisplayName).toBe('Fitness IQ');
+    expect(config.name).toBe('SparkyFitness');
+    expect(
+      loadConfig({ APP_VARIANT: 'production' }).ios?.infoPlist
+        ?.CFBundleDisplayName
+    ).toBeUndefined();
+  });
+
   it('takes the build number from CI', () => {
     expect(
       loadConfig({ APP_VARIANT: 'sideload', IOS_BUILD_NUMBER: '42' }).ios

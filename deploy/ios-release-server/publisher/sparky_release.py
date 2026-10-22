@@ -248,8 +248,8 @@ def build_source(cfg: Config, state: dict) -> dict:
             "bundleIdentifier": cfg.bundle_id,
             "developerName": cfg.developer_name,
             "subtitle": "Self-hosted fitness, nutrition and training",
-            "localizedDescription": "Personal SparkyFitness build for SideStore. "
-                                    "Connects to your own SparkyFitness server.",
+            "localizedDescription": "Personal build for SideStore, running next to the "
+                                    "official SparkyFitness app.",
             "iconURL": url("icon.png"),
             "tintColor": cfg.tint_color,
             "category": "lifestyle",

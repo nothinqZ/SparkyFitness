@@ -508,7 +508,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               height={72}
             />
             <h1 className="text-xl sm:text-2xl font-bold text-foreground dark:text-slate-300">
-              SparkyFitness
+              Fitness Intelligence
             </h1>
             {!isMobile && (
               <>
