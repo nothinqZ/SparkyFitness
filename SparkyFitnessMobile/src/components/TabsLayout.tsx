@@ -7,6 +7,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useCSSVariable } from 'uniwind';
 import { createIOSNativeHeaderOptions } from '../utils/nativeHeaderItems';
 import DashboardScreen from '../screens/DashboardScreen';
+import TrainingHomeScreen from '../screens/TrainingHomeScreen';
+import { isPersonalBuild } from '../utils/personalBuild';
 import DiaryScreen from '../screens/DiaryScreen';
 import LibraryScreen from '../screens/LibraryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -68,7 +70,18 @@ const AddRedirectScreen = ({
 };
 
 // Tab screens — no Go Back (tab bar provides navigation)
-const SafeDashboard = withErrorBoundary(DashboardScreen, 'Dashboard');
+const SafeDashboard = isPersonalBuild()
+  ? withErrorBoundary(TrainingHomeScreen, 'Training')
+  : withErrorBoundary(DashboardScreen, 'Dashboard');
+const HOME_ICON = isPersonalBuild() ? 'dumbbell.fill' : 'square.grid.2x2.fill';
+
+/** The home tab's name: "Training" in the personal build. */
+function useHomeTabLabel(): string {
+  const { t } = useTranslation();
+  return isPersonalBuild()
+    ? t('navigation.training', { defaultValue: 'Training' })
+    : t('navigation.dashboard', { defaultValue: 'Dashboard' });
+}
 const SafeDiary = withErrorBoundary(DiaryScreen, 'Diary');
 const SafeLibrary = withErrorBoundary(LibraryScreen, 'Library');
 const SafeSettings = withErrorBoundary(SettingsScreen, 'Settings');
@@ -142,6 +155,7 @@ function DashboardStackScreen() {
         <DashboardStack.Screen
           name="DashboardRoot"
           component={SafeDashboard as React.ComponentType}
+          // The personal build's training home renames itself (setOptions).
           options={{
             title: t('navigation.dashboard', { defaultValue: 'Dashboard' }),
             headerBackTitle: t('navigation.dashboard', {
@@ -243,6 +257,7 @@ export function NativeTabsLayout({
   getLastActiveTab,
 }: { onAddPress?: () => void } & TabTrackingProps) {
   const { t } = useTranslation();
+  const homeLabel = useHomeTabLabel();
   const [primary, tabActive, tabInactive] = useCSSVariable([
     '--color-accent-primary',
     '--color-tab-active',
@@ -277,11 +292,8 @@ export function NativeTabsLayout({
           name="Dashboard"
           component={DashboardStackScreen}
           options={{
-            tabBarLabel: t('navigation.dashboard', {
-              defaultValue: 'Dashboard',
-            }),
-            tabBarIcon: () =>
-              ({ sfSymbol: 'square.grid.2x2.fill' }) as unknown as AppleIcon,
+            tabBarLabel: homeLabel,
+            tabBarIcon: () => ({ sfSymbol: HOME_ICON }) as unknown as AppleIcon,
           }}
         />
         <NativeTab.Screen
@@ -342,6 +354,7 @@ export function FallbackTabsLayout({
   getLastActiveTab,
 }: { onAddPress?: () => void } & TabTrackingProps) {
   const { t } = useTranslation();
+  const homeLabel = useHomeTabLabel();
   // The AddSheet is rendered in App.tsx with proper props
   return (
     <FallbackTab.Navigator
@@ -372,10 +385,8 @@ export function FallbackTabsLayout({
         name="Dashboard"
         component={SafeDashboard}
         options={{
-          tabBarLabel: t('navigation.dashboard', { defaultValue: 'Dashboard' }),
-          tabBarAccessibilityLabel: t('navigation.dashboard', {
-            defaultValue: 'Dashboard',
-          }),
+          tabBarLabel: homeLabel,
+          tabBarAccessibilityLabel: homeLabel,
         }}
       />
       <FallbackTab.Screen

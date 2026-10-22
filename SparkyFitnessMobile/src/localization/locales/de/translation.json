@@ -162,7 +162,8 @@
     "details": "Details",
     "dashboard": "Dashboard",
     "add": "Hinzufügen",
-    "mealTypes": "Mahlzeitentypen"
+    "mealTypes": "Mahlzeitentypen",
+    "training": "Training"
   },
   "medications": {
     "schedule": {
@@ -6341,5 +6342,22 @@
       "dataThrough": "Daten bis {{date}}",
       "title": "Heute wichtig"
     }
+  },
+  "trainingHome": {
+    "resume": "Workout fortsetzen",
+    "start": "Workout starten",
+    "weekWorkouts": "Workouts diese Woche",
+    "weekSets": "Sätze",
+    "weekMinutes": "Minuten",
+    "routines": "Routinen",
+    "allRoutines": "Alle",
+    "noRoutines": "Noch keine Routinen. Leg unter „Alle“ eine an und starte sie hier mit einem Tipp.",
+    "startRoutine": "Routine starten",
+    "recent": "Letzte Workouts",
+    "noRecent": "Deine abgeschlossenen Workouts erscheinen hier.",
+    "sets_one": "{{count}} Satz",
+    "sets_other": "{{count}} Sätze",
+    "minutes_one": "{{count}} Min.",
+    "minutes_other": "{{count}} Min."
   }
 }

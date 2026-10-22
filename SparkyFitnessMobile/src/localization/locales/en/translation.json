@@ -199,7 +199,8 @@
     "details": "Details",
     "dashboard": "Dashboard",
     "add": "Add",
-    "mealTypes": "Meal Types"
+    "mealTypes": "Meal Types",
+    "training": "Training"
   },
   "familyDiary": {
     "title": "Family Diaries",
@@ -8553,5 +8554,22 @@
       "dataThrough": "Data through {{date}}",
       "title": "What matters today"
     }
+  },
+  "trainingHome": {
+    "resume": "Resume workout",
+    "start": "Start workout",
+    "weekWorkouts": "Workouts this week",
+    "weekSets": "Sets",
+    "weekMinutes": "Minutes",
+    "routines": "Routines",
+    "allRoutines": "All",
+    "noRoutines": "No routines yet. Create one under All, then start it here with one tap.",
+    "startRoutine": "Start routine",
+    "recent": "Recent workouts",
+    "noRecent": "Your finished workouts show up here.",
+    "sets_one": "{{count}} set",
+    "sets_other": "{{count}} sets",
+    "minutes_one": "{{count}} min",
+    "minutes_other": "{{count}} min"
   }
 }
