@@ -14,29 +14,29 @@
     --radius-xl: 16px;
 
     @variant light {
-      --color-background: hsl(220, 25%, 96%);
-      --color-surface: hsl(220, 20%, 98%);
-      --color-raised: hsl(0, 0%, 100%);
+      --color-background: hsl(220, 20%, 96%);
+      --color-surface: hsl(0, 0%, 100%);
+      --color-raised: hsl(220, 20%, 96%);
       --color-chrome: hsl(0, 0%, 100%);
 
       --color-border: hsl(213, 16%, 90%);
-      --color-border-subtle: hsl(213, 16%, 90%);
+      --color-border-subtle: hsl(213, 16%, 93%);
       --color-border-strong: hsl(212, 18%, 83%);
       --color-chrome-border: hsl(220, 20%, 88%);
 
       --color-text-primary: hsl(222, 47%, 11%);
       --color-text-secondary: hsl(215, 19%, 40%);
-      --color-text-muted: hsl(215, 20%, 65%);
+      --color-text-muted: hsl(215, 16%, 52%);
       --color-icon-decorative: hsl(215, 19%, 40%);
 
       --color-text-link: hsl(220, 90%, 65%);
 
       /* --color-accent-primary:    hsl(20, 89%, 48%);    */
-      --color-accent-primary: hsl(220, 91%, 64%);
+      --color-accent-primary: hsl(221, 84%, 55%);
       --color-accent-muted: hsl(220, 49%, 55%);
       --color-accent-text: hsl(220, 88%, 94%);
 
-      --color-tab-active: hsl(220, 91%, 64%);
+      --color-tab-active: hsl(221, 84%, 55%);
       --color-tab-inactive: hsl(220, 16%, 47%);
       --color-form-enabled: hsl(220, 22%, 55%);
       --color-form-disabled: hsl(220, 12%, 82%);
@@ -100,13 +100,13 @@
     }
 
     @variant dark {
-      --color-background: hsl(220, 20%, 6%);
-      --color-surface: hsl(220, 18%, 9%);
-      --color-raised: hsl(220, 16%, 13%);
+      --color-background: hsl(220, 20%, 5%);
+      --color-surface: hsl(220, 17%, 10%);
+      --color-raised: hsl(220, 15%, 15%);
       --color-chrome: hsl(220, 22%, 7%);
 
-      --color-border-subtle: hsl(220, 15%, 14%);
-      --color-border: hsl(220, 15%, 18%);
+      --color-border-subtle: hsl(220, 15%, 17%);
+      --color-border: hsl(220, 15%, 21%);
       --color-border-strong: hsl(220, 15%, 22%);
       --color-chrome-border: hsl(220, 18%, 16%);
 
@@ -115,13 +115,13 @@
       --color-text-muted: hsl(220, 10%, 50%);
       --color-icon-decorative: hsl(220, 10%, 50%);
 
-      --color-accent-primary: hsl(220, 85%, 60%);
+      --color-accent-primary: hsl(221, 84%, 55%);
       --color-accent-muted: hsl(220, 65%, 66%);
       --color-accent-text: hsl(221, 100%, 97%);
 
       --color-text-link: hsl(220, 80%, 65%);
 
-      --color-tab-active: hsl(220, 85%, 60%);
+      --color-tab-active: hsl(221, 84%, 55%);
       --color-tab-inactive: hsl(215, 15%, 55%);
       --color-form-enabled: hsl(220, 30%, 62%);
       --color-form-disabled: hsl(220, 12%, 26%);

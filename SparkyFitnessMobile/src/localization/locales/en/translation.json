@@ -8366,6 +8366,15 @@
     "trainingStatus": "Training status"
   },
   "insights": {
+    "dashboard": {
+      "title": "Your analysis board",
+      "description": "Compare two signals over the selected period. Save up to four comparisons for later.",
+      "save": "Save comparison",
+      "saved": "Saved",
+      "full": "Remove a saved comparison first",
+      "pinned": "Saved comparisons",
+      "remove": "Remove comparison"
+    },
     "compare": {
       "days": "days",
       "disclaimer": "Lines are scaled to their own range. A link is an observation, not a cause.",

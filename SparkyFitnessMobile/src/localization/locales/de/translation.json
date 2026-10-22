@@ -6154,6 +6154,15 @@
     "bluetoothForgetMessage": "Workouts werden dann nicht mehr live mit der Uhr synchronisiert. Die Kopplung für Uploads bleibt bestehen."
   },
   "insights": {
+    "dashboard": {
+      "title": "Deine Analyseübersicht",
+      "description": "Vergleiche zwei Messwerte im gewählten Zeitraum. Speichere bis zu vier Vergleiche für später.",
+      "save": "Vergleich speichern",
+      "saved": "Gespeichert",
+      "full": "Entferne zuerst einen gespeicherten Vergleich",
+      "pinned": "Gespeicherte Vergleiche",
+      "remove": "Vergleich entfernen"
+    },
     "compare": {
       "days": "Tage",
       "disclaimer": "Die Linien sind auf ihren eigenen Bereich skaliert. Ein Zusammenhang ist eine Beobachtung, keine Ursache.",

@@ -828,7 +828,7 @@ function ActiveWorkoutExerciseCard({
         : `${exercise.sets.length} sets`;
 
     return (
-      <View className="border-b border-border-subtle">
+      <View className="bg-surface rounded-xl border border-border-subtle mb-3">
         <View className="flex-row items-center gap-3 px-2 py-3">
           <Pressable
             onPress={() => onToggleExpanded(exercise.id)}
@@ -877,7 +877,7 @@ function ActiveWorkoutExerciseCard({
   const workingSetNumbers = buildWorkingSetNumbers(exercise.sets);
 
   return (
-    <View className="border-b border-border-subtle px-2 pt-3 pb-2">
+    <View className="bg-surface rounded-xl border border-border-subtle mb-3 px-3 pt-3 pb-2">
       <View className="flex-row items-center gap-3">
         <Pressable
           onPress={

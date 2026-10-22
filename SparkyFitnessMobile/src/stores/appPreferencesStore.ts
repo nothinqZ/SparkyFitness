@@ -4,8 +4,7 @@ import {
   DEFAULT_GUIDED_SPEECH_RATE,
   clampGuidedCountdownSec,
   clampGuidedSpeechRate,
-} from '@workspace/shared';
-import {
+  type CompareMetric,
   DEFAULT_WARMUP_DUMBBELL_ROUNDING,
   DEFAULT_WARMUP_METHOD,
   DEFAULT_WARMUP_PLATE_ROUNDING,
@@ -101,6 +100,7 @@ export const PREFERENCE_DEFAULTS = {
   mindfulnessCardVisible: true,
   trainingLoadCardVisible: true,
   dashboardCardOrder: [...DASHBOARD_CARD_KEYS] as DashboardCardKey[],
+  analysisComparisons: [] as { a: CompareMetric; b: CompareMetric }[],
   medicationRemindersEnabled: true,
   medicationReminderRepeats: true,
   medicationReminderHideNames: false,
@@ -177,6 +177,7 @@ export type AppPreferencesData = {
   mindfulnessCardVisible: boolean;
   trainingLoadCardVisible: boolean;
   dashboardCardOrder: DashboardCardKey[];
+  analysisComparisons: { a: CompareMetric; b: CompareMetric }[];
   medicationRemindersEnabled: boolean;
   medicationReminderRepeats: boolean;
   medicationReminderHideNames: boolean;
@@ -289,6 +290,8 @@ export interface AppPreferencesState extends AppPreferencesData {
   setMindfulnessCardVisible: (value: boolean) => void;
   setTrainingLoadCardVisible: (value: boolean) => void;
   setDashboardCardOrder: (order: DashboardCardKey[]) => void;
+  addAnalysisComparison: (a: CompareMetric, b: CompareMetric) => void;
+  removeAnalysisComparison: (a: CompareMetric, b: CompareMetric) => void;
   setMedicationRemindersEnabled: (value: boolean) => void;
   setMedicationReminderRepeats: (value: boolean) => void;
   setMedicationReminderHideNames: (value: boolean) => void;
@@ -428,6 +431,26 @@ export const useAppPreferencesStore = create<AppPreferencesState>()(
         set({ mindfulnessCardVisible: value }),
       setTrainingLoadCardVisible: (value) =>
         set({ trainingLoadCardVisible: value }),
+      addAnalysisComparison: (a, b) =>
+        set((state) => {
+          if (
+            a === b ||
+            state.analysisComparisons.length >= 4 ||
+            state.analysisComparisons.some(
+              (pair) => pair.a === a && pair.b === b
+            )
+          )
+            return state;
+          return {
+            analysisComparisons: [...state.analysisComparisons, { a, b }],
+          };
+        }),
+      removeAnalysisComparison: (a, b) =>
+        set((state) => ({
+          analysisComparisons: state.analysisComparisons.filter(
+            (pair) => pair.a !== a || pair.b !== b
+          ),
+        })),
       setDashboardCardOrder: (order) => set({ dashboardCardOrder: order }),
       setMedicationRemindersEnabled: (value) =>
         set({ medicationRemindersEnabled: value }),
@@ -587,6 +610,7 @@ export const useAppPreferencesStore = create<AppPreferencesState>()(
         mindfulnessCardVisible: state.mindfulnessCardVisible,
         trainingLoadCardVisible: state.trainingLoadCardVisible,
         dashboardCardOrder: state.dashboardCardOrder,
+        analysisComparisons: state.analysisComparisons,
         medicationRemindersEnabled: state.medicationRemindersEnabled,
         medicationReminderRepeats: state.medicationReminderRepeats,
         medicationReminderHideNames: state.medicationReminderHideNames,

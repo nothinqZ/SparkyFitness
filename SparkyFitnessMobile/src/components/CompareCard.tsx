@@ -71,8 +71,22 @@ const MetricChips: React.FC<{
  * only from MIN_COMPARE_PAIRS pairs). A correlation is an observation, and
  * the card says so.
  */
-const CompareCard: React.FC<{ overview: PerformanceOverviewResponse }> = ({
+type CompareSelection = { a: CompareMetric; b: CompareMetric };
+
+const CompareCard: React.FC<{
+  overview: PerformanceOverviewResponse;
+  selection?: CompareSelection;
+  onSelectionChange?: (selection: CompareSelection) => void;
+  readOnly?: boolean;
+  title?: string;
+  testID?: string;
+}> = ({
   overview,
+  selection,
+  onSelectionChange,
+  readOnly = false,
+  title,
+  testID = 'compare-card',
 }) => {
   const { t } = useTranslation();
   const font = useChartFont(CHART_LABEL_FONT_SIZE);
@@ -107,12 +121,25 @@ const CompareCard: React.FC<{ overview: PerformanceOverviewResponse }> = ({
   );
   const [b, setB] = useState<CompareMetric | undefined>(() => pick('hrv', a));
   // The range may drop a metric: fall back instead of comparing nothing.
-  const metricA =
-    a && options.some((o) => o.key === a) ? a : pick('sleepHours');
-  const metricB =
-    b && b !== metricA && options.some((o) => o.key === b)
+  const metricA = selection
+    ? selection.a
+    : a && options.some((o) => o.key === a)
+      ? a
+      : pick('sleepHours');
+  const metricB = selection
+    ? selection.b
+    : b && b !== metricA && options.some((o) => o.key === b)
       ? b
       : pick('hrv', metricA);
+
+  const selectA = (next: CompareMetric) => {
+    if (selection && metricB) onSelectionChange?.({ a: next, b: metricB });
+    else setA(next);
+  };
+  const selectB = (next: CompareMetric) => {
+    if (selection && metricA) onSelectionChange?.({ a: metricA, b: next });
+    else setB(next);
+  };
 
   const result = useMemo(
     () =>
@@ -129,7 +156,29 @@ const CompareCard: React.FC<{ overview: PerformanceOverviewResponse }> = ({
   const labelOf = (key: CompareMetric | undefined) =>
     options.find((o) => o.key === key)?.label ?? '';
 
-  if (options.length < 2 || !metricA || !metricB || !result) return null;
+  if (!metricA || !metricB || (options.length < 2 && !selection)) return null;
+  if (
+    !result ||
+    !options.some((o) => o.key === metricA) ||
+    !options.some((o) => o.key === metricB)
+  ) {
+    if (!readOnly) return null;
+    return (
+      <View
+        testID={testID}
+        className="bg-surface rounded-2xl p-5 mb-3 border border-border-subtle"
+      >
+        <Text className="text-text-primary text-base font-bold">
+          {title ?? t('insights.compare.title', { defaultValue: 'Compare' })}
+        </Text>
+        <Text className="text-text-muted text-sm mt-2">
+          {t('insights.compare.noData', {
+            defaultValue: 'Not enough data in this range.',
+          })}
+        </Text>
+      </View>
+    );
+  }
 
   const strength = correlationStrength(result.correlation);
   const direction =
@@ -151,26 +200,30 @@ const CompareCard: React.FC<{ overview: PerformanceOverviewResponse }> = ({
 
   return (
     <View
-      testID="compare-card"
-      className="bg-surface rounded-xl p-4 mb-4 shadow-sm"
+      testID={testID}
+      className="bg-surface rounded-2xl border border-border-subtle p-5 mb-3"
     >
       <Text className="text-text-primary text-base font-bold mb-3">
-        {t('insights.compare.title', { defaultValue: 'Compare' })}
+        {title ?? t('insights.compare.title', { defaultValue: 'Compare' })}
       </Text>
-      <MetricChips
-        options={options.filter((o) => o.key !== metricB)}
-        selected={metricA}
-        color={colorA}
-        testIDPrefix="compare-a"
-        onSelect={setA}
-      />
-      <MetricChips
-        options={options.filter((o) => o.key !== metricA)}
-        selected={metricB}
-        color={colorB}
-        testIDPrefix="compare-b"
-        onSelect={setB}
-      />
+      {!readOnly && (
+        <>
+          <MetricChips
+            options={options.filter((o) => o.key !== metricB)}
+            selected={metricA}
+            color={colorA}
+            testIDPrefix="compare-a"
+            onSelect={selectA}
+          />
+          <MetricChips
+            options={options.filter((o) => o.key !== metricA)}
+            selected={metricB}
+            color={colorB}
+            testIDPrefix="compare-b"
+            onSelect={selectB}
+          />
+        </>
+      )}
 
       {chartData.length >= 2 ? (
         <View style={{ height: 160 }} className="mt-1">

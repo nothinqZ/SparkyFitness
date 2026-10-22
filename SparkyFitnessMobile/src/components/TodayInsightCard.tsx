@@ -42,10 +42,10 @@ const TodayInsightCard: React.FC<{ onPress: () => void }> = ({ onPress }) => {
       testID="today-insight-card"
       accessibilityRole="button"
       onPress={onPress}
-      className="bg-surface rounded-xl p-4 mb-4 shadow-sm active:opacity-80"
+      className="bg-surface rounded-2xl border border-border-subtle p-5 mb-3 active:opacity-80"
     >
       <View className="flex-row justify-between items-center mb-2">
-        <Text className="text-text-primary text-base font-bold">
+        <Text className="text-text-secondary text-xs font-bold uppercase tracking-wide">
           {t('insights.today.title', { defaultValue: 'What matters today' })}
         </Text>
         <Text className="text-text-muted text-xs">
@@ -68,7 +68,7 @@ const TodayInsightCard: React.FC<{ onPress: () => void }> = ({ onPress }) => {
           >
             {findingKindLabel(t, top!.kind)}
           </Text>
-          <Text className="text-text-primary text-lg font-semibold">
+          <Text className="text-text-primary text-xl font-bold leading-7">
             {main.title}
           </Text>
           {main.detail !== '' && (
@@ -80,7 +80,7 @@ const TodayInsightCard: React.FC<{ onPress: () => void }> = ({ onPress }) => {
       </View>
 
       {data.summary && (
-        <View className="mt-3 bg-raised rounded-lg p-3">
+        <View className="mt-4 bg-raised rounded-xl p-3">
           <Text className="text-text-primary text-sm">{data.summary.text}</Text>
           <Text className="text-text-muted text-xs mt-1">
             {t('insights.today.aiWorded', {

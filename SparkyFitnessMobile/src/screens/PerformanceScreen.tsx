@@ -17,7 +17,7 @@ import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
 import SegmentedControl from '../components/SegmentedControl';
 import StatusView from '../components/StatusView';
-import CompareCard from '../components/CompareCard';
+import AnalysisDashboard from '../components/AnalysisDashboard';
 import { weightFromKg } from '../utils/unitConversions';
 import { getAppLocale } from '../localization';
 import { formatLocalizedDate } from '../utils/insightDates';
@@ -51,7 +51,7 @@ const Card: React.FC<{
 }> = ({ title, provenance, children }) => {
   const { t } = useTranslation();
   return (
-    <View className="bg-surface rounded-xl p-4 mb-4 shadow-sm">
+    <View className="bg-surface rounded-2xl border border-border-subtle p-5 mb-3">
       <View className="flex-row justify-between items-center mb-3">
         <Text className="text-text-primary text-base font-bold">{title}</Text>
         {provenance && (
@@ -373,7 +373,7 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = ({
           </Card>
         )}
 
-        {section === 'analysis' && <CompareCard overview={d} />}
+        {section === 'analysis' && <AnalysisDashboard overview={d} />}
 
         {section === 'analysis' && (
           <Card

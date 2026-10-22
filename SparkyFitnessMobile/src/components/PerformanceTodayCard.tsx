@@ -27,7 +27,7 @@ const Stat: React.FC<{ label: string; value: string; detail?: string }> = ({
   value,
   detail,
 }) => (
-  <View className="flex-1 min-w-[22%] mb-2">
+  <View className="w-[48%] bg-raised rounded-xl p-3">
     <Text className="text-text-secondary text-xs">{label}</Text>
     <Text className="text-text-primary text-base font-semibold">{value}</Text>
     {detail ? <Text className="text-text-muted text-xs">{detail}</Text> : null}
@@ -43,7 +43,7 @@ const DayStats: React.FC<{
     v === null ? '–' : formatLocalizedNumber(Math.round(v));
   return (
     <View
-      className="flex-row flex-wrap border-t border-border-subtle pt-3 mb-2"
+      className="flex-row flex-wrap justify-between gap-y-2 mb-3"
       testID="performance-day-stats"
     >
       <Stat
@@ -134,7 +134,7 @@ const PerformanceTodayCard: React.FC<{ onPress: () => void }> = ({
         defaultValue: 'Open performance cockpit',
       })}
       onPress={onPress}
-      className="bg-surface rounded-xl p-4 mb-3 shadow-sm"
+      className="bg-surface rounded-2xl border border-border-subtle p-5 mb-3"
     >
       <View className="flex-row justify-between items-center mb-2">
         <Text className="text-text-primary text-lg font-bold">
@@ -162,7 +162,7 @@ const PerformanceTodayCard: React.FC<{ onPress: () => void }> = ({
       ) : (
         <>
           <View className="flex-row items-baseline mb-2">
-            <Text className="text-text-primary text-3xl font-bold">
+            <Text className="text-text-primary text-4xl font-bold">
               {score === null || score === undefined
                 ? '–'
                 : formatLocalizedNumber(Math.round(score))}
