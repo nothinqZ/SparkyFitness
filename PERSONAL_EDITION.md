@@ -14,6 +14,7 @@ few conflicts.
 | Watch pairing by code (API key minted on confirm, collected once) | `routes/v2/watchPairingRoutes.ts`, `services/watchPairingService.ts`, migration `20261020110000_*` | Unit + e2e tested |
 | Garmin dedup: a watch-logged workout recorded by Garmin is linked, not imported twice | `services/watch/garminWatchLink.ts`, hook in `services/garmin/garminActivityProcessor.ts` | Unit + e2e tested (incl. re-sync) |
 | Performance analytics API | `routes/v2/performanceRoutes.ts`, `shared/src/analytics/performance.ts` | Unit (hand-calculated) + e2e tested |
+| Estimated training status, leg/run spacing finding, race prediction range | `shared/src/analytics/performance.ts`, `shared/src/analytics/insights.ts` | Unit tested; live on fitness-next |
 | Paired watches: list and unpair, re-pairing revokes the old key | `routes/v2/watchPairingRoutes.ts` (`/devices`), `models/watchDeviceRepository.ts`, migration `20261021100000_*` | Unit tested |
 | Web: Settings > Garmin watch (pair, status, unpair) | `SparkyFitnessFrontend/src/pages/Settings/GarminWatchSettings.tsx` | Unit tested |
 | Mobile: Settings > Garmin watch (pair, paired watches, unpair, status) | `SparkyFitnessMobile/src/screens/GarminWatchSettingsScreen.tsx` | Unit tested |
@@ -21,9 +22,9 @@ few conflicts.
 | Web: `/performance` desktop dashboard | `SparkyFitnessFrontend/src/pages/Performance/` | Unit tested, rendered at 2560 px light/dark |
 | Mobile: Library > Performance | `SparkyFitnessMobile/src/screens/PerformanceScreen.tsx` | Unit tested |
 | Mobile: `sideload` variant (single App ID, free-Apple-ID entitlements, custom bundle id) | `SparkyFitnessMobile/app.sideload.js`, `plugins/withSideloadEntitlements.ts` | Config tests + Linux `expo prebuild` verified |
-| iOS CI: unsigned (ad-hoc signed) IPA, structure check, GitHub release | `.github/workflows/ios-sideload.yml`, `scripts/ios/validate_ipa.py` | actionlint clean, validator tested; **workflow not run yet** |
-| iOS release server + AltSource | `deploy/ios-release-server/` | Tested in Docker (publish, serve, rollback) |
-| Garmin Connect IQ app "Sparky Strength" | `SparkyFitnessConnectIQ/` | Compiles with SDK 9.2.0 (compile-check device); **not run on a watch or in the simulator** |
+| iOS CI: unsigned (ad-hoc signed) IPA, structure check, GitHub release | `.github/workflows/ios-sideload.yml`, `scripts/ios/validate_ipa.py` | Runs on tag push; installed through SideStore on an iPhone |
+| iOS release server + AltSource | `deploy/ios-release-server/` | Running in the homelab, publishes each tagged release |
+| Garmin Connect IQ app "Sparky Strength" | `SparkyFitnessConnectIQ/` | Builds for the Forerunner 265 with SDK 9.2.0 and real device files; **not yet run on the watch** |
 
 Already in upstream and reused, not rebuilt: workout logger (sets, reps,
 weight, RPE/RIR, rest timers, previous values, progression, templates and
@@ -134,8 +135,8 @@ Tailscale; both need HTTPS with a certificate the phone trusts.
 2. Actions > **iOS sideload IPA** > Run workflow, or tag a release:
 
    ```bash
-   git tag -a sideload-v1.8.0-1 -m "First personal build"
-   git push origin sideload-v1.8.0-1
+   git tag -a sideload-v1.9.0-6 -m "Release notes"
+   git push origin sideload-v1.9.0-6
    ```
 
 3. Deploy the release server (`deploy/ios-release-server/README.md`), add its
@@ -181,13 +182,13 @@ python3 -m unittest discover -s deploy/ios-release-server/tests
 
 ## Known limitations
 
-- The iOS workflow has not run yet (no GitHub access from the build host);
-  first runs often surface Xcode/CocoaPods version issues.
-- The IPA has not been installed through SideStore yet.
-- The watch app has not run on hardware or in the simulator (needs Garmin
-  device definitions from the SDK Manager, which require a Garmin login).
+- The watch app has not run on the watch yet; the Forerunner 265 build has
+  to be copied to `GARMIN/APPS/` over USB (MTP).
+- The Bluetooth bridge between phone and watch has not run on devices.
+- SideStore offers an update only when the version string changes; tag builds
+  as `sideload-v<version>-<n>` (becomes `<version>.<n>`).
 - Garmin Connect shows watch-recorded sessions as generic strength activities
   without exercise sets; set details live in SparkyFitness.
 - Watch/Garmin matching is time based (±10 minutes).
-- `de` mobile locale: six placeholder errors inherited from upstream v1.8.0
-  (`pnpm run i18n:audit`); locales are machine-synced upstream.
+- Training status and readiness are estimates from load, VO2max trend and
+  HRV, not Garmin's own values; Garmin's are shown next to them where synced.
