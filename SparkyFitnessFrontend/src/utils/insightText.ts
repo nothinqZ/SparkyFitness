@@ -105,6 +105,51 @@ export function findingText(
           p
         ),
       };
+    case 'load.status_productive':
+      return {
+        title: t(
+          'insights.rules.statusProductive.title',
+          'Training looks productive'
+        ),
+        detail: t(
+          'insights.rules.statusProductive.detail',
+          'Load in the optimal range and VO2max rising ({{vo2Trend}} per week).',
+          p
+        ),
+      };
+    case 'load.status_unproductive':
+      return {
+        title: t(
+          'insights.rules.statusUnproductive.title',
+          'Training may be unproductive'
+        ),
+        detail: t(
+          'insights.rules.statusUnproductive.detail',
+          'Load in the optimal range but VO2max falling ({{vo2Trend}} per week). Check sleep, stress and intensity mix.',
+          p
+        ),
+      };
+    case 'load.status_detraining':
+      return {
+        title: t('insights.rules.statusDetraining.title', 'Fitness declining'),
+        detail: t(
+          'insights.rules.statusDetraining.detail',
+          'Low load and VO2max falling ({{vo2Trend}} per week).',
+          p
+        ),
+      };
+    case 'hybrid.leg_run_close':
+      return {
+        title: t(
+          'insights.rules.legRunClose.title',
+          'Leg days close to hard runs'
+        ),
+        detail: t(
+          'insights.rules.legRunClose.detail',
+          '{{count}} times in {{days}} days a leg session was within a day of a hard run. More space between them may help both.',
+          p
+        ),
+      };
     case 'strength.best_in_window':
       return {
         title: t('insights.rules.bestInWindow.title', 'Best {{exercise}}', p),
@@ -293,6 +338,10 @@ export function metricLabel(t: TFunction, metric: string): string {
       return t('insights.metric.loadAcute', 'Acute load');
     case 'loadRatio':
       return t('insights.metric.loadRatio', 'Load ratio');
+    case 'vo2Trend':
+      return t('insights.metric.vo2Trend', 'VO2max trend');
+    case 'legRunPairs':
+      return t('insights.metric.legRunPairs', 'Leg day next to hard run');
     case 'strengthVolume':
       return t('insights.metric.strengthVolume', 'Strength volume / week');
     case 'strengthSets':

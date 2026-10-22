@@ -348,7 +348,18 @@ function Dashboard({
     label,
     device: running.predictions.device?.[key] ?? null,
     estimated: running.predictions.estimated[key],
+    range: running.predictions.estimatedRange[key],
   }));
+  const statusLabel = (status: string) =>
+    ({
+      productive: t('performance.status.productive', 'Productive'),
+      maintaining: t('performance.status.maintaining', 'Maintaining'),
+      recovery: t('performance.status.recovery', 'Recovery'),
+      unproductive: t('performance.status.unproductive', 'Unproductive'),
+      strained: t('performance.status.strained', 'Strained'),
+      overreaching: t('performance.status.overreaching', 'Overreaching'),
+      detraining: t('performance.status.detraining', 'Detraining'),
+    })[status] ?? status;
 
   return (
     <>
@@ -388,6 +399,13 @@ function Dashboard({
             <Kpi
               label={t('performance.kpi.acwr', 'Load ratio (ACWR)')}
               value={load.current ? load.current.ratio.toFixed(2) : '–'}
+              detail={
+                load.trainingStatus
+                  ? t('performance.kpi.trainingStatus', 'Status: {{status}}', {
+                      status: statusLabel(load.trainingStatus.status),
+                    })
+                  : undefined
+              }
               provenance={load.current?.provenance ?? 'estimated'}
               status={
                 load.current
@@ -590,6 +608,12 @@ function Dashboard({
                       <td className="py-1.5">{formatDuration(r.device)}</td>
                       <td className="py-1.5 italic text-muted-foreground">
                         {formatDuration(r.estimated)}
+                        {r.range && r.range.samples > 1 && (
+                          <span className="block text-xs not-italic">
+                            {formatDuration(r.range.low)}–
+                            {formatDuration(r.range.high)}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}

@@ -10,7 +10,7 @@
 // Rules stay silent when the data is too thin rather than guess.
 
 import type { PerformanceOverviewResponse } from '../schemas/api/Performance.api.zod.ts';
-import type { DatedValue } from './performance.ts';
+import { legRunConflicts, type DatedValue } from './performance.ts';
 
 export type FindingKind = 'observation' | 'hypothesis' | 'finding';
 export type FindingArea =
@@ -97,6 +97,98 @@ function lastDays<T extends { date: string }>(
 }
 
 // --- Findings -----------------------------------------------------------
+
+/**
+ * Garmin-style training status (performance.ts, classifyTrainingStatus).
+ * Only the states that say something the load and recovery findings do not
+ * already: overreaching and strained repeat load.very_high / recovery.*.
+ */
+function trainingStatusFindings(
+  o: PerformanceOverviewResponse
+): FitnessFinding[] {
+  const ts = o.load.trainingStatus;
+  if (!ts) return [];
+  const rule = {
+    productive: { severity: 'info', tone: 'positive' },
+    unproductive: { severity: 'notice', tone: 'caution' },
+    detraining: { severity: 'notice', tone: 'caution' },
+  } as const;
+  if (!(ts.status in rule)) return [];
+  const { severity, tone } = rule[ts.status as keyof typeof rule];
+  const evidence: FindingEvidence[] = [];
+  if (o.load.current) {
+    evidence.push({
+      metric: 'loadRatio',
+      value: round(o.load.current.ratio, 2),
+      period: '7d/28d',
+      source: o.load.current.provenance === 'device' ? 'device' : 'estimated',
+    });
+  }
+  if (ts.vo2TrendPerWeek !== null) {
+    evidence.push({
+      metric: 'vo2Trend',
+      value: round(ts.vo2TrendPerWeek, 2),
+      unit: '/wk',
+      period: `${o.running.vo2max.length} values`,
+      source: 'device',
+    });
+  }
+  return [
+    {
+      id: `load.status_${ts.status}`,
+      area: 'load',
+      kind: 'hypothesis',
+      severity,
+      tone,
+      params: {
+        vo2Trend:
+          ts.vo2TrendPerWeek === null ? '–' : round(ts.vo2TrendPerWeek, 2),
+      },
+      evidence,
+      // A VO2max trend from a handful of watch estimates is shaky.
+      confidence:
+        ts.vo2TrendPerWeek !== null && o.running.vo2max.length >= 6
+          ? 'medium'
+          : 'low',
+    },
+  ];
+}
+
+/** Pairs before a hint; one close pair is just a busy week. */
+const LEG_RUN_MIN_PAIRS = 2;
+const LEG_RUN_WINDOW_DAYS = 28;
+
+function hybridFindings(
+  o: PerformanceOverviewResponse,
+  asOf: string
+): FitnessFinding[] {
+  const pairs = legRunConflicts(
+    o.strength.legDays,
+    o.running.hardRunDates,
+    asOf,
+    LEG_RUN_WINDOW_DAYS
+  );
+  if (pairs.length < LEG_RUN_MIN_PAIRS) return [];
+  return [
+    {
+      id: 'hybrid.leg_run_close',
+      area: 'load',
+      kind: 'hypothesis',
+      severity: 'notice',
+      tone: 'caution',
+      params: { count: pairs.length, days: LEG_RUN_WINDOW_DAYS },
+      evidence: [
+        {
+          metric: 'legRunPairs',
+          value: pairs.length,
+          period: `${LEG_RUN_WINDOW_DAYS}d`,
+          source: 'logged',
+        },
+      ],
+      confidence: 'medium',
+    },
+  ];
+}
 
 function recoveryFindings(o: PerformanceOverviewResponse): FitnessFinding[] {
   const hrv = o.recovery.hrv.status;
@@ -639,6 +731,8 @@ export function deriveFindings(
   const all = [
     ...recoveryFindings(overview),
     ...loadFindings(overview),
+    ...trainingStatusFindings(overview),
+    ...hybridFindings(overview, asOf),
     ...strengthFindings(overview, asOf),
     ...sleepFindings(overview, asOf),
     ...consistencyFindings(overview, asOf),

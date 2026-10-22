@@ -8353,7 +8353,17 @@
     "watchNone": "Pair the watch in SparkyFitness web: Settings > Garmin watch.",
     "readiness": {
       "garmin": "Garmin"
-    }
+    },
+    "status": {
+      "productive": "Productive",
+      "maintaining": "Maintaining",
+      "recovery": "Recovery",
+      "unproductive": "Unproductive",
+      "strained": "Strained",
+      "overreaching": "Overreaching",
+      "detraining": "Detraining"
+    },
+    "trainingStatus": "Training status"
   },
   "insights": {
     "compare": {
@@ -8410,7 +8420,9 @@
       "vo2max": "VO2max",
       "weeklySetsUsual": "Sets / week, usual",
       "weight": "Weight",
-      "weightTrend": "Weight trend"
+      "weightTrend": "Weight trend",
+      "vo2Trend": "VO2max trend",
+      "legRunPairs": "Leg day next to hard run"
     },
     "missing": "Not enough recent data for: {{list}}",
     "none": "Nothing stands out. Your recent data looks unremarkable.",
@@ -8498,6 +8510,22 @@
       "stallMany": {
         "title": "{{count}} lifts without a new best",
         "detail": "For at least {{weeks}} weeks, e.g. {{exercises}}. Often a lighter phase or less training rather than a plateau."
+      },
+      "statusProductive": {
+        "title": "Training looks productive",
+        "detail": "Load in the optimal range and VO2max rising ({{vo2Trend}} per week)."
+      },
+      "statusUnproductive": {
+        "title": "Training may be unproductive",
+        "detail": "Load in the optimal range but VO2max falling ({{vo2Trend}} per week). Check sleep, stress and intensity mix."
+      },
+      "statusDetraining": {
+        "title": "Fitness declining",
+        "detail": "Low load and VO2max falling ({{vo2Trend}} per week)."
+      },
+      "legRunClose": {
+        "title": "Leg days close to hard runs",
+        "detail": "{{count}} times in {{days}} days a leg session was within a day of a hard run. More space between them may help both."
       }
     },
     "source": {

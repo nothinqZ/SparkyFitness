@@ -6910,7 +6910,8 @@
       "readiness": "Bereitschaft",
       "runs": "{{count}} Läufe",
       "sleep": "Schlaf (Ø)",
-      "weightTrend": "Gewichtstrend"
+      "weightTrend": "Gewichtstrend",
+      "trainingStatus": "Status: {{status}}"
     },
     "loadError": "Performance-Daten konnten nicht geladen werden",
     "loading": "Lädt …",
@@ -6971,6 +6972,15 @@
       "optimal": "Optimal (0,8–1,3)",
       "optimalShort": "optimal",
       "veryHigh": "Sehr hoch (> 1,5)"
+    },
+    "status": {
+      "productive": "Produktiv",
+      "maintaining": "Erhaltend",
+      "recovery": "Erholung",
+      "unproductive": "Unproduktiv",
+      "strained": "Angespannt",
+      "overreaching": "Überlastung",
+      "detraining": "Leistungsabbau"
     }
   },
   "insights": {
@@ -7032,7 +7042,9 @@
       "vo2max": "VO2max",
       "weeklySetsUsual": "Sätze / Woche, üblich",
       "weight": "Gewicht",
-      "weightTrend": "Gewichtstrend"
+      "weightTrend": "Gewichtstrend",
+      "vo2Trend": "VO2max-Trend",
+      "legRunPairs": "Beintag neben hartem Lauf"
     },
     "missing": "Zu wenige aktuelle Daten für: {{list}}",
     "none": "Nichts Auffälliges. Deine letzten Daten sehen unauffällig aus.",
@@ -7122,6 +7134,22 @@
       "stallMany": {
         "title": "{{count}} Übungen ohne neuen Bestwert",
         "detail": "Seit mindestens {{weeks}} Wochen, z. B. {{exercises}}. Oft eher eine leichtere Phase oder weniger Training als ein Plateau."
+      },
+      "statusProductive": {
+        "title": "Training wirkt produktiv",
+        "detail": "Belastung im optimalen Bereich und VO2max steigend ({{vo2Trend}} pro Woche)."
+      },
+      "statusUnproductive": {
+        "title": "Training möglicherweise unproduktiv",
+        "detail": "Belastung im optimalen Bereich, aber VO2max sinkend ({{vo2Trend}} pro Woche). Schlaf, Stress und Intensitätsmix prüfen."
+      },
+      "statusDetraining": {
+        "title": "Fitness nimmt ab",
+        "detail": "Niedrige Belastung und VO2max sinkend ({{vo2Trend}} pro Woche)."
+      },
+      "legRunClose": {
+        "title": "Beintage nah an harten Läufen",
+        "detail": "{{count}}-mal in {{days}} Tagen lag eine Beineinheit höchstens einen Tag neben einem harten Lauf. Mehr Abstand kann beidem helfen."
       }
     },
     "source": {

@@ -54,6 +54,8 @@ export interface StrengthSetRow {
   exercise_name: string;
   weight: string | number;
   reps: number;
+  /** JSON-ish text like ["quadriceps","glutes"]; null for custom exercises. */
+  primary_muscles: string | null;
 }
 
 // Runs: running by category or by name (word boundaries, as in
@@ -175,7 +177,7 @@ async function getStrengthSets(
   return withClient(userId, authUserId, (q) =>
     q(
       `SELECT TO_CHAR(e.entry_date, 'YYYY-MM-DD') AS date, e.exercise_id, e.exercise_name,
-              s.weight, s.reps
+              s.weight, s.reps, e.primary_muscles
        FROM exercise_entry_sets s
        JOIN exercise_entries e ON e.id = s.exercise_entry_id
        WHERE e.user_id = $1 AND e.entry_date BETWEEN $2 AND $3

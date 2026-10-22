@@ -65,11 +65,19 @@ const overview: PerformanceOverviewResponse = {
       },
       device: { '5k': 1260, '10k': null, half_marathon: null, marathon: 12000 },
       deviceDate: '2026-10-20',
+      estimatedRange: {
+        '5k': { low: 1180, high: 1230, samples: 3 },
+        '10k': null,
+        half_marathon: null,
+        marathon: null,
+      },
     },
     vo2max: [{ date: '2026-10-20', value: 52 }],
+    hardRunDates: [],
   },
   strength: {
     provenance: 'estimated',
+    legDays: [],
     weekly: [{ weekStart: '2026-10-12', volumeKg: 1570, sets: 3 }],
     topLifts: [
       {
@@ -86,6 +94,11 @@ const overview: PerformanceOverviewResponse = {
     estimated: [{ date: '2026-10-20', acute: 30, chronic: 28, ratio: 1.07 }],
     device: [],
     current: { ratio: 1.07, zone: 'optimal', provenance: 'estimated' },
+    trainingStatus: {
+      status: 'productive',
+      provenance: 'estimated',
+      vo2TrendPerWeek: 0.3,
+    },
   },
   recovery: {
     hrv: {
@@ -152,6 +165,7 @@ describe('PerformancePage', () => {
     expect(screen.getByText('Below baseline')).toBeInTheDocument();
     expect(screen.getByText('Garmin: 64')).toBeInTheDocument();
     expect(screen.getByText('-0.70 kg/wk')).toBeInTheDocument();
+    expect(screen.getByText('Status: Productive')).toBeInTheDocument();
     expect(screen.getAllByText('Estimated').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Device').length).toBeGreaterThan(0);
   });

@@ -443,3 +443,169 @@ export function movingAverage(
     return { date: p.date, value: round(mean(vals.map((q) => q.value))!, 2) };
   });
 }
+
+// --- Training status (Garmin Connect style, estimated) ------------------
+
+export type TrainingStatus =
+  | 'productive'
+  | 'maintaining'
+  | 'recovery'
+  | 'unproductive'
+  | 'strained'
+  | 'overreaching'
+  | 'detraining';
+
+/** VO2max change per week below which the trend counts as flat. */
+export const VO2_TREND_FLAT_PER_WEEK = 0.1;
+
+/**
+ * A Garmin-style training status from signals this app already has: the
+ * load zone (acute:chronic ratio), the VO2max trend and the HRV status.
+ * Garmin's own status uses more inputs (load focus, heat/altitude
+ * acclimation), so this is labelled as an estimate. Returns null when the
+ * load ratio is unknown, because every status depends on it.
+ *
+ *   very high load                      -> overreaching
+ *   HRV below baseline (any load)       -> strained
+ *   low load and VO2max falling         -> detraining
+ *   low load otherwise                  -> recovery
+ *   optimal/high load, VO2max rising    -> productive
+ *   optimal/high load, VO2max falling   -> unproductive
+ *   optimal/high load, flat or unknown  -> maintaining
+ */
+export function classifyTrainingStatus(input: {
+  zone: LoadZone | null;
+  vo2TrendPerWeek: number | null;
+  hrvStatus: BaselineStatus['status'] | null;
+}): TrainingStatus | null {
+  const { zone, vo2TrendPerWeek: vo2, hrvStatus } = input;
+  if (!zone) return null;
+  if (zone === 'very_high') return 'overreaching';
+  if (hrvStatus === 'below') return 'strained';
+  const rising = vo2 !== null && vo2 >= VO2_TREND_FLAT_PER_WEEK;
+  const falling = vo2 !== null && vo2 <= -VO2_TREND_FLAT_PER_WEEK;
+  if (zone === 'low') return falling ? 'detraining' : 'recovery';
+  if (rising) return 'productive';
+  if (falling) return 'unproductive';
+  return 'maintaining';
+}
+
+// --- Hybrid training: leg days next to hard runs ------------------------
+
+/** Muscles whose training counts as a leg day. */
+const LEG_MUSCLES = [
+  'quadriceps',
+  'hamstrings',
+  'glutes',
+  'calves',
+  'adductors',
+  'abductors',
+];
+
+/** True when an exercise's primary muscles include a leg muscle. */
+export function isLegExercise(
+  primaryMuscles: string | null | undefined
+): boolean {
+  if (!primaryMuscles) return false;
+  const text = primaryMuscles.toLowerCase();
+  return LEG_MUSCLES.some((m) => text.includes(m));
+}
+
+/**
+ * Days with a hard run: faster than 95% of the median pace, at least 1.5×
+ * the median distance, or 75 minutes or longer. Medians need 5 runs; with
+ * fewer, only the duration rule applies.
+ */
+export function hardRunDates(runs: readonly RunRow[]): string[] {
+  const valid = runs.filter((r) => r.distanceKm > 0 && r.durationMinutes > 0);
+  const median = (xs: number[]) => {
+    const s = [...xs].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+  };
+  const enough = valid.length >= 5;
+  const medPace = enough
+    ? median(valid.map((r) => (r.durationMinutes * 60) / r.distanceKm))
+    : 0;
+  const medDist = enough ? median(valid.map((r) => r.distanceKm)) : 0;
+  const dates = valid
+    .filter((r) => {
+      const pace = (r.durationMinutes * 60) / r.distanceKm;
+      return (
+        r.durationMinutes >= 75 ||
+        (enough && (pace <= medPace * 0.95 || r.distanceKm >= medDist * 1.5))
+      );
+    })
+    .map((r) => r.date);
+  return [...new Set(dates)].sort();
+}
+
+/**
+ * Leg day / hard run pairs at most one calendar day apart (either order,
+ * or the same day) within the `windowDays` before `asOf`. Lifting legs
+ * right before or after a hard run blunts both; a repeated pattern is worth
+ * pointing out.
+ */
+export function legRunConflicts(
+  legDays: readonly string[],
+  hardRuns: readonly string[],
+  asOf: string,
+  windowDays = 28
+): { legDay: string; run: string }[] {
+  const end = dayIndex(asOf);
+  const inWindow = (d: string) => {
+    const i = dayIndex(d);
+    return i <= end && i > end - windowDays;
+  };
+  const pairs: { legDay: string; run: string }[] = [];
+  for (const leg of legDays.filter(inWindow)) {
+    for (const run of hardRuns.filter(inWindow)) {
+      if (Math.abs(dayIndex(leg) - dayIndex(run)) <= 1) {
+        pairs.push({ legDay: leg, run });
+      }
+    }
+  }
+  return pairs;
+}
+
+// --- Race prediction range ----------------------------------------------
+
+/**
+ * Riegel predictions from the three fastest-predicting eligible runs per
+ * distance, as a low..high band: one great day should not stand for your
+ * form, so the spread of your best efforts is shown instead of the single
+ * best value. `samples` is how many runs the band rests on (1–3).
+ */
+export function riegelPredictionRange(
+  runs: readonly RunRow[]
+): Record<
+  PerformanceRaceDistance,
+  { low: number; high: number; samples: number } | null
+> {
+  const eligible = runs.filter(
+    (r) => r.distanceKm >= MIN_PREDICTION_RUN_KM && r.durationMinutes > 0
+  );
+  const out = {} as Record<
+    PerformanceRaceDistance,
+    { low: number; high: number; samples: number } | null
+  >;
+  for (const [key, km] of Object.entries(RACE_DISTANCES_KM) as [
+    PerformanceRaceDistance,
+    number,
+  ][]) {
+    const best = eligible
+      .map((r) =>
+        riegelPredictSeconds(r.distanceKm, r.durationMinutes * 60, km)
+      )
+      .sort((a, b) => a - b)
+      .slice(0, 3);
+    out[key] = best.length
+      ? {
+          low: Math.round(best[0]!),
+          high: Math.round(best[best.length - 1]!),
+          samples: best.length,
+        }
+      : null;
+  }
+  return out;
+}

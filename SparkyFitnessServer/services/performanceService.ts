@@ -2,12 +2,16 @@ import {
   acuteChronicLoad,
   baselineStatus,
   classifyAcwr,
+  classifyTrainingStatus,
   epleyOneRepMaxKg,
+  hardRunDates,
+  isLegExercise,
   isoWeekStart,
   movingAverage,
   paceSecondsPerKm,
   predictRaceTimesRiegel,
   recoveryEstimate,
+  riegelPredictionRange,
   sleepConsistency,
   todayInZone,
   weeklyRunSummaries,
@@ -88,8 +92,12 @@ export function summarizeStrength(
     exercise_name: string;
     weight: string | number;
     reps: number;
+    primary_muscles?: string | null;
   }>
 ): PerformanceOverviewResponse['strength'] {
+  const legDays = new Set(
+    sets.filter((s) => isLegExercise(s.primary_muscles)).map((s) => s.date)
+  );
   const weekly = new Map<
     string,
     { volumeKg: number; sets: number; days: Set<string> }
@@ -137,6 +145,7 @@ export function summarizeStrength(
   }
   return {
     provenance: 'estimated',
+    legDays: [...legDays].sort(),
     weekly: [...weekly.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([weekStart, w]) => ({
@@ -371,8 +380,10 @@ async function getOverview(
             }
           : null,
         deviceDate: latestDevicePrediction?.date ?? null,
+        estimatedRange: riegelPredictionRange(runs),
       },
       vo2max,
+      hardRunDates: hardRunDates(runs),
     },
     strength: summarizeStrength(setRows),
     load: {
@@ -381,6 +392,17 @@ async function getOverview(
       current: current
         ? { ...current, zone: classifyAcwr(current.ratio)! }
         : null,
+      trainingStatus: (() => {
+        const vo2TrendPerWeek = weeklyTrend(vo2max);
+        const status = classifyTrainingStatus({
+          zone: current ? classifyAcwr(current.ratio) : null,
+          vo2TrendPerWeek,
+          hrvStatus: hrvStatus.status,
+        });
+        return status
+          ? { status, provenance: 'estimated' as const, vo2TrendPerWeek }
+          : null;
+      })(),
     },
     recovery: {
       hrv: {

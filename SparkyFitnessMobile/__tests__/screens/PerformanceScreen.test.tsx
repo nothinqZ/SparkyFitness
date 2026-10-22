@@ -63,11 +63,19 @@ const overview: PerformanceOverviewResponse = {
       },
       device: { '5k': 1260, '10k': null, half_marathon: null, marathon: 12000 },
       deviceDate: '2026-10-20',
+      estimatedRange: {
+        '5k': { low: 1180, high: 1230, samples: 3 },
+        '10k': null,
+        half_marathon: null,
+        marathon: null,
+      },
     },
     vo2max: [{ date: '2026-10-20', value: 52 }],
+    hardRunDates: [],
   },
   strength: {
     provenance: 'estimated',
+    legDays: [],
     weekly: [],
     topLifts: [
       {
@@ -84,6 +92,11 @@ const overview: PerformanceOverviewResponse = {
     estimated: [],
     device: [],
     current: { ratio: 1.6, zone: 'very_high', provenance: 'device' },
+    trainingStatus: {
+      status: 'productive',
+      provenance: 'estimated',
+      vo2TrendPerWeek: 0.3,
+    },
   },
   recovery: {
     hrv: {
@@ -168,6 +181,7 @@ describe('PerformanceScreen', () => {
     expect(screen.getByText('33')).toBeTruthy();
     expect(screen.getByText('64')).toBeTruthy();
     expect(screen.getByText('1.60 · Very high (> 1.5)')).toBeTruthy();
+    expect(screen.getByText('Productive')).toBeTruthy();
     expect(screen.getByText('Body Battery')).toBeTruthy();
     expect(screen.queryByText('25.0 km · 4×')).toBeNull();
 

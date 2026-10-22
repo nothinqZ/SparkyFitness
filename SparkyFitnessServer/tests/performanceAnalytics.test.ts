@@ -13,6 +13,11 @@ import {
   weeklyRunSummaries,
   weeklyTrend,
   type DatedValue,
+  classifyTrainingStatus,
+  hardRunDates,
+  isLegExercise,
+  legRunConflicts,
+  riegelPredictionRange,
 } from '@workspace/shared';
 
 // Shared calculations behind /api/v2/performance. Expected values are worked
@@ -227,5 +232,77 @@ describe('trends', () => {
       7
     );
     expect(avg.map((p) => p.value)).toEqual([80, 81, 70]);
+  });
+});
+
+describe('training status, hybrid helpers and prediction range', () => {
+  it('classifies the Garmin-style status from load, VO2max trend and HRV', () => {
+    const c = (
+      zone: Parameters<typeof classifyTrainingStatus>[0]['zone'],
+      vo2: number | null,
+      hrv: 'below' | 'within' | null = 'within'
+    ) => classifyTrainingStatus({ zone, vo2TrendPerWeek: vo2, hrvStatus: hrv });
+    expect(c('optimal', 0.3)).toBe('productive');
+    expect(c('high', -0.2)).toBe('unproductive');
+    expect(c('optimal', 0.05)).toBe('maintaining');
+    expect(c('optimal', null)).toBe('maintaining');
+    expect(c('low', -0.3)).toBe('detraining');
+    expect(c('low', 0)).toBe('recovery');
+    expect(c('very_high', 0.5, 'below')).toBe('overreaching');
+    expect(c('optimal', 0.5, 'below')).toBe('strained');
+    expect(c(null, 0.5)).toBeNull();
+  });
+
+  it('recognises leg exercises from their primary muscles', () => {
+    expect(isLegExercise('["quadriceps","glutes"]')).toBe(true);
+    expect(isLegExercise('["calves"]')).toBe(true);
+    expect(isLegExercise('["chest"]')).toBe(false);
+    expect(isLegExercise(null)).toBe(false);
+  });
+
+  it('marks fast, long and 75+ minute runs as hard', () => {
+    const easy = (d: string) => ({
+      date: d,
+      distanceKm: 8,
+      durationMinutes: 48,
+    }); // 6:00/km
+    const runs = [
+      easy('2026-10-01'),
+      easy('2026-10-03'),
+      easy('2026-10-05'),
+      easy('2026-10-07'),
+      { date: '2026-10-09', distanceKm: 8, durationMinutes: 44 }, // 5:30/km, 8% faster
+      { date: '2026-10-11', distanceKm: 14, durationMinutes: 84 }, // long and 84 min
+      { date: '2026-10-13', distanceKm: 8, durationMinutes: 47 }, // 2% faster only
+    ];
+    expect(hardRunDates(runs)).toEqual(['2026-10-09', '2026-10-11']);
+    // Under 5 runs only the duration rule applies.
+    expect(
+      hardRunDates([
+        { date: '2026-10-01', distanceKm: 10, durationMinutes: 40 },
+      ])
+    ).toEqual([]);
+  });
+
+  it('pairs leg days and hard runs at most a day apart within the window', () => {
+    expect(
+      legRunConflicts(
+        ['2026-10-10', '2026-10-18', '2026-09-01'],
+        ['2026-10-11', '2026-10-15', '2026-09-01'],
+        '2026-10-20',
+        28
+      )
+    ).toEqual([{ legDay: '2026-10-10', run: '2026-10-11' }]);
+  });
+
+  it('gives a Riegel band from the three best-predicting runs', () => {
+    const range = riegelPredictionRange([
+      { date: '2026-10-01', distanceKm: 5, durationMinutes: 20 }, // 1200 s
+      { date: '2026-10-02', distanceKm: 5, durationMinutes: 21 }, // 1260 s
+      { date: '2026-10-03', distanceKm: 5, durationMinutes: 22 }, // 1320 s
+      { date: '2026-10-04', distanceKm: 5, durationMinutes: 30 }, // ignored, 4th
+    ]);
+    expect(range['5k']).toEqual({ low: 1200, high: 1320, samples: 3 });
+    expect(riegelPredictionRange([])['10k']).toBeNull();
   });
 });

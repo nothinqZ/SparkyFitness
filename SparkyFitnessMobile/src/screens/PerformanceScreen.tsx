@@ -137,6 +137,26 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = ({
         defaultValue: 'Not enough history yet',
       }),
     })[status] ?? status;
+  const statusText = (status: string) =>
+    ({
+      productive: t('performance.status.productive', {
+        defaultValue: 'Productive',
+      }),
+      maintaining: t('performance.status.maintaining', {
+        defaultValue: 'Maintaining',
+      }),
+      recovery: t('performance.status.recovery', { defaultValue: 'Recovery' }),
+      unproductive: t('performance.status.unproductive', {
+        defaultValue: 'Unproductive',
+      }),
+      strained: t('performance.status.strained', { defaultValue: 'Strained' }),
+      overreaching: t('performance.status.overreaching', {
+        defaultValue: 'Overreaching',
+      }),
+      detraining: t('performance.status.detraining', {
+        defaultValue: 'Detraining',
+      }),
+    })[status] ?? status;
   const zoneText = (zone: string) =>
     ({
       low: t('performance.zone.low', { defaultValue: 'Low (< 0.8)' }),
@@ -200,8 +220,17 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = ({
                     : '–'
                 }
                 tone={acwrTone(d.load.current?.zone)}
-                last
+                last={!d.load.trainingStatus}
               />
+              {d.load.trainingStatus && (
+                <Row
+                  label={t('performance.trainingStatus', {
+                    defaultValue: 'Training status',
+                  })}
+                  value={statusText(d.load.trainingStatus.status)}
+                  last
+                />
+              )}
             </Card>
 
             <Card
@@ -353,14 +382,21 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = ({
             })}
             provenance={['device', 'estimated']}
           >
-            {races.map(([key, label], i) => (
-              <Row
-                key={key}
-                label={label}
-                value={`${formatDurationSeconds(d.running.predictions.device?.[key])}  ·  ~${formatDurationSeconds(d.running.predictions.estimated[key])}`}
-                last={i === races.length - 1}
-              />
-            ))}
+            {races.map(([key, label], i) => {
+              const range = d.running.predictions.estimatedRange[key];
+              const band =
+                range && range.samples > 1
+                  ? ` (${formatDurationSeconds(range.low)}–${formatDurationSeconds(range.high)})`
+                  : '';
+              return (
+                <Row
+                  key={key}
+                  label={label}
+                  value={`${formatDurationSeconds(d.running.predictions.device?.[key])}  ·  ~${formatDurationSeconds(d.running.predictions.estimated[key])}${band}`}
+                  last={i === races.length - 1}
+                />
+              );
+            })}
             <Text className="text-text-muted text-xs mt-2">
               {t('performance.raceLegend', {
                 defaultValue: 'Garmin · ~Estimate (Riegel, best run ≥ 3 km)',

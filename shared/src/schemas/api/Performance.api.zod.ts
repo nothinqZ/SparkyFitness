@@ -41,6 +41,10 @@ const today = z.object({
   sleepScore: z.number().nullable(),
 });
 
+const raceRange = z
+  .object({ low: z.number(), high: z.number(), samples: z.number() })
+  .nullable();
+
 export const performanceOverviewQuerySchema = z.object({
   end: z
     .string()
@@ -81,11 +85,22 @@ export const performanceOverviewResponseSchema = z.object({
       estimated: raceTimes,
       device: raceTimes.nullable(),
       deviceDate: z.string().nullable(),
+      // Riegel band from the three best-predicting runs (estimated).
+      estimatedRange: z.object({
+        '5k': raceRange,
+        '10k': raceRange,
+        half_marathon: raceRange,
+        marathon: raceRange,
+      }),
     }),
     vo2max: z.array(dated),
+    // Days with a hard run (fast, long or 75+ min), for hybrid hints.
+    hardRunDates: z.array(z.string()),
   }),
   strength: z.object({
     provenance: provenance,
+    // Days with a weighted leg exercise.
+    legDays: z.array(z.string()),
     weekly: z.array(
       z.object({
         weekStart: z.string(),
@@ -128,6 +143,22 @@ export const performanceOverviewResponseSchema = z.object({
         ratio: z.number(),
         zone: z.enum(['low', 'optimal', 'high', 'very_high']),
         provenance: provenance,
+      })
+      .nullable(),
+    // Garmin-style status from load zone, VO2max trend and HRV (estimated).
+    trainingStatus: z
+      .object({
+        status: z.enum([
+          'productive',
+          'maintaining',
+          'recovery',
+          'unproductive',
+          'strained',
+          'overreaching',
+          'detraining',
+        ]),
+        provenance: z.literal('estimated'),
+        vo2TrendPerWeek: z.number().nullable(),
       })
       .nullable(),
   }),

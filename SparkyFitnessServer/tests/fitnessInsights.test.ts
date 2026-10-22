@@ -51,11 +51,23 @@ function overview(
         },
         device: null,
         deviceDate: null,
+        estimatedRange: {
+          '5k': null,
+          '10k': null,
+          half_marathon: null,
+          marathon: null,
+        },
       },
       vo2max: [],
+      hardRunDates: [],
     } as never,
-    strength: { provenance: 'estimated', weekly: [], topLifts: [] },
-    load: { estimated: [], device: [], current: null },
+    strength: {
+      provenance: 'estimated',
+      legDays: [],
+      weekly: [],
+      topLifts: [],
+    },
+    load: { estimated: [], device: [], current: null, trainingStatus: null },
     recovery: {
       hrv: { series: [], status: within },
       restingHr: { series: [], status: within },
@@ -514,5 +526,64 @@ describe('buildSummaryPrompt', () => {
     expect(prompt).toContain('Use ONLY the findings below');
     expect(prompt).toContain('"rule":"load.very_high"');
     expect(prompt).toContain('must not be guessed: hrv');
+  });
+});
+
+describe('training status and hybrid findings', () => {
+  it('reports a productive status as a positive hypothesis', () => {
+    const findings = deriveFindings(
+      overview((o) => {
+        o.load.current = { ratio: 1.1, zone: 'optimal', provenance: 'device' };
+        o.load.trainingStatus = {
+          status: 'productive',
+          provenance: 'estimated',
+          vo2TrendPerWeek: 0.3,
+        };
+        o.running.vo2max = Array.from({ length: 8 }, (_, i) => ({
+          date: day(-i * 7),
+          value: 50 + i * 0.3,
+        }));
+      })
+    );
+    const f = findings.find((x) => x.id === 'load.status_productive');
+    expect(f).toMatchObject({
+      kind: 'hypothesis',
+      tone: 'positive',
+      confidence: 'medium',
+    });
+    expect(f?.evidence.map((e) => e.metric)).toEqual(['loadRatio', 'vo2Trend']);
+  });
+
+  it('does not repeat overreaching, which load.very_high already says', () => {
+    const findings = deriveFindings(
+      overview((o) => {
+        o.load.trainingStatus = {
+          status: 'overreaching',
+          provenance: 'estimated',
+          vo2TrendPerWeek: null,
+        };
+      })
+    );
+    expect(findings.some((f) => f.id.startsWith('load.status_'))).toBe(false);
+  });
+
+  it('flags repeated leg days next to hard runs, not a single one', () => {
+    const one = deriveFindings(
+      overview((o) => {
+        o.strength.legDays = [day(-3)];
+        o.running.hardRunDates = [day(-2)];
+      })
+    );
+    expect(one.some((f) => f.id === 'hybrid.leg_run_close')).toBe(false);
+    const two = deriveFindings(
+      overview((o) => {
+        o.strength.legDays = [day(-10), day(-3)];
+        o.running.hardRunDates = [day(-10), day(-2), day(-20)];
+      })
+    );
+    expect(two.find((f) => f.id === 'hybrid.leg_run_close')).toMatchObject({
+      params: { count: 2, days: 28 },
+      severity: 'notice',
+    });
   });
 });
