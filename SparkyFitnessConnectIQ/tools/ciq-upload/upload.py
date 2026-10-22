@@ -1,11 +1,12 @@
 """Publishes a new version of the Sparky Strength beta app:
 
     venv\\Scripts\\python.exe upload.py <path-to.iq> <version>
+    venv\\Scripts\\python.exe upload.py --submit-pending <version>
 
 Uses the Edge profile signed in with login (the .bat on the desktop). Fills
-Garmin's "Upload New Version" form and presses "Upload and publish", then
-saves a screenshot of the result in probe\\. Exits 2 when the session has
-expired (sign in again with the .bat)."""
+Garmin's two-step form, including the final "Submit" on "Edit App Details".
+The second command finishes a verified upload left by an older script.
+Exits 2 when the session has expired (sign in again with the .bat)."""
 import sys
 sys.stdout.reconfigure(errors="replace")
 from pathlib import Path
@@ -22,8 +23,14 @@ BROWSER = {
 }
 APP_URL = "https://apps-developer.garmin.com/apps/72557e98-0839-42e3-925f-3f97907e6a12"
 
-iq, version = Path(sys.argv[1]).resolve(), sys.argv[2]
-if not iq.is_file():
+pending_only = len(sys.argv) == 3 and sys.argv[1] == "--submit-pending"
+if pending_only:
+    iq, version = None, sys.argv[2]
+elif len(sys.argv) == 3:
+    iq, version = Path(sys.argv[1]).resolve(), sys.argv[2]
+else:
+    sys.exit("usage: upload.py <path-to.iq> <version> | --submit-pending <version>")
+if iq is not None and not iq.is_file():
     sys.exit(f"no such file: {iq}")
 
 with sync_playwright() as p:
@@ -32,28 +39,28 @@ with sync_playwright() as p:
     page = ctx.new_page()
     page.goto(APP_URL, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(8000)
-    upload = page.get_by_text("Upload New Version", exact=True)
-    if upload.count() == 0:
+    action = page.get_by_text(
+        "Edit Details" if pending_only else "Upload New Version", exact=True
+    )
+    if action.count() == 0:
         page.screenshot(path=str(OUT / "upload-failed.png"))
-        print("not signed in (no 'Upload New Version'): run the login .bat again")
+        print("not signed in or app action unavailable: run the login .bat again")
         sys.exit(2)
-    upload.first.click()
-    page.wait_for_timeout(3000)
-    with page.expect_file_chooser() as chooser:
-        page.get_by_text("Choose file", exact=True).first.click()
-    chooser.value.set_files(str(iq))
-    page.fill("#app-version", version)
-    page.wait_for_timeout(1500)
-    publish = page.get_by_role("button", name="Upload and publish")
-    publish.wait_for(state="visible")
-    if not publish.is_enabled():
-        page.screenshot(path=str(OUT / "upload-failed.png"), full_page=True)
-        print("'Upload and publish' stays disabled; see probe\\upload-failed.png")
-        sys.exit(1)
-    publish.click()
-    # "Upload and publish" publishes once Garmin has verified the file; the
-    # page then offers step 2 ("Edit App Details") for the store listing,
-    # which stays as it is, so nothing more is submitted.
+    action.first.click()
+    if not pending_only:
+        page.wait_for_timeout(3000)
+        with page.expect_file_chooser() as chooser:
+            page.get_by_text("Choose file", exact=True).first.click()
+        chooser.value.set_files(str(iq))
+        page.fill("#app-version", version)
+        page.wait_for_timeout(1500)
+        publish = page.get_by_role("button", name="Upload and publish")
+        publish.wait_for(state="visible")
+        if not publish.is_enabled():
+            page.screenshot(path=str(OUT / "upload-failed.png"), full_page=True)
+            print("'Upload and publish' stays disabled; see probe\\upload-failed.png")
+            sys.exit(1)
+        publish.click()
     try:
         page.get_by_text("Edit App Details").first.wait_for(timeout=90000)
     except Exception:
@@ -61,10 +68,23 @@ with sync_playwright() as p:
         print("Garmin did not accept the file; see probe\\upload-failed.png")
         sys.exit(1)
     text = page.inner_text("body")
-    page.screenshot(path=str(OUT / "upload-result.png"), full_page=True)
-    if f"Version: {version}" in text and "Status: Verified" in text:
-        print(f"published {version}")
-    else:
-        print("verified page without the expected version; see probe\\upload-result.png")
+    if f"Version: {version}" not in text or "Status: Verified" not in text:
+        page.screenshot(path=str(OUT / "upload-failed.png"), full_page=True)
+        print("wrong or unverified version; see probe\\upload-failed.png")
         sys.exit(1)
+    submit = page.get_by_role("button", name="Submit", exact=True)
+    submit.wait_for(state="visible")
+    if not submit.is_enabled():
+        page.screenshot(path=str(OUT / "upload-failed.png"), full_page=True)
+        print("final Submit is disabled; see probe\\upload-failed.png")
+        sys.exit(1)
+    submit.click()
+    try:
+        page.wait_for_url(APP_URL, timeout=90000)
+    except Exception:
+        page.screenshot(path=str(OUT / "upload-failed.png"), full_page=True)
+        print("Garmin did not return to the app page after Submit")
+        sys.exit(1)
+    page.screenshot(path=str(OUT / "upload-result.png"), full_page=True)
+    print(f"submitted {version}; check the store version after Garmin processes it")
     ctx.close()
