@@ -342,6 +342,52 @@ class WorkoutSession {
         }
     }
 
+    // The set logged last on the watch, for correcting it during the rest.
+    // Null in a live workout: sets logged there belong to the phone.
+    function lastLogged() as Dictionary or Null {
+        var last = data["last_ex"];
+        if (isLive() || !(last instanceof Number) || last < 0 || last >= exerciseCount()) {
+            return null;
+        }
+        var logged = (exercises()[last] as Dictionary)["logged"] as Array;
+        return logged.size() > 0 ? logged[logged.size() - 1] as Dictionary : null;
+    }
+
+    function lastLoggedName() as String {
+        return (exercises()[data["last_ex"] as Number] as Dictionary)["name"] as String;
+    }
+
+    // Replaces reps, weight and RPE of the set logged last; its time and
+    // rest stay.
+    function amendLastSet(reps as Number, weightKg as Float, rpe as Float or Null) as Void {
+        var entry = lastLogged();
+        if (entry == null) {
+            return;
+        }
+        entry["reps"] = reps;
+        entry["weight"] = weightKg;
+        if (rpe != null) {
+            entry["rpe"] = rpe;
+        } else {
+            entry.remove("rpe");
+        }
+        save();
+    }
+
+    // The next other exercise with a set left, for "Next: ..." on screen.
+    function nextExerciseName() as String or Null {
+        var list = exercises();
+        var n = list.size();
+        var idx = exerciseIndex();
+        for (var step = 1; step < n; step++) {
+            var ex = list[(idx + step) % n] as Dictionary;
+            if (hasOpenSet(ex)) {
+                return ex["name"] as String;
+            }
+        }
+        return null;
+    }
+
     function isExerciseComplete() as Boolean {
         var planned = plannedCount();
         return planned > 0 && loggedCount() >= planned;

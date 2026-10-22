@@ -16,7 +16,8 @@ import Toybox.UserProfile;
 //               calories, sets done, volume
 //   2 Overview  every exercise with its progress; SELECT picks one
 //
-//   SELECT / tap       log the next set (one press confirms the target)
+//   SELECT             log the set as shown (one press), then rest
+//   tap                change reps / weight first, then log
 //   swipe left/right   next / previous exercise
 //   MENU (long UP)     exercises, undo last set
 //   BACK               continue, finish or discard
@@ -154,23 +155,19 @@ class WorkoutView extends WatchUi.View {
             dc.drawText(cx, h * 0.62, Graphics.FONT_XTINY,
                 (WatchUi.loadResource(Rez.Strings.Last) as String) + " " + describeSet(previous[idx] as Dictionary, unit),
                 Graphics.TEXT_JUSTIFY_CENTER);
-            var suggestion = "w".equals(plan == null ? null : plan["type"]) ? null
-                : SparkyLogic.suggestWeight(
-                    plan == null ? null : SparkyLogic.toInt(plan["reps"]),
-                    SparkyLogic.workingSets(previous), unit);
-            // Only worth a line when it says something the target does not.
-            var target = plan == null ? null : SparkyLogic.toFloatOrNull(plan["weight"]);
-            if (suggestion != null && target != null
-                    && (suggestion - SparkyLogic.toDisplayWeight(target, unit)).abs() < 0.01) {
-                suggestion = null;
-            }
-            if (suggestion != null) {
-                dc.setColor(Graphics.COLOR_BLUE, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(cx, h * 0.70, Graphics.FONT_XTINY,
-                    (WatchUi.loadResource(Rez.Strings.Suggest) as String) + " " + SparkyLogic.formatWeight(suggestion) + " " + unit,
-                    Graphics.TEXT_JUSTIFY_CENTER);
-            }
         }
+
+        // What comes after this exercise, so the plan is never a guess.
+        var after = _session.nextExerciseName();
+        if (after != null) {
+            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.70, Graphics.FONT_XTINY,
+                (WatchUi.loadResource(Rez.Strings.Next) as String) + ": " + after,
+                Graphics.TEXT_JUSTIFY_CENTER);
+        }
+        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.89, Graphics.FONT_XTINY,
+            WatchUi.loadResource(Rez.Strings.LogHint) as String, Graphics.TEXT_JUSTIFY_CENTER);
     }
 
     // Heart rate (zone colour) and workout time along the bottom.
@@ -395,8 +392,40 @@ class WorkoutDelegate extends WatchUi.BehaviorDelegate {
         if (_view.page == WorkoutView.PAGE_OVERVIEW) {
             return onMenu();
         }
-        var editor = new SetEditorView(_session);
+        if (!quickLog()) {
+            openEditor();
+        }
+        return true;
+    }
+
+    // START logs the set as shown: the target, or what was logged last.
+    // The editor opens instead when there is nothing to confirm, or when
+    // RPE is to be asked.
+    private function quickLog() as Boolean {
+        if (Store.askRpe() || _session.nextPlannedSet() == null) {
+            return false;
+        }
+        var defaults = _session.defaultsForNextSet();
+        var reps = SparkyLogic.toInt(defaults["reps"]);
+        var weight = SparkyLogic.toFloatOrNull(defaults["weight"]);
+        if (reps == null) {
+            return false;
+        }
+        SetEditorView.logAndRest(_session, reps, weight == null ? 0.0 : weight, null);
+        return true;
+    }
+
+    private function openEditor() as Void {
+        var editor = new SetEditorView(_session, false);
         WatchUi.pushView(editor, new SetEditorDelegate(editor), WatchUi.SLIDE_UP);
+    }
+
+    // Tapping the set screen changes the set before logging it.
+    function onTap(event as WatchUi.ClickEvent) as Boolean {
+        if (_view.page != WorkoutView.PAGE_SET) {
+            return false;
+        }
+        openEditor();
         return true;
     }
 
@@ -434,7 +463,7 @@ class WorkoutDelegate extends WatchUi.BehaviorDelegate {
                 i, null));
         }
         if (!_session.isLive()) {
-            menu.addItem(new WatchUi.MenuItem("Undo last set", null, :undo, null));
+            menu.addItem(new WatchUi.MenuItem(WatchUi.loadResource(Rez.Strings.UndoLast) as String, null, :undo, null));
         }
         WatchUi.pushView(menu, new ExerciseMenuDelegate(_session, _view), WatchUi.SLIDE_UP);
         return true;

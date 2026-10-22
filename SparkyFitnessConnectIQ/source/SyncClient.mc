@@ -2,7 +2,7 @@ import Toybox.Lang;
 import Toybox.Communications;
 import Toybox.WatchUi;
 
-const APP_VERSION = "0.6.1";
+const APP_VERSION = "0.7.0";
 
 // Talks to the SparkyFitness server through the paired phone (Connect IQ web
 // requests are proxied by the Garmin Connect app, so the server must be

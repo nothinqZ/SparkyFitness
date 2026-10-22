@@ -44,11 +44,15 @@
     <string id="Summary">Training beendet</string>
     <string id="Duration">Dauer</string>
     <string id="AvgHeartRate">Ø Puls</string>
-    <string id="LogHint">Start: loggen · Hoch/Runter: ändern</string>
+    <string id="LogHint">Start: erledigt · Tippen: ändern</string>
     <string id="NewPr">Neuer Rekord!</string>
     <string id="BeatLastTime">Stärker als letztes Mal</string>
     <string id="PerSide">Je Seite:</string>
     <string id="BarOnly">Nur Stange</string>
     <string id="RpeSettingTitle">Nach jedem Satz RPE abfragen</string>
     <string id="TapWeight">Tippen/Wischen: Gewicht</string>
+    <string id="Correct">Satz korrigieren</string>
+    <string id="TapToCorrect">Tippen zum Korrigieren</string>
+    <string id="UndoLast">Letzten Satz rückgängig</string>
+    <string id="Logged">Geloggt</string>
 </strings>

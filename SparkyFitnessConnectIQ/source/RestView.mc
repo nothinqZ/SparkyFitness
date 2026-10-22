@@ -8,7 +8,9 @@ import Toybox.Time;
 // Rest countdown after a logged set, as in Hevy: UP / DOWN add or take 15 s,
 // a short buzz 10 s before the end, a full alert (vibration, and a tone
 // where available) at zero, then it counts into overtime. Shows the heart
-// rate in its zone colour and the next set. SELECT or BACK ends the rest.
+// rate in its zone colour, the set just logged and the next set. SELECT or
+// BACK ends the rest; a tap corrects the logged set, as Garmin's strength
+// activity asks for reps and weight during the rest.
 // In a live workout the rest follows the phone's (PhoneLink.followRest) and
 // ±15 s / ending it here are sent to the phone.
 class RestView extends WatchUi.View {
@@ -131,6 +133,10 @@ class RestView extends WatchUi.View {
         WatchUi.requestUpdate();
     }
 
+    function session() as WorkoutSession {
+        return _session;
+    }
+
     function remaining() as Number {
         return _endsAt - Time.now().value();
     }
@@ -157,9 +163,20 @@ class RestView extends WatchUi.View {
             dc.drawArc(w / 2, h / 2, radius, Graphics.ARC_CLOCKWISE, 90, 90 - degrees);
         }
 
-        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, h * 0.17, Graphics.FONT_SMALL, WatchUi.loadResource(Rez.Strings.Rest) as String,
-            Graphics.TEXT_JUSTIFY_CENTER);
+        // The set just logged ("✓ 8 × 100 kg"), else the plain title.
+        var logged = _session.lastLogged();
+        if (logged != null) {
+            dc.setColor(Graphics.COLOR_GREEN, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(w / 2, h * 0.13, Graphics.FONT_TINY,
+                "✓ " + WorkoutView.describeSet(logged, Store.weightUnit()), Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(w / 2, h * 0.13 + dc.getFontHeight(Graphics.FONT_TINY), Graphics.FONT_XTINY,
+                WatchUi.loadResource(Rez.Strings.TapToCorrect) as String, Graphics.TEXT_JUSTIFY_CENTER);
+        } else {
+            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(w / 2, h * 0.17, Graphics.FONT_SMALL, WatchUi.loadResource(Rez.Strings.Rest) as String,
+                Graphics.TEXT_JUSTIFY_CENTER);
+        }
         dc.setColor(left > 0 ? Graphics.COLOR_WHITE : Graphics.COLOR_GREEN, Graphics.COLOR_TRANSPARENT);
         var text = left >= 0 ? SparkyLogic.formatClock(left) : "+" + SparkyLogic.formatClock(-left);
         dc.drawText(w / 2, h * 0.40, Graphics.FONT_NUMBER_MEDIUM, text,
@@ -219,6 +236,17 @@ class RestDelegate extends WatchUi.BehaviorDelegate {
 
     function onBack() as Boolean {
         _view.finish();
+        return true;
+    }
+
+    // Correct the set just logged; the rest keeps running meanwhile.
+    function onTap(event as WatchUi.ClickEvent) as Boolean {
+        var session = _view.session();
+        if (session.lastLogged() == null) {
+            return false;
+        }
+        var editor = new SetEditorView(session, true);
+        WatchUi.pushView(editor, new SetEditorDelegate(editor), WatchUi.SLIDE_UP);
         return true;
     }
 }

@@ -3,8 +3,10 @@ import Toybox.Graphics;
 import Toybox.WatchUi;
 import Toybox.System;
 
-// Logs one set on a single screen. It opens on the planned values, so a set
-// done as planned is one press of START. The reps are large in the middle
+// Edits one set on a single screen: a set that differs from the target
+// (tap the set screen) or, with `amend`, the set just logged (tap during
+// the rest). A set done as planned needs none of this: START on the set
+// screen logs it straight away (logAndRest). The reps are large in the middle
 // and UP / DOWN change them right away, since reps are what usually differ.
 // Tap the weight, swipe sideways or press MENU to change the weight instead
 // (and back). RPE is only asked when the "Ask for RPE" setting is on; then
@@ -21,12 +23,19 @@ class SetEditorView extends WatchUi.View {
     var weight as Float;   // display units
     var rpe as Float or Null = null;
     var unit as String;
+    // Correcting the set logged last instead of logging a new one.
+    var amend as Boolean;
 
-    function initialize(session as WorkoutSession) {
+    function initialize(session as WorkoutSession, amend as Boolean) {
         View.initialize();
         self.session = session;
+        self.amend = amend;
         unit = Store.weightUnit();
-        var defaults = session.defaultsForNextSet();
+        var last = amend ? session.lastLogged() : null;
+        var defaults = last != null ? last : session.defaultsForNextSet();
+        if (last != null && last["rpe"] != null) {
+            rpe = SparkyLogic.toFloatOrNull(last["rpe"]);
+        }
         var defaultReps = SparkyLogic.toInt(defaults["reps"]);
         reps = defaultReps == null ? 8 : defaultReps;
         weight = SparkyLogic.roundToStep(
@@ -78,20 +87,34 @@ class SetEditorView extends WatchUi.View {
         commit();
     }
 
-    // Logs the set, then rests before the next one. A drop set follows
-    // straight on without a rest, as in Hevy.
     function commit() as Void {
-        var rest = session.restSecondsForNextSet();
-        session.logSet(reps, SparkyLogic.toKg(weight, unit),
-            rpe == null ? null : (rpe as Float), rest);
-        var next = session.nextPlannedSet();
-        if (next != null && "d".equals(next["type"])) {
-            session.markSetStart();
+        var kg = SparkyLogic.toKg(weight, unit);
+        var r = rpe == null ? null : (rpe as Float);
+        if (amend) {
+            // Back to the rest that is still running.
+            session.amendLastSet(reps, kg, r);
             WatchUi.popView(WatchUi.SLIDE_DOWN);
             return;
         }
+        // Back to the set screen first, so the rest returns there.
+        WatchUi.popView(WatchUi.SLIDE_IMMEDIATE);
+        logAndRest(session, reps, kg, r);
+    }
+
+    // Logs a set, then rests before the next one. A drop set follows
+    // straight on without a rest, as in Hevy. Called from the set screen.
+    static function logAndRest(session as WorkoutSession, reps as Number, weightKg as Float,
+            rpe as Float or Null) as Void {
+        var rest = session.restSecondsForNextSet();
+        session.logSet(reps, weightKg, rpe, rest);
+        var next = session.nextPlannedSet();
+        if (next != null && "d".equals(next["type"])) {
+            session.markSetStart();
+            WatchUi.requestUpdate();
+            return;
+        }
         var timer = new RestView(session, rest);
-        WatchUi.switchToView(timer, new RestDelegate(timer), WatchUi.SLIDE_UP);
+        WatchUi.pushView(timer, new RestDelegate(timer), WatchUi.SLIDE_UP);
     }
 
     function onUpdate(dc as Graphics.Dc) as Void {
@@ -102,15 +125,17 @@ class SetEditorView extends WatchUi.View {
         dc.clear();
 
         // "Aufwärmen 1/2 · Bankdrücken", in the set kind's colour.
-        var next = session.nextPlannedSet();
-        var label = next == null
-            ? (WatchUi.loadResource(Rez.Strings.Set) as String) + " " + (session.loggedCount() + 1)
-            : WorkoutView.setLabel(session, next);
+        var next = amend ? null : session.nextPlannedSet();
+        var label = amend ? WatchUi.loadResource(Rez.Strings.Correct) as String
+            : next == null
+                ? (WatchUi.loadResource(Rez.Strings.Set) as String) + " " + (session.loggedCount() + 1)
+                : WorkoutView.setLabel(session, next);
         var accent = next == null ? Graphics.COLOR_ORANGE : WorkoutView.setColor(next);
         dc.setColor(accent, Graphics.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.10, Graphics.FONT_XTINY, label, Graphics.TEXT_JUSTIFY_CENTER);
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.17, Graphics.FONT_XTINY, session.current()["name"] as String,
+        dc.drawText(cx, h * 0.17, Graphics.FONT_XTINY,
+            (amend ? session.lastLoggedName() : session.current()["name"]) as String,
             Graphics.TEXT_JUSTIFY_CENTER);
 
         if (field == FIELD_RPE) {

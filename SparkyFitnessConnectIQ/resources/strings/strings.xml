@@ -47,11 +47,15 @@
     <string id="Summary">Workout done</string>
     <string id="Duration">Duration</string>
     <string id="AvgHeartRate">Avg heart rate</string>
-    <string id="LogHint">Start: log · Up/Down: edit</string>
+    <string id="LogHint">Start: done · Tap: edit</string>
     <string id="NewPr">New record!</string>
     <string id="BeatLastTime">Stronger than last time</string>
     <string id="PerSide">Per side:</string>
     <string id="BarOnly">Bar only</string>
     <string id="RpeSettingTitle">Ask for RPE after each set</string>
     <string id="TapWeight">Tap or swipe: weight</string>
+    <string id="Correct">Correct set</string>
+    <string id="TapToCorrect">Tap to correct</string>
+    <string id="UndoLast">Undo last set</string>
+    <string id="Logged">Logged</string>
 </strings>
