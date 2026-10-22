@@ -24,6 +24,8 @@ import ObjectiveC
     func registerAppMessages(app: AnyObject, delegate: AnyObject)
     @objc(unregisterForAllAppMessages:)
     func unregisterAllAppMessages(delegate: AnyObject)
+    @objc(openAppRequest:completion:)
+    func openAppRequest(_ app: AnyObject, completion: ((Int) -> Void)?)
     @objc(sendMessage:toApp:progress:completion:)
     func sendMessage(
         _ message: Any,
@@ -200,6 +202,35 @@ public class GarminConnectIQModule: Module {
                 }
             }
             if pending == 0 { promise.resolve(delivered) }
+        }
+        .runOnQueue(.main)
+
+        /// Asks every connected watch to open the watch app (the watch shows
+        /// Garmin's "open app?" prompt; nothing happens when it already
+        /// runs). Resolves with the number of watches that accepted.
+        AsyncFunction("openApp") { (promise: Promise) in
+            guard let sdk = self.sdk else {
+                promise.resolve(0)
+                return
+            }
+            let targets = self.devices.compactMap { device -> AnyObject? in
+                guard sdk.deviceStatus(device: device) == statusConnected,
+                      let id = Self.deviceId(device) else { return nil }
+                return self.apps[id]
+            }
+            guard !targets.isEmpty else {
+                promise.resolve(0)
+                return
+            }
+            var pending = targets.count
+            var opened = 0
+            for app in targets {
+                sdk.openAppRequest(app) { result in
+                    if result == sendSuccess { opened += 1 }
+                    pending -= 1
+                    if pending == 0 { promise.resolve(opened) }
+                }
+            }
         }
         .runOnQueue(.main)
     }

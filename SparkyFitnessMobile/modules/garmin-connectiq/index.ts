@@ -47,6 +47,11 @@ declare class GarminConnectIQNativeModule extends NativeModule<GarminConnectIQEv
   forgetDevices(): Promise<void>;
   /** Resolves with the number of connected watches that accepted it. */
   sendMessage(message: Record<string, unknown>): Promise<number>;
+  /**
+   * Asks connected watches to open the watch app (Garmin's prompt on the
+   * watch). Resolves with the number that accepted.
+   */
+  openApp(): Promise<number>;
 }
 
 /**

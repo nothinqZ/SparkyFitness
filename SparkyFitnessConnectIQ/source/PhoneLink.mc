@@ -78,11 +78,20 @@ class PhoneLink {
             var plan = SparkyLogic.mergePendingAdds(
                 SparkyLogic.mergePendingSets(data as Dictionary, Store.pendingLiveSets()),
                 Store.pendingLiveAdds());
-            var knownPrs = SparkyLogic.prSetIds(Store.live());
+            var previous = Store.live();
+            var knownPrs = SparkyLogic.prSetIds(previous);
             Store.setLive(plan);
             celebrateNewPrs(knownPrs, SparkyLogic.prSetIds(plan));
             if (awaitingStartUntil != null) {
                 awaitingStartUntil = null;
+                openLiveWorkout(true);
+            } else if (isNewLive(previous, plan) && MainMenu.visible && Store.activeSession() == null) {
+                // Started on the phone (or already running there when the
+                // app opened): follow it straight away, with the sets
+                // already done there marked done.
+                if (Attention has :vibrate) {
+                    Attention.vibrate([new Attention.VibeProfile(80, 250)]);
+                }
                 openLiveWorkout(true);
             } else {
                 followRest(SparkyLogic.toInt(plan["re"]));
@@ -98,6 +107,15 @@ class PhoneLink {
         WatchUi.requestUpdate();
         // The phone is reachable now; send anything still waiting.
         flush();
+    }
+
+    // A phone workout the watch has not shown yet.
+    private function isNewLive(previous as Dictionary or Null, plan as Dictionary) as Boolean {
+        if (previous == null) {
+            return true;
+        }
+        var sid = plan["sid"];
+        return sid == null || !sid.equals(previous["sid"]);
     }
 
     // A set the phone just marked as a personal record: buzz and say so.

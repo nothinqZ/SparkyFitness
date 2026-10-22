@@ -235,6 +235,8 @@ export function useGarminWatchBridge(
     // the next publish (after a failed send, a connect, or a hello).
     let lastSent: string | null = null;
     let lastSessionId: string | null = null;
+    // The workout the watch was last asked to open the app for.
+    let openRequestedFor: string | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const handledClientIds: string[] = [];
     const store = useGarminWatchStore.getState();
@@ -268,6 +270,16 @@ export function useGarminWatchBridge(
       }
       const key = JSON.stringify(message);
       if (!force && key === lastSent) return;
+      // A workout new to the watch: ask it to open the watch app, so a
+      // workout started here shows up there without opening it by hand.
+      // Sending fails while the app is closed; once open it says "hello"
+      // and gets the plan. The watch only prompts when it is not running.
+      if (message.t === 'plan' && message.sid !== openRequestedFor) {
+        openRequestedFor = message.sid;
+        void sdk.openApp().catch((error: unknown) => {
+          addLog(`Garmin open app failed: ${String(error)}`, 'DEBUG');
+        });
+      }
       const ok = await send(message);
       lastSent = ok ? key : null;
       if (ok) lastSessionId = message.t === 'plan' ? message.sid : null;
