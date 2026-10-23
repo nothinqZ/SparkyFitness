@@ -22,6 +22,9 @@ class WorkoutSession {
     // When the current set began (epoch s): after the last rest, or when the
     // workout was opened. Shown as "set time" like Garmin's set timer.
     var setStartedAt as Number;
+    // The set logged last in a live workout (id, reps, weight, rpe, name),
+    // so the rest screen can correct it; the phone's plan has no "last".
+    var lastLive as Dictionary or Null = null;
 
     function initialize(data as Dictionary) {
         self.data = data;
@@ -290,6 +293,8 @@ class WorkoutSession {
         var setId = next["id"] as String;
         SparkyLogic.markLiveSetDone(plan, setId, reps, weightKg);
         Store.setLive(plan);
+        lastLive = { "id" => setId, "reps" => reps, "weight" => weightKg, "rpe" => rpe,
+            "name" => current()["name"] };
         var message = {
             "t" => "set", "sid" => data["live"], "id" => setId, "r" => reps,
             "w" => weightKg, "at" => Time.now().value(), "c" => Store.newUuid()
@@ -343,10 +348,14 @@ class WorkoutSession {
     }
 
     // The set logged last on the watch, for correcting it during the rest.
-    // Null in a live workout: sets logged there belong to the phone.
+    // In a live workout only a set logged here; sets logged on the phone are
+    // corrected there.
     function lastLogged() as Dictionary or Null {
+        if (isLive()) {
+            return lastLive;
+        }
         var last = data["last_ex"];
-        if (isLive() || !(last instanceof Number) || last < 0 || last >= exerciseCount()) {
+        if (!(last instanceof Number) || last < 0 || last >= exerciseCount()) {
             return null;
         }
         var logged = (exercises()[last] as Dictionary)["logged"] as Array;
@@ -354,6 +363,10 @@ class WorkoutSession {
     }
 
     function lastLoggedName() as String {
+        var live = lastLive;
+        if (isLive() && live != null) {
+            return live["name"] as String;
+        }
         return (exercises()[data["last_ex"] as Number] as Dictionary)["name"] as String;
     }
 
@@ -364,6 +377,10 @@ class WorkoutSession {
         if (entry == null) {
             return;
         }
+        if (isLive()) {
+            amendLiveSet(entry, reps, weightKg, rpe);
+            return;
+        }
         entry["reps"] = reps;
         entry["weight"] = weightKg;
         if (rpe != null) {
@@ -372,6 +389,33 @@ class WorkoutSession {
             entry.remove("rpe");
         }
         save();
+    }
+
+    // A live set is the phone's: send the corrected values as a "set" with
+    // "fix", which the phone applies to the set it already completed.
+    private function amendLiveSet(entry as Dictionary, reps as Number, weightKg as Float,
+            rpe as Float or Null) as Void {
+        var setId = entry["id"] as String;
+        var message = {
+            "t" => "set", "sid" => data["live"], "id" => setId, "r" => reps,
+            "w" => weightKg, "fix" => 1, "c" => Store.newUuid()
+        } as Dictionary;
+        if (rpe != null) {
+            message["rpe"] = rpe;
+        }
+        if (!getApp().phone.enqueue(message)) {
+            Store.setLastError("Watch storage full, set not sent");
+            return;
+        }
+        var plan = Store.live();
+        if (plan != null) {
+            SparkyLogic.markLiveSetDone(plan, setId, reps, weightKg);
+            Store.setLive(plan);
+        }
+        entry["reps"] = reps;
+        entry["weight"] = weightKg;
+        entry["rpe"] = rpe;
+        refresh();
     }
 
     // The next other exercise with a set left, for "Next: ..." on screen.

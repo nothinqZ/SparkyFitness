@@ -90,12 +90,19 @@ export async function applyGarminSet(
     addLog(`Garmin set ignored: unknown set ${message.id}`, 'WARNING');
     return;
   }
-  if (state.completedSetIds[message.id] != null) return;
+  const done = state.completedSetIds[message.id] != null;
+  // A repeated delivery of a set already done changes nothing; a correction
+  // from the watch's rest screen updates its values.
+  if (done && !message.fix) return;
   const patch: ActiveSetPatch = {};
   if (message.w != null) patch.weight = message.w;
   if (message.r != null) patch.reps = message.r;
   if (message.rpe != null) patch.rpe = message.rpe;
   if (Object.keys(patch).length > 0) state.updateSetField(message.id, patch);
+  if (done) {
+    await saveActiveWorkoutSession(queryClient);
+    return;
+  }
   const completedAt =
     message.at != null ? new Date(message.at * 1000).toISOString() : null;
   state.completeSet(

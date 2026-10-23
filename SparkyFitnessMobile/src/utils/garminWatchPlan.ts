@@ -87,6 +87,11 @@ export interface GarminWatchSetMessage {
   rpe?: number | null;
   /** When it was logged, epoch seconds. */
   at?: number;
+  /**
+   * A correction of a set the watch already logged (made during the rest):
+   * the phone updates the completed set instead of ignoring it.
+   */
+  fix?: boolean;
   /** Client id generated on the watch, to drop a repeated delivery. */
   c: string;
 }
@@ -161,6 +166,7 @@ export function parseGarminWatchMessage(
         w: finiteOrNull(record.w),
         rpe: finiteOrNull(record.rpe),
         at: finiteOrNull(record.at) ?? undefined,
+        ...(record.fix === 1 || record.fix === true ? { fix: true } : {}),
         c: record.c,
       };
     case 'add':

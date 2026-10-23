@@ -157,7 +157,9 @@ class PhoneLink {
         var session = liveSession;
         if (phoneEnd != null && phoneEnd != previous && liveViewOpen && session != null
                 && phoneEnd > Time.now().value() + 2) {
-            // A set logged on the phone: rest here as well.
+            // A set logged on the phone: rest here as well. Its rest shows
+            // no watch set to correct.
+            session.lastLive = null;
             var rest = new RestView(session, phoneEnd - Time.now().value());
             WatchUi.pushView(rest, new RestDelegate(rest), WatchUi.SLIDE_UP);
         }

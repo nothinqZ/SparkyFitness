@@ -175,6 +175,16 @@ describe('parseGarminWatchMessage', () => {
       at: 5,
       c: 'c1',
     });
+    expect(
+      parseGarminWatchMessage({
+        t: 'set',
+        sid: 's',
+        id: 12,
+        r: 6,
+        fix: 1,
+        c: 'c3',
+      })
+    ).toMatchObject({ t: 'set', id: '12', r: 6, fix: true });
     expect(parseGarminWatchMessage({ t: 'start', p: '17', c: 'c2' })).toEqual({
       t: 'start',
       p: 17,

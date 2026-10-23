@@ -66,6 +66,27 @@ describe('applyGarminSet', () => {
     expect(saveActiveWorkoutSession).toHaveBeenCalled();
   });
 
+  it('applies a correction to a done set without completing it again', async () => {
+    jest
+      .mocked(useActiveWorkoutStore.getState)
+      .mockReturnValue(liveState({ completedSetIds: { '12': 1 } }) as never);
+    await applyGarminSet({
+      t: 'set',
+      sid: 'session-1',
+      id: '12',
+      r: 6,
+      w: 100,
+      fix: true,
+      c: 'fix-1',
+    });
+    expect(actions.updateSetField).toHaveBeenCalledWith('12', {
+      reps: 6,
+      weight: 100,
+    });
+    expect(actions.completeSet).not.toHaveBeenCalled();
+    expect(saveActiveWorkoutSession).toHaveBeenCalled();
+  });
+
   it('ignores sets for another session, unknown sets and done sets', async () => {
     await applyGarminSet({ t: 'set', sid: 'other', id: '12', c: 'c' });
     await applyGarminSet({ t: 'set', sid: 'session-1', id: '99', c: 'c' });
