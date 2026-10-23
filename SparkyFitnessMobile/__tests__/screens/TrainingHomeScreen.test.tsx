@@ -4,6 +4,7 @@ import { fireEvent, render } from '@testing-library/react-native';
 import TrainingHomeScreen from '../../src/screens/TrainingHomeScreen';
 import { useWorkoutPresets } from '../../src/hooks';
 import { useExerciseHistory } from '../../src/hooks/useExerciseHistory';
+import { useActiveWorkoutPlans } from '../../src/hooks/useActiveWorkoutPlan';
 import { initializeI18n } from '../../src/localization/i18n';
 
 const mockStartLiveWorkout = jest.fn();
@@ -21,7 +22,15 @@ jest.mock('../../src/hooks/useStartLiveWorkout', () => ({
     isStarting: false,
   }),
 }));
-jest.mock('../../src/components/PerformanceTodayCard', () => () => null);
+jest.mock('../../src/components/TodayReadinessCard', () => () => null);
+jest.mock('../../src/hooks/useActiveWorkoutPlan', () => ({
+  useActiveWorkoutPlans: jest.fn(),
+}));
+jest.mock('../../src/hooks/useTrainingConsistency', () => ({
+  useTrainingConsistency: () => ({
+    data: { weeklyStreak: { current: 6, longest: 9 } },
+  }),
+}));
 jest.mock('../../src/components/ActiveWorkoutBar', () => ({
   useActiveWorkoutBarPadding: () => 0,
 }));
@@ -65,6 +74,10 @@ describe('TrainingHomeScreen', () => {
       isError: false,
       refetch: jest.fn(),
     } as never);
+    jest.mocked(useActiveWorkoutPlans).mockReturnValue({
+      plans: [],
+      refetch: jest.fn(),
+    } as never);
     jest.mocked(useExerciseHistory).mockReturnValue({
       sessions: [session],
       refetch: jest.fn(),
@@ -97,5 +110,35 @@ describe('TrainingHomeScreen', () => {
       session,
     });
     expect(navigation.setOptions).toHaveBeenCalledWith({ title: 'Training' });
+  });
+
+  it('offers the plan session that is due, tagged with its assignment', () => {
+    jest.mocked(useActiveWorkoutPlans).mockReturnValue({
+      plans: [
+        {
+          id: 'p1',
+          plan_name: 'Torso/Limbs',
+          schedule_type: 'sequential',
+          next_assignment: {
+            id: '42',
+            workout_preset_id: '7',
+            workout_preset_name: 'Torso B – Rücken-Fokus',
+          },
+          sequence_position: { current: 3, total: 16 },
+        },
+      ],
+      refetch: jest.fn(),
+    } as never);
+    const screen = renderScreen();
+    expect(screen.getByText('Up next · session 3 of 16')).toBeTruthy();
+    fireEvent.press(screen.getByText('Start Torso B'));
+    expect(mockStartLiveWorkout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Torso B – Rücken-Fokus',
+        workoutPlanAssignmentId: 42,
+        exercises: [{ exercise_id: 'e1', workout_plan_assignment_id: 42 }],
+      })
+    );
+    expect(screen.getByText('6')).toBeTruthy();
   });
 });

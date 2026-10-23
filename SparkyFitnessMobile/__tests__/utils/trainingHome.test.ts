@@ -1,7 +1,9 @@
 import type { ExerciseSessionResponse } from '@workspace/shared';
 import type { WorkoutPreset } from '../../src/types/workoutPresets';
 import {
+  nextPlanSession,
   presetExerciseLine,
+  shortRoutineName,
   recentWorkouts,
   weekStart,
   weekSummary,
@@ -75,5 +77,36 @@ describe('training home', () => {
     } as unknown as WorkoutPreset;
     expect(presetExerciseLine(preset)).toBe('Bench, Row, Squat +2');
     expect(presetExerciseLine(preset, 5)).toBe('Bench, Row, Squat, Curl, Dip');
+  });
+});
+
+describe('next plan session', () => {
+  const presets = [{ id: 7, name: 'Torso B – Rücken', exercises: [] }];
+  it('takes the session a sequential plan is on', () => {
+    const next = nextPlanSession(
+      [
+        {
+          schedule_type: 'weekly',
+          next_assignment: { workout_preset_id: '7' },
+        },
+        {
+          schedule_type: 'sequential',
+          next_assignment: { id: '42', workout_preset_id: '7' },
+          sequence_position: { current: 3, total: 16 },
+        },
+      ] as never,
+      presets as never
+    );
+    expect(next?.name).toBe('Torso B – Rücken');
+    expect(next?.position).toEqual({ current: 3, total: 16 });
+    expect(nextPlanSession([], presets as never)).toBeNull();
+  });
+
+  it('shortens a routine name for a sentence', () => {
+    expect(shortRoutineName('Torso B – Schulter-/Rücken-Fokus')).toBe(
+      'Torso B'
+    );
+    expect(shortRoutineName('OK A - Brust-Priorität')).toBe('OK A');
+    expect(shortRoutineName('Push')).toBe('Push');
   });
 });

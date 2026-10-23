@@ -4112,7 +4112,8 @@
       "sets_one": "{{count}} set",
       "sets_other": "{{count}} sets",
       "personalRecordCount_one": "{{formattedCount}} Personal Record",
-      "personalRecordCount_other": "{{formattedCount}} Personal Records"
+      "personalRecordCount_other": "{{formattedCount}} Personal Records",
+      "vsLast": "{{change}} vs. last"
     },
     "accessibility": {
       "calculating": "Calculating"
@@ -8558,7 +8559,7 @@
   "trainingHome": {
     "resume": "Resume workout",
     "start": "Start workout",
-    "weekWorkouts": "Workouts this week",
+    "weekWorkouts": "Workouts",
     "weekSets": "Sets",
     "weekMinutes": "Minutes",
     "routines": "Routines",
@@ -8570,6 +8571,48 @@
     "sets_one": "{{count}} set",
     "sets_other": "{{count}} sets",
     "minutes_one": "{{count}} min",
-    "minutes_other": "{{count}} min"
+    "minutes_other": "{{count}} min",
+    "nextUp": "Up next",
+    "nextUpPosition": "Up next · session {{current}} of {{total}}",
+    "startNamed": "Start {{name}}",
+    "other": "Other workout",
+    "thisWeek": "This week",
+    "progress": "Progress",
+    "weekStreak": "Week streak"
+  },
+  "readiness": {
+    "title": "Readiness",
+    "factor": {
+      "sleep": "Sleep",
+      "hrv": "HRV",
+      "restingHr": "Resting heart rate",
+      "load": "Training load"
+    },
+    "status": {
+      "good": "Good",
+      "fair": "Fair",
+      "poor": "Poor"
+    },
+    "level": {
+      "high": "High",
+      "moderate": "Moderate",
+      "low": "Low",
+      "poor": "Poor"
+    },
+    "advice": {
+      "unknown": "Not enough recovery data for today yet.",
+      "easyBecause": "Take it easier today: {{factor}} is low.",
+      "easy": "Take it easier today.",
+      "trainRoutine": "Well recovered. {{routine}} is up next.",
+      "steadyRoutine": "{{routine}} is up next. Go by feel on the heavy sets.",
+      "train": "Well recovered for a hard session.",
+      "steady": "A normal training day."
+    },
+    "chip": {
+      "sleep": "Sleep",
+      "hours": "{{value}} h",
+      "restingHr": "Resting HR"
+    },
+    "garmin": "Garmin: {{value}}"
   }
 }

@@ -21,6 +21,7 @@ import { useWorkoutCompletePresetSync } from '../hooks/useWorkoutCompletePresetS
 import { getWorkout } from '../services/api/exerciseApi';
 import { fireSuccessHaptic } from '../services/haptics';
 import { formatDateToTimeLabel } from '../utils/entryTimeDisplay';
+import { volumeChangeByEntry } from '../utils/workoutComparison';
 import { setsDurationMinutes } from '@workspace/shared';
 import {
   buildSessionDurationMinutes,
@@ -160,6 +161,11 @@ function WorkoutCompleteScreen({ navigation, route }: Props) {
     if (hasRecords) fireSuccessHaptic();
   }, [hasRecords]);
 
+  const volumeChange = useMemo(
+    () => volumeChangeByEntry(session, summary.exercises, previousSessionSets),
+    [session, summary.exercises, previousSessionSets]
+  );
+
   // Stable identity: the prompt's memo and timer effect key off it.
   const assumeSources = useMemo(
     () =>
@@ -276,6 +282,7 @@ function WorkoutCompleteScreen({ navigation, route }: Props) {
           exercises={summary.exercises}
           weightUnit={weightUnit}
           getImageSource={getImageSource}
+          volumeChange={volumeChange}
         />
       </ScrollView>
 

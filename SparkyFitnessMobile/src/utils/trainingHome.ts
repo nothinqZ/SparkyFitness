@@ -3,6 +3,10 @@ import type {
   PresetSessionResponse,
 } from '@workspace/shared';
 import type { WorkoutPreset } from '../types/workoutPresets';
+import type {
+  WorkoutPlanAssignment,
+  WorkoutPlanTemplate,
+} from '../types/workoutPlans';
 
 export interface RecentWorkout {
   session: PresetSessionResponse;
@@ -56,4 +60,54 @@ export function presetExerciseLine(preset: WorkoutPreset, shown = 3): string {
   const names = preset.exercises.map((e) => e.exercise_name);
   const head = names.slice(0, shown).join(', ');
   return names.length > shown ? `${head} +${names.length - shown}` : head;
+}
+
+export interface NextPlanSession {
+  plan: WorkoutPlanTemplate;
+  assignment: WorkoutPlanAssignment;
+  preset: WorkoutPreset;
+  /** "Torso B – Schulter-/Rücken-Fokus" */
+  name: string;
+  /** 1-based session in the plan's sequence, with the total. */
+  position: { current: number; total: number } | null;
+}
+
+/**
+ * The session an active sequential plan is on, with the routine behind it -
+ * the plan in Sparky decides what is next, not the weekday.
+ */
+export function nextPlanSession(
+  plans: readonly WorkoutPlanTemplate[],
+  presets: readonly WorkoutPreset[]
+): NextPlanSession | null {
+  for (const plan of plans) {
+    if (plan.schedule_type !== 'sequential') continue;
+    const assignment = plan.next_assignment;
+    if (!assignment?.workout_preset_id) continue;
+    const preset = presets.find(
+      (p) => String(p.id) === String(assignment.workout_preset_id)
+    );
+    if (!preset) continue;
+    return {
+      plan,
+      assignment,
+      preset,
+      name:
+        assignment.workout_preset_name ||
+        assignment.session_name ||
+        preset.name,
+      position: plan.sequence_position
+        ? {
+            current: plan.sequence_position.current,
+            total: plan.sequence_position.total,
+          }
+        : null,
+    };
+  }
+  return null;
+}
+
+/** The short routine name for a sentence: "Torso B" of "Torso B – …". */
+export function shortRoutineName(name: string): string {
+  return name.split(/\s[–-]\s/)[0]!.trim();
 }

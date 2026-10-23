@@ -15,6 +15,7 @@ import {
 import { usePreferences } from '../hooks/usePreferences';
 import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
+import TodayReadinessCard from '../components/TodayReadinessCard';
 import SegmentedControl from '../components/SegmentedControl';
 import StatusView from '../components/StatusView';
 import AnalysisDashboard from '../components/AnalysisDashboard';
@@ -184,32 +185,13 @@ const PerformanceScreen: React.FC<PerformanceScreenProps> = ({
       <>
         {section === 'today' && (
           <>
+            <TodayReadinessCard nextRoutine={null} />
             <Card
-              title={t('performance.kpi.readiness', {
-                defaultValue: 'Readiness',
+              title={t('performance.kpi.acwr', {
+                defaultValue: 'Load ratio (ACWR)',
               })}
               provenance={['estimated', 'device']}
             >
-              <Row
-                label={t('performance.provenance.estimated', {
-                  defaultValue: 'Estimated',
-                })}
-                value={
-                  d.recovery.readiness.estimated
-                    ? String(d.recovery.readiness.estimated.score)
-                    : '–'
-                }
-              />
-              <Row
-                label={t('performance.readiness.garmin', {
-                  defaultValue: 'Garmin',
-                })}
-                value={
-                  d.recovery.readiness.device !== null
-                    ? String(d.recovery.readiness.device)
-                    : '–'
-                }
-              />
               <Row
                 label={t('performance.kpi.acwr', {
                   defaultValue: 'Load ratio (ACWR)',

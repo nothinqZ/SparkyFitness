@@ -3681,7 +3681,8 @@
       "sets_other": "{{count}} Sätze",
       "personalRecordCount_one": "{{formattedCount}} persönlicher Rekord",
       "personalRecordCount_other": "{{formattedCount}} persönliche Rekorde",
-      "todayAt": " · Heute um "
+      "todayAt": " · Heute um ",
+      "vsLast": "{{change}} ggü. letztem Mal"
     },
     "accessibility": {
       "calculating": "Wird berechnet"
@@ -6346,7 +6347,7 @@
   "trainingHome": {
     "resume": "Workout fortsetzen",
     "start": "Workout starten",
-    "weekWorkouts": "Workouts diese Woche",
+    "weekWorkouts": "Workouts",
     "weekSets": "Sätze",
     "weekMinutes": "Minuten",
     "routines": "Routinen",
@@ -6358,6 +6359,48 @@
     "sets_one": "{{count}} Satz",
     "sets_other": "{{count}} Sätze",
     "minutes_one": "{{count}} Min.",
-    "minutes_other": "{{count}} Min."
+    "minutes_other": "{{count}} Min.",
+    "nextUp": "Als Nächstes",
+    "nextUpPosition": "Als Nächstes · Einheit {{current}} von {{total}}",
+    "startNamed": "{{name}} starten",
+    "other": "Anderes Workout",
+    "thisWeek": "Diese Woche",
+    "progress": "Fortschritt",
+    "weekStreak": "Wochen in Folge"
+  },
+  "readiness": {
+    "title": "Readiness",
+    "factor": {
+      "sleep": "Schlaf",
+      "hrv": "HRV",
+      "restingHr": "Ruhepuls",
+      "load": "Trainingslast"
+    },
+    "status": {
+      "good": "Gut",
+      "fair": "Mittel",
+      "poor": "Schwach"
+    },
+    "level": {
+      "high": "Hoch",
+      "moderate": "Mittel",
+      "low": "Niedrig",
+      "poor": "Sehr niedrig"
+    },
+    "advice": {
+      "unknown": "Für heute fehlen noch Erholungsdaten.",
+      "easyBecause": "Heute eher locker: {{factor}} ist schwach.",
+      "easy": "Heute eher locker.",
+      "trainRoutine": "Gut erholt. {{routine}} ist dran.",
+      "steadyRoutine": "{{routine}} ist dran. Die schweren Sätze nach Gefühl.",
+      "train": "Gut erholt für eine harte Einheit.",
+      "steady": "Ein normaler Trainingstag."
+    },
+    "chip": {
+      "sleep": "Schlaf",
+      "hours": "{{value}} h",
+      "restingHr": "Ruhepuls"
+    },
+    "garmin": "Garmin: {{value}}"
   }
 }

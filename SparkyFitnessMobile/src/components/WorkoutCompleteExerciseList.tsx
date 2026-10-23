@@ -27,6 +27,8 @@ interface WorkoutCompleteExerciseListProps {
   exercises: ExerciseSummaryRow[];
   weightUnit: 'kg' | 'lbs';
   getImageSource: GetImageSource;
+  /** Volume change against last session per entry id (kg), where known. */
+  volumeChange?: Record<string, number>;
 }
 
 export default function WorkoutCompleteExerciseList({
@@ -34,6 +36,7 @@ export default function WorkoutCompleteExerciseList({
   exercises,
   weightUnit,
   getImageSource,
+  volumeChange,
 }: WorkoutCompleteExerciseListProps) {
   const { t } = useTranslation();
   const prColor = String(useCSSVariable('--color-pr'));
@@ -125,14 +128,29 @@ export default function WorkoutCompleteExerciseList({
                   </Text>
                 )}
               </View>
-              <Text
-                className="text-sm font-medium text-text-primary"
-                style={{ fontVariant: ['tabular-nums'] }}
-              >
-                {row.volumeKg > 0
-                  ? formatVolume(row.volumeKg, weightUnit)
-                  : '—'}
-              </Text>
+              <View className="items-end">
+                <Text
+                  className="text-sm font-medium text-text-primary"
+                  style={{ fontVariant: ['tabular-nums'] }}
+                >
+                  {row.volumeKg > 0
+                    ? formatVolume(row.volumeKg, weightUnit)
+                    : '—'}
+                </Text>
+                {volumeChange?.[row.entryId] != null &&
+                Math.abs(volumeChange[row.entryId]!) >= 1 ? (
+                  <Text
+                    className={`text-xs ${volumeChange[row.entryId]! > 0 ? 'text-text-success' : 'text-text-muted'}`}
+                    style={{ fontVariant: ['tabular-nums'] }}
+                    testID="volume-change"
+                  >
+                    {t('workoutComplete.labels.vsLast', {
+                      defaultValue: '{{change}} vs. last',
+                      change: `${volumeChange[row.entryId]! > 0 ? '+' : '−'}${formatVolume(Math.abs(volumeChange[row.entryId]!), weightUnit)}`,
+                    })}
+                  </Text>
+                ) : null}
+              </View>
             </View>
           );
         })}

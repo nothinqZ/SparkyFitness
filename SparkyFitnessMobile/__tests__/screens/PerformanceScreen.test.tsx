@@ -179,10 +179,11 @@ describe('PerformanceScreen', () => {
   it('separates today, training, recovery and analysis', () => {
     const screen = render(<PerformanceScreen {...props} />);
     expect(screen.getByText('33')).toBeTruthy();
-    expect(screen.getByText('64')).toBeTruthy();
+    expect(screen.getByText(/Garmin: 64/)).toBeTruthy();
+    expect(screen.getByTestId('readiness-factor-hrv')).toBeTruthy();
     expect(screen.getByText('1.60 · Very high (> 1.5)')).toBeTruthy();
     expect(screen.getByText('Productive')).toBeTruthy();
-    expect(screen.getByText('Body Battery')).toBeTruthy();
+    expect(screen.getAllByText('Body Battery').length).toBeGreaterThan(0);
     expect(screen.queryByText('25.0 km · 4×')).toBeNull();
 
     fireEvent.press(screen.getByText('Training'));

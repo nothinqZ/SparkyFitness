@@ -13,10 +13,12 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { PresetSessionResponse } from '@workspace/shared';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
-import PerformanceTodayCard from '../components/PerformanceTodayCard';
+import TodayReadinessCard from '../components/TodayReadinessCard';
 import Button from '../components/ui/Button';
 import { useWorkoutPresets, useRefetchOnFocus } from '../hooks';
+import { useActiveWorkoutPlans } from '../hooks/useActiveWorkoutPlan';
 import { useExerciseHistory } from '../hooks/useExerciseHistory';
+import { useTrainingConsistency } from '../hooks/useTrainingConsistency';
 import { useStartLiveWorkout } from '../hooks/useStartLiveWorkout';
 import { useActiveWorkoutStore } from '../stores/activeWorkoutStore';
 import { formatLocalizedNumber } from '../localization';
@@ -28,9 +30,12 @@ import {
   buildPresetStartExercisesPayload,
 } from '../utils/workoutSession';
 import {
+  nextPlanSession,
   recentWorkouts,
+  shortRoutineName,
   weekSummary,
   presetExerciseLine,
+  type NextPlanSession,
 } from '../utils/trainingHome';
 
 type Props = CompositeScreenProps<
@@ -52,6 +57,9 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
   const activeSessionId = useActiveWorkoutStore((s) => s.sessionId);
   const { presets, isLoading: presetsLoading, refetch } = useWorkoutPresets();
   const { sessions, refetch: refetchHistory } = useExerciseHistory();
+  const { plans, refetch: refetchPlans } = useActiveWorkoutPlans();
+  const { data: consistency } = useTrainingConsistency();
+  const streak = consistency?.weeklyStreak.current ?? 0;
   const { startLiveWorkout, isStarting } = useStartLiveWorkout(navigation);
   const [refreshing, setRefreshing] = React.useState(false);
 
@@ -64,15 +72,16 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
 
   const recent = useMemo(() => recentWorkouts(sessions, 5), [sessions]);
   const week = useMemo(() => weekSummary(sessions, new Date()), [sessions]);
+  const next = useMemo(() => nextPlanSession(plans, presets), [plans, presets]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.allSettled([refetch(), refetchHistory()]);
+      await Promise.allSettled([refetch(), refetchHistory(), refetchPlans()]);
     } finally {
       setRefreshing(false);
     }
-  }, [refetch, refetchHistory]);
+  }, [refetch, refetchHistory, refetchPlans]);
 
   const startPreset = useCallback(
     (preset: WorkoutPreset) => {
@@ -83,6 +92,29 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
         sourcePresetId: preset.id,
         workoutFormat: preset.workout_format ?? 'standard',
         timeCapSeconds: preset.time_cap_seconds ?? null,
+      });
+    },
+    [startLiveWorkout]
+  );
+
+  // A plan session starts like its routine, tagged with the plan
+  // assignment so Sparky moves the plan on to the next session.
+  const startPlanSession = useCallback(
+    (session: NextPlanSession) => {
+      const assignmentId = Number(session.assignment.id);
+      void startLiveWorkout({
+        name: session.name,
+        exercises: buildPresetStartExercisesPayload(session.preset).map(
+          (exercise) => ({
+            ...exercise,
+            workout_plan_assignment_id: assignmentId,
+          })
+        ),
+        exerciseConfigs: buildPresetLiveExerciseConfigs(session.preset),
+        sourcePresetId: session.preset.id,
+        workoutPlanAssignmentId: assignmentId,
+        workoutFormat: session.preset.workout_format ?? 'standard',
+        timeCapSeconds: session.preset.time_cap_seconds ?? null,
       });
     },
     [startLiveWorkout]
@@ -104,7 +136,8 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      <PerformanceTodayCard
+      <TodayReadinessCard
+        nextRoutine={next ? shortRoutineName(next.name) : null}
         onPress={() => navigation.navigate('Performance')}
       />
 
@@ -116,6 +149,44 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
         >
           {t('trainingHome.resume', { defaultValue: 'Resume workout' })}
         </Button>
+      ) : next ? (
+        <View className="bg-surface rounded-2xl p-4 mb-4" testID="next-up-card">
+          <Text className="text-text-secondary text-xs">
+            {next.position
+              ? t('trainingHome.nextUpPosition', {
+                  defaultValue: 'Up next · session {{current}} of {{total}}',
+                  current: next.position.current,
+                  total: next.position.total,
+                })
+              : t('trainingHome.nextUp', { defaultValue: 'Up next' })}
+          </Text>
+          <Text className="text-text-primary text-lg font-semibold mt-0.5">
+            {next.name}
+          </Text>
+          <Text className="text-text-muted text-sm" numberOfLines={2}>
+            {presetExerciseLine(next.preset)}
+          </Text>
+          <Button
+            variant="primary"
+            className="mt-3"
+            disabled={isStarting}
+            onPress={() => startPlanSession(next)}
+          >
+            {t('trainingHome.startNamed', {
+              defaultValue: 'Start {{name}}',
+              name: shortRoutineName(next.name),
+            })}
+          </Button>
+          <Pressable
+            accessibilityRole="button"
+            className="items-center pt-3"
+            onPress={() => navigation.navigate('PresetSearch')}
+          >
+            <Text className="text-accent-primary text-sm">
+              {t('trainingHome.other', { defaultValue: 'Other workout' })}
+            </Text>
+          </Pressable>
+        </View>
       ) : (
         <Button
           variant="primary"
@@ -127,10 +198,20 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
         </Button>
       )}
 
-      <View className="flex-row justify-between bg-surface rounded-xl p-4 mb-4">
+      <SectionTitle
+        title={t('trainingHome.thisWeek', { defaultValue: 'This week' })}
+        action={t('trainingHome.progress', { defaultValue: 'Progress' })}
+        onAction={() => navigation.navigate('ExerciseStatistics')}
+      />
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => navigation.navigate('ExerciseStatistics')}
+        className="flex-row justify-between bg-surface rounded-xl p-4 mb-4"
+        testID="training-home-week"
+      >
         <WeekStat
           label={t('trainingHome.weekWorkouts', {
-            defaultValue: 'Workouts this week',
+            defaultValue: 'Workouts',
           })}
           value={formatLocalizedNumber(week.workouts)}
         />
@@ -139,10 +220,10 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
           value={formatLocalizedNumber(week.sets)}
         />
         <WeekStat
-          label={t('trainingHome.weekMinutes', { defaultValue: 'Minutes' })}
-          value={formatLocalizedNumber(week.minutes)}
+          label={t('trainingHome.weekStreak', { defaultValue: 'Week streak' })}
+          value={formatLocalizedNumber(streak)}
         />
-      </View>
+      </Pressable>
 
       <SectionTitle
         title={t('trainingHome.routines', { defaultValue: 'Routines' })}
