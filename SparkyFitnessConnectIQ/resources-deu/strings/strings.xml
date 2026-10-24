@@ -44,7 +44,7 @@
     <string id="Summary">Training beendet</string>
     <string id="Duration">Dauer</string>
     <string id="AvgHeartRate">Ø Puls</string>
-    <string id="LogHint">Start: erledigt · Tippen: ändern</string>
+    <string id="LogHint">Start: prüfen · erneut: loggen</string>
     <string id="NewPr">Neuer Rekord!</string>
     <string id="BeatLastTime">Stärker als letztes Mal</string>
     <string id="PerSide">Je Seite:</string>

@@ -28,7 +28,7 @@ turn recording off in the app settings.
 
 ## Controls
 
-Modelled on Garmin's own strength activity (data pages, one press per set)
+Modelled on Garmin's own strength activity (data pages, deliberate set confirmation)
 and Hevy (last values, set types, ±15 s rest).
 
 | Screen | Control | Action |
@@ -36,11 +36,11 @@ and Hevy (last values, set types, ±15 s rest).
 | Start menu | select | Start the workout / open the phone's live workout / resume / sync now |
 | Workout | UP / DOWN / swipe up-down | Pages: Set · Data (time, heart rate in zone colour, set time, calories, sets, volume) · Exercises |
 | Workout | swipe left / right | Next / previous exercise |
-| Workout, Set or Data page | SELECT / tap | Log the next set |
+| Workout, Set or Data page | SELECT / tap | Review the next set; no set is logged yet |
 | Workout, Exercises page | SELECT | Pick an exercise |
 | Workout | MENU (hold UP) | Jump to an exercise, undo the last set |
 | Workout | BACK | Continue / finish and save (shows a summary) / discard |
-| Log set | SELECT | Log the shown values (one press) |
+| Log set | SELECT | Confirm and log the shown values |
 | Log set | UP / DOWN | Edit: reps, then weight (exercise's own step), then RPE ("-" = none) |
 | Rest | UP / DOWN | +15 s / -15 s |
 | Rest | SELECT / BACK | End the rest |

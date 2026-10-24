@@ -3,10 +3,9 @@ import Toybox.Graphics;
 import Toybox.WatchUi;
 import Toybox.System;
 
-// Edits one set on a single screen: a set that differs from the target
-// (tap the set screen) or, with `amend`, the set just logged (tap during
-// the rest). A set done as planned needs none of this: START on the set
-// screen logs it straight away (logAndRest). The reps are large in the middle
+// Reviews one set on a single screen before logging, or, with `amend`,
+// corrects the set just logged (tap during the rest). START on the set
+// screen opens this review; a second START logs it. The reps are large in the middle
 // and UP / DOWN change them right away, since reps are what usually differ.
 // Tap the weight, swipe sideways or press MENU to change the weight instead
 // (and back). RPE is only asked when the "Ask for RPE" setting is on; then

@@ -47,7 +47,7 @@
     <string id="Summary">Workout done</string>
     <string id="Duration">Duration</string>
     <string id="AvgHeartRate">Avg heart rate</string>
-    <string id="LogHint">Start: done · Tap: edit</string>
+    <string id="LogHint">Start: review · again: log</string>
     <string id="NewPr">New record!</string>
     <string id="BeatLastTime">Stronger than last time</string>
     <string id="PerSide">Per side:</string>

@@ -163,7 +163,7 @@ class WorkoutSession {
     // Values the log screen starts with, field by field: the plan's target
     // (the phone's resolved one, so warm-up ramps and progression are in),
     // else what was logged last in this exercise, else last session. With a
-    // plan this makes most sets a single press.
+    // plan this makes most sets a quick review and confirm.
     function defaultsForNextSet() as Dictionary {
         var plan = nextPlannedSet();
         var logged = current()["logged"] as Array;

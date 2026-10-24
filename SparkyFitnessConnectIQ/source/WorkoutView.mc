@@ -7,7 +7,7 @@ import Toybox.Time;
 import Toybox.UserProfile;
 
 // The workout, modelled on Garmin's own strength activity and Hevy: data
-// pages you scroll through, one press to log a set.
+// pages you scroll through, with an explicit review before logging a set.
 //
 // Pages (UP / DOWN or swipe up / down, dots on the right):
 //   0 Set       exercise, set kind, the target, last time, a ring with one
@@ -16,8 +16,7 @@ import Toybox.UserProfile;
 //               calories, sets done, volume
 //   2 Overview  every exercise with its progress; SELECT picks one
 //
-//   SELECT             log the set as shown (one press), then rest
-//   tap                change reps / weight first, then log
+//   SELECT / tap       review reps / weight; SELECT again logs the set
 //   swipe left/right   next / previous exercise
 //   MENU (long UP)     exercises, undo last set
 //   BACK               continue, finish or discard
@@ -392,26 +391,7 @@ class WorkoutDelegate extends WatchUi.BehaviorDelegate {
         if (_view.page == WorkoutView.PAGE_OVERVIEW) {
             return onMenu();
         }
-        if (!quickLog()) {
-            openEditor();
-        }
-        return true;
-    }
-
-    // START logs the set as shown: the target, or what was logged last.
-    // The editor opens instead when there is nothing to confirm, or when
-    // RPE is to be asked.
-    private function quickLog() as Boolean {
-        if (Store.askRpe() || _session.nextPlannedSet() == null) {
-            return false;
-        }
-        var defaults = _session.defaultsForNextSet();
-        var reps = SparkyLogic.toInt(defaults["reps"]);
-        var weight = SparkyLogic.toFloatOrNull(defaults["weight"]);
-        if (reps == null) {
-            return false;
-        }
-        SetEditorView.logAndRest(_session, reps, weight == null ? 0.0 : weight, null);
+        openEditor();
         return true;
     }
 
