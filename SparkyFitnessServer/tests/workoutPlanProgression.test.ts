@@ -183,7 +183,7 @@ describe('computeSequentialPlanProgression', () => {
     expect(result.nextAssignment?.id).toBe(2);
   });
 
-  it('keeps progression on first incomplete session when an out-of-order session is logged prematurely', () => {
+  it('continues after a deliberately selected out-of-order session', () => {
     const assignments: AssignmentProgressionInput[] = [
       { id: 10, session_index: 1, session_name: 'Session 1' },
       { id: 20, session_index: 2, session_name: 'Session 2' },
@@ -196,13 +196,30 @@ describe('computeSequentialPlanProgression', () => {
     ];
 
     const result = computeSequentialPlanProgression(assignments, logs);
-    // Progression must remain at Session 1 because Session 1 is not completed in this cycle
+    // The diary selection is intentional; do not force the skipped session next.
     expect(result.sequencePosition).toEqual({
-      current: 1,
+      current: 3,
       total: 3,
-      session_name: 'Session 1',
+      session_name: 'Session 3',
     });
-    expect(result.nextAssignment?.id).toBe(10);
+    expect(result.nextAssignment?.id).toBe(30);
+  });
+
+  it('follows the latest completed session after a manual jump', () => {
+    const assignments: AssignmentProgressionInput[] = [
+      { id: 1, session_index: 1, session_name: 'Torso A' },
+      { id: 2, session_index: 2, session_name: 'Limbs A' },
+      { id: 3, session_index: 3, session_name: 'Torso B' },
+      { id: 4, session_index: 4, session_name: 'Limbs B' },
+    ];
+    const logs: LoggedEntryProgressionInput[] = [
+      { id: 'l1', workout_plan_assignment_id: 2, entry_date: '2026-10-20' },
+      { id: 'l2', workout_plan_assignment_id: 3, entry_date: '2026-10-24' },
+    ];
+
+    const result = computeSequentialPlanProgression(assignments, logs);
+    expect(result.nextAssignment?.id).toBe(4);
+    expect(result.sequencePosition?.current).toBe(4);
   });
 
   it('handles multiple sessions logged on the same date in chronological sequence', () => {

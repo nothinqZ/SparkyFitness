@@ -32,7 +32,8 @@ export interface SequentialProgressionResult<
 /**
  * Computes the active session and progress position for a sequential workout plan.
  * Pure function: given assignments and chronologically sorted logged entries,
- * finds the next incomplete session in the progression cycle.
+ * suggests the session after the last completed one. Choosing a different
+ * session in the diary deliberately moves the rotation to that point.
  */
 export function computeSequentialPlanProgression<
   T extends AssignmentProgressionInput,
@@ -61,82 +62,48 @@ export function computeSequentialPlanProgression<
     };
   }
 
-  // Map assignment ID -> array of monotonic log sequence indices
-  const logOrderIndicesByAssignment = new Map<string | number, number[]>();
-  for (const [logOrder, row] of loggedRows.entries()) {
-    const aid = row.workout_plan_assignment_id;
-    if (aid === null || aid === undefined) continue;
-    // Normalize numeric IDs to match assignment IDs
-    const normalizedAid =
-      typeof aid === 'string' && !isNaN(Number(aid)) ? Number(aid) : aid;
-    const list = logOrderIndicesByAssignment.get(normalizedAid) || [];
-    list.push(logOrder);
-    logOrderIndicesByAssignment.set(normalizedAid, list);
+  const normalizeId = (id: string | number): string => String(id);
+  const sessionByAssignment = new Map(
+    assignments.map((a) => [normalizeId(a.id), a.session_index ?? 1])
+  );
+  const requiredBySession = new Map<number, Set<string>>();
+  for (const a of assignments) {
+    const session = a.session_index ?? 1;
+    const required = requiredBySession.get(session) ?? new Set<string>();
+    required.add(normalizeId(a.id));
+    requiredBySession.set(session, required);
   }
 
-  let nextSessionIndex = sessionIndices[0] ?? 1;
-  let nextSessionOrder = 0;
-  let cycleThreshold = -1;
-  let hasActiveSession = false;
-
-  // Loop cycles to find first incomplete session
-  while (!hasActiveSession) {
-    let cycleCompleted = true;
-    for (let i = 0; i < sessionIndices.length; i++) {
-      const sIndex = sessionIndices[i]!;
-      const sAssignments = assignments.filter(
-        (a) => (a.session_index ?? 1) === sIndex
-      );
-      if (sAssignments.length === 0) continue;
-
-      // Check if every assignment in this session has been completed after cycleThreshold
-      let sessionCanComplete = true;
-      let sessionCompletionOrder = cycleThreshold;
-
-      for (const a of sAssignments) {
-        const aid =
-          typeof a.id === 'string' && !isNaN(Number(a.id))
-            ? Number(a.id)
-            : a.id;
-        const orders = logOrderIndicesByAssignment.get(aid) || [];
-        const nextOrder = orders.find((o) => o > cycleThreshold);
-        if (nextOrder === undefined) {
-          sessionCanComplete = false;
-          break;
-        }
-        if (nextOrder > sessionCompletionOrder) {
-          sessionCompletionOrder = nextOrder;
-        }
-      }
-
-      if (!sessionCanComplete) {
-        nextSessionIndex = sIndex;
-        nextSessionOrder = i;
-        hasActiveSession = true;
-        cycleCompleted = false;
-        break;
-      } else {
-        cycleThreshold = sessionCompletionOrder;
-      }
+  let lastCompletedSession: number | null = null;
+  let currentSession: number | null = null;
+  let completedAssignments = new Set<string>();
+  const finishSession = () => {
+    if (currentSession === null) return;
+    const required = requiredBySession.get(currentSession);
+    if (required && [...required].every((id) => completedAssignments.has(id))) {
+      lastCompletedSession = currentSession;
     }
-
-    if (cycleCompleted) {
-      // Check if there are any further entries logged after the latest cycleThreshold
-      let hasFutureLogs = false;
-      for (const orders of logOrderIndicesByAssignment.values()) {
-        if (orders.some((o) => o > cycleThreshold)) {
-          hasFutureLogs = true;
-          break;
-        }
-      }
-      if (!hasFutureLogs) {
-        // Wrap around to the start of the next cycle
-        nextSessionIndex = sessionIndices[0] ?? 1;
-        nextSessionOrder = 0;
-        hasActiveSession = true;
-      }
+  };
+  for (const row of loggedRows) {
+    const assignmentId = row.workout_plan_assignment_id;
+    if (assignmentId === null || assignmentId === undefined) continue;
+    const session = sessionByAssignment.get(normalizeId(assignmentId));
+    if (session === undefined) continue;
+    if (session !== currentSession) {
+      finishSession();
+      currentSession = session;
+      completedAssignments = new Set<string>();
     }
+    completedAssignments.add(normalizeId(assignmentId));
   }
+  finishSession();
+
+  const lastOrder =
+    lastCompletedSession === null
+      ? -1
+      : sessionIndices.indexOf(lastCompletedSession);
+  const nextSessionOrder = (lastOrder + 1) % sessionIndices.length;
+  const nextSessionIndex = sessionIndices[nextSessionOrder] ?? 1;
 
   const activeSessionAssignments = assignments.filter(
     (a) => (a.session_index ?? 1) === nextSessionIndex
