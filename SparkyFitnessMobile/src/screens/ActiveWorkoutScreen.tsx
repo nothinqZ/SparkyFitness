@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
-  AppState,
   Keyboard,
   LayoutAnimation,
+  Platform,
   Text,
   View,
   type LayoutChangeEvent,
@@ -78,7 +78,6 @@ import { runAfterKeyboardSettles } from '../utils/keyboardFocus';
 import {
   buildExerciseReorderItems,
   describeActiveSet,
-  firstSetInputField,
   formatSetLoad,
   rendersCardioEffortForm,
   resolveSnapshotModality,
@@ -177,13 +176,10 @@ function ActiveWorkoutScreen({ navigation, route }: Props) {
     sourcePresetId == null ||
     (isFocused && settledPresetCheckKey === presetCheckKey);
 
-  // The set cell holding the keyboard (its render key) and which field. The
-  // ref is written with the state, not by an effect after the commit, so the
-  // rest-expiry subscription below already sees a tap from the same tick.
+  // The set cell holding the keyboard (its render key) and which field.
+  // Rest expiry deliberately does not focus a cell or open the keyboard.
   const [focusedSetKey, setFocusedSetKeyState] = useState<string | null>(null);
-  const focusedSetKeyRef = useRef<string | null>(null);
   const setFocusedSetKey = useCallback((key: string | null) => {
-    focusedSetKeyRef.current = key;
     setFocusedSetKeyState(key);
   }, []);
   const [focusedField, setFocusedField] = useState<SetInputField>('weight');
@@ -583,46 +579,6 @@ function ActiveWorkoutScreen({ navigation, route }: Props) {
     []
   );
 
-  // When a rest runs out on its own, put the cursor in the next set's first
-  // value cell so the lifter can type without tapping. Skip / dismiss don't
-  // stamp restExpiredAt, so they never steal focus, and neither does an
-  // expiry while a set cell already has the keyboard: the lifter is typing
-  // there. A store subscription (not an effect on the value) because this
-  // reacts to an event, once.
-  const isFocusedRef = useRef(isFocused);
-  useEffect(() => {
-    isFocusedRef.current = isFocused;
-  }, [isFocused]);
-  useEffect(
-    () =>
-      useActiveWorkoutStore.subscribe((state, prev) => {
-        if (
-          state.restExpiredAt == null ||
-          state.restExpiredAt === prev.restExpiredAt
-        )
-          return;
-        if (
-          !isFocusedRef.current ||
-          focusedSetKeyRef.current != null ||
-          AppState.currentState !== 'active' ||
-          state.activeSetId == null
-        )
-          return;
-        const setId = state.activeSetId;
-        const exercise = state.session?.exercises.find((e) =>
-          e.sets.some((s) => String(s.id) === setId)
-        );
-        if (!exercise) return;
-        handleActivateSet(
-          state.setRenderKeys[setId] ?? setId,
-          firstSetInputField(
-            resolveSnapshotModality(exercise.exercise_snapshot)
-          )
-        );
-      }),
-    [handleActivateSet]
-  );
-
   useDeactivateOnKeyboardDismiss(
     useCallback(() => setFocusedSetKey(null), [setFocusedSetKey]),
     focusedSetKey != null
@@ -941,6 +897,7 @@ function ActiveWorkoutScreen({ navigation, route }: Props) {
         scrollEventThrottle={32}
         onLayout={handleScrollLayout}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         // The focused cell stays clear of the keyboard bar riding on top of
         // the keyboard, and of the rest row it carries while a rest runs.
         bottomOffset={

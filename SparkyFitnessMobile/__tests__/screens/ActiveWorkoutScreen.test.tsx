@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, AppState, Dimensions } from 'react-native';
+import { Alert, Dimensions } from 'react-native';
 import { fireEvent, render, act, within } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -693,34 +693,13 @@ describe('ActiveWorkoutScreen keyboard accessory bar', () => {
     ).toBeNull();
   });
 
-  describe('rest expiry auto-focus', () => {
-    // The RN preset mocks currentState as a function; the screen only acts
-    // on an expiry while the app is in the foreground.
-    let currentStateDescriptor: PropertyDescriptor | undefined;
-
-    beforeEach(() => {
-      currentStateDescriptor = Object.getOwnPropertyDescriptor(
-        AppState,
-        'currentState'
-      );
-      Object.defineProperty(AppState, 'currentState', {
-        get: () => 'active',
-        configurable: true,
-      });
-    });
-
-    afterEach(() => {
-      if (currentStateDescriptor != null) {
-        Object.defineProperty(AppState, 'currentState', currentStateDescriptor);
-      }
-    });
-
+  describe('rest expiry keyboard behavior', () => {
     const expireRest = () =>
       act(() => {
         useActiveWorkoutStore.setState({ restExpiredAt: Date.now() });
       });
 
-    it("puts the keyboard in the on-deck set's first cell when nothing is focused", () => {
+    it('does not open the keyboard when the pause ends', () => {
       const { getByTestId } = renderScreen();
       const bar = () =>
         within(
@@ -730,9 +709,8 @@ describe('ActiveWorkoutScreen keyboard accessory bar', () => {
 
       expireRest();
 
-      // Weight is the first cell, so Next (→ reps) and Log are on offer.
-      expect(bar().queryByText('Next')).toBeTruthy();
-      expect(bar().queryByText('Log')).toBeTruthy();
+      expect(bar().queryByText('Next')).toBeNull();
+      expect(bar().queryByText('Log')).toBeNull();
     });
 
     it('does not move the keyboard off a set the lifter is editing', () => {
