@@ -123,6 +123,10 @@ class SetEditorView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
         dc.clear();
 
+        dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.03, Graphics.FONT_XTINY,
+            WatchUi.loadResource(Rez.Strings.ReviewSet) as String, Graphics.TEXT_JUSTIFY_CENTER);
+
         // "Aufwärmen 1/2 · Bankdrücken", in the set kind's colour.
         var next = amend ? null : session.nextPlannedSet();
         var label = amend ? WatchUi.loadResource(Rez.Strings.Correct) as String
@@ -153,15 +157,12 @@ class SetEditorView extends WatchUi.View {
         dc.drawText(w * 0.15, h * 0.66, Graphics.FONT_SMALL, "-",
             Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        // The check beside START (upper right).
-        var kx = (w * 0.83).toNumber();
-        var ky = (h * 0.27).toNumber();
+        // Only the physical START key saves; do not draw a touch-like checkmark.
         dc.setColor(accent, Graphics.COLOR_TRANSPARENT);
-        dc.fillCircle(kx, ky, 18);
-        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
-        dc.setPenWidth(4);
-        dc.drawLine(kx - 8, ky, kx - 2, ky + 6);
-        dc.drawLine(kx - 2, ky + 6, kx + 9, ky - 6);
+        dc.drawText(cx, h * 0.79, Graphics.FONT_XTINY,
+            WatchUi.loadResource(field != FIELD_RPE && Store.askRpe()
+                ? Rez.Strings.StartToRpe : Rez.Strings.StartToSave) as String,
+            Graphics.TEXT_JUSTIFY_CENTER);
 
         if (field != FIELD_RPE) {
             dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);

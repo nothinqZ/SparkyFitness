@@ -40,7 +40,7 @@
     <string id="Overview">Exercises</string>
     <string id="Elapsed">Workout time</string>
     <string id="HeartRate">Heart rate</string>
-    <string id="SetTime">Set time</string>
+    <string id="SetTime">Since rest</string>
     <string id="Calories">Calories</string>
     <string id="Sets">Sets</string>
     <string id="Volume">Volume</string>
@@ -55,7 +55,12 @@
     <string id="RpeSettingTitle">Ask for RPE after each set</string>
     <string id="TapWeight">Tap or swipe: weight</string>
     <string id="Correct">Correct set</string>
-    <string id="TapToCorrect">Tap to correct</string>
+    <string id="TapToCorrect">MENU: correct</string>
+    <string id="SetReady">SET READY</string>
+    <string id="ReviewSet">REVIEW SET</string>
+    <string id="StartToSave">START: save set</string>
+    <string id="StartToRpe">START: review RPE</string>
+    <string id="StartToContinue">START: continue · MENU: correct</string>
     <string id="UndoLast">Undo last set</string>
     <string id="Logged">Logged</string>
 </strings>

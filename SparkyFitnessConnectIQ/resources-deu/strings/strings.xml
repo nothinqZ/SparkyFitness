@@ -37,7 +37,7 @@
     <string id="Overview">Übungen</string>
     <string id="Elapsed">Trainingszeit</string>
     <string id="HeartRate">Puls</string>
-    <string id="SetTime">Satzzeit</string>
+    <string id="SetTime">Seit Pause</string>
     <string id="Calories">Kalorien</string>
     <string id="Sets">Sätze</string>
     <string id="Volume">Volumen</string>
@@ -52,7 +52,12 @@
     <string id="RpeSettingTitle">Nach jedem Satz RPE abfragen</string>
     <string id="TapWeight">Tippen/Wischen: Gewicht</string>
     <string id="Correct">Satz korrigieren</string>
-    <string id="TapToCorrect">Tippen zum Korrigieren</string>
+    <string id="TapToCorrect">Menü: korrigieren</string>
+    <string id="SetReady">SATZ BEREIT</string>
+    <string id="ReviewSet">SATZ PRÜFEN</string>
+    <string id="StartToSave">START: Satz speichern</string>
+    <string id="StartToRpe">START: RPE prüfen</string>
+    <string id="StartToContinue">START: weiter · MENÜ: korrigieren</string>
     <string id="UndoLast">Letzten Satz rückgängig</string>
     <string id="Logged">Geloggt</string>
 </strings>

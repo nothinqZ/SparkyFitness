@@ -16,7 +16,7 @@ import Toybox.UserProfile;
 //               calories, sets done, volume
 //   2 Overview  every exercise with its progress; SELECT picks one
 //
-//   SELECT / tap       review reps / weight; SELECT again logs the set
+//   SELECT / tap       review reps / weight; physical START in editor logs
 //   swipe left/right   next / previous exercise
 //   MENU (long UP)     exercises, undo last set
 //   BACK               continue, finish or discard
@@ -99,6 +99,10 @@ class WorkoutView extends WatchUi.View {
         var ex = _session.current();
 
         drawSetRing(dc, w, h);
+
+        dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.04, Graphics.FONT_XTINY,
+            WatchUi.loadResource(Rez.Strings.SetReady) as String, Graphics.TEXT_JUSTIFY_CENTER);
 
         // Exercise counter, and a green dot while the phone is connected.
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);

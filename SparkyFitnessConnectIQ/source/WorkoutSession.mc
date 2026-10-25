@@ -19,8 +19,8 @@ import Toybox.WatchUi;
 class WorkoutSession {
 
     var data as Dictionary;
-    // When the current set began (epoch s): after the last rest, or when the
-    // workout was opened. Shown as "set time" like Garmin's set timer.
+    // Time since the last rest ended (or the workout opened). This is not
+    // measured active set duration, so the UI must not call it "set time".
     var setStartedAt as Number;
     // The set logged last in a live workout (id, reps, weight, rpe, name),
     // so the rest screen can correct it; the phone's plan has no "last".

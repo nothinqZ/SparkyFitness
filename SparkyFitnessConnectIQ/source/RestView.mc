@@ -8,9 +8,8 @@ import Toybox.Time;
 // Rest countdown after a logged set, as in Hevy: UP / DOWN add or take 15 s,
 // a short buzz 10 s before the end, a full alert (vibration, and a tone
 // where available) at zero, then it counts into overtime. Shows the heart
-// rate in its zone colour, the set just logged and the next set. SELECT or
-// BACK ends the rest; a tap corrects the logged set, as Garmin's strength
-// activity asks for reps and weight during the rest.
+// rate in its zone colour, the set just logged and the next set. Physical
+// START or BACK ends the rest; MENU corrects the logged set. A tap is inert.
 // In a live workout the rest follows the phone's (PhoneLink.followRest) and
 // ±15 s / ending it here are sent to the phone.
 class RestView extends WatchUi.View {
@@ -163,19 +162,16 @@ class RestView extends WatchUi.View {
             dc.drawArc(w / 2, h / 2, radius, Graphics.ARC_CLOCKWISE, 90, 90 - degrees);
         }
 
-        // The set just logged ("✓ 8 × 100 kg"), else the plain title.
+        dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(w / 2, h * 0.07, Graphics.FONT_SMALL,
+            WatchUi.loadResource(Rez.Strings.Rest) as String, Graphics.TEXT_JUSTIFY_CENTER);
+
+        // The set just logged ("✓ 8 × 100 kg").
         var logged = _session.lastLogged();
         if (logged != null) {
             dc.setColor(Graphics.COLOR_GREEN, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(w / 2, h * 0.13, Graphics.FONT_TINY,
+            dc.drawText(w / 2, h * 0.18, Graphics.FONT_TINY,
                 "✓ " + WorkoutView.describeSet(logged, Store.weightUnit()), Graphics.TEXT_JUSTIFY_CENTER);
-            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(w / 2, h * 0.13 + dc.getFontHeight(Graphics.FONT_TINY), Graphics.FONT_XTINY,
-                WatchUi.loadResource(Rez.Strings.TapToCorrect) as String, Graphics.TEXT_JUSTIFY_CENTER);
-        } else {
-            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(w / 2, h * 0.17, Graphics.FONT_SMALL, WatchUi.loadResource(Rez.Strings.Rest) as String,
-                Graphics.TEXT_JUSTIFY_CENTER);
         }
         dc.setColor(left > 0 ? Graphics.COLOR_WHITE : Graphics.COLOR_GREEN, Graphics.COLOR_TRANSPARENT);
         var text = left >= 0 ? SparkyLogic.formatClock(left) : "+" + SparkyLogic.formatClock(-left);
@@ -207,6 +203,9 @@ class RestView extends WatchUi.View {
             dc.drawText(w / 2, h * 0.72, Graphics.FONT_XTINY, WatchUi.loadResource(Rez.Strings.Skip) as String,
                 Graphics.TEXT_JUSTIFY_CENTER);
         }
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(w / 2, h * 0.86, Graphics.FONT_XTINY,
+            WatchUi.loadResource(Rez.Strings.StartToContinue) as String, Graphics.TEXT_JUSTIFY_CENTER);
     }
 }
 
@@ -249,14 +248,19 @@ class RestDelegate extends WatchUi.BehaviorDelegate {
         return true;
     }
 
-    // Correct the set just logged; the rest keeps running meanwhile.
-    function onTap(event as WatchUi.ClickEvent) as Boolean {
+    // Correction is deliberately behind MENU: a stray screen touch must not
+    // open another view or alter the pause.
+    function onMenu() as Boolean {
         var session = _view.session();
         if (session.lastLogged() == null) {
             return true;
         }
         var editor = new SetEditorView(session, true);
         WatchUi.pushView(editor, new SetEditorDelegate(editor), WatchUi.SLIDE_UP);
+        return true;
+    }
+
+    function onTap(event as WatchUi.ClickEvent) as Boolean {
         return true;
     }
 }
