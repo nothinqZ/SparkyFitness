@@ -46,3 +46,29 @@ export function volumeChangeByEntry(
   }
   return out;
 }
+
+export interface WorkoutTakeaway {
+  compared: number;
+  higher: number;
+  lower: number;
+  unchanged: number;
+  skippedSets: number;
+  personalRecords: number;
+}
+
+/** A factual recap; volume is not a claim about strength or readiness. */
+export function workoutTakeaway(
+  volumeChanges: Record<string, number>,
+  skippedSets: number,
+  personalRecords: number
+): WorkoutTakeaway {
+  const changes = Object.values(volumeChanges).filter(Number.isFinite);
+  return {
+    compared: changes.length,
+    higher: changes.filter((n) => n > 0).length,
+    lower: changes.filter((n) => n < 0).length,
+    unchanged: changes.filter((n) => n === 0).length,
+    skippedSets,
+    personalRecords,
+  };
+}

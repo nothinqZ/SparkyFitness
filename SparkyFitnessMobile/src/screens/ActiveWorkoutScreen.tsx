@@ -906,6 +906,29 @@ function ActiveWorkoutScreen({ navigation, route }: Props) {
         onPressAdd={handleAddExercise}
       />
 
+      {workoutFormat === 'standard' && !guidedWorkoutEnabled ? (
+        <View
+          className="mx-3 mb-1 rounded-xl bg-surface px-3 py-2"
+          testID="active-workout-phase"
+        >
+          <Text className="text-text-primary text-sm font-semibold">
+            {restState === 'resting'
+              ? t('activeWorkout.phase.rest', { defaultValue: 'Rest now' })
+              : restState === 'paused'
+                ? t('activeWorkout.phase.paused', {
+                    defaultValue: 'Rest paused',
+                  })
+                : t('activeWorkout.phase.set', { defaultValue: 'Set ready' })}
+          </Text>
+          {activeSetDescription ? (
+            <Text className="text-text-secondary text-xs" numberOfLines={1}>
+              {restLabel}
+              {restNextSetText ? ` · ${restNextSetText}` : ''}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
       <KeyboardAwareScrollView
         ref={scrollRef}
         className="flex-1"

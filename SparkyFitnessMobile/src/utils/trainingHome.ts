@@ -111,3 +111,33 @@ export function nextPlanSession(
 export function shortRoutineName(name: string): string {
   return name.split(/\s[–-]\s/)[0]!.trim();
 }
+
+/** Only suggest a plan review after repeated, comparable long sessions. */
+export function longRoutineSuggestion(
+  sessions: readonly ExerciseSessionResponse[],
+  presetId: number | string,
+  thresholdMinutes = 75
+): { averageMinutes: number; count: number } | null {
+  const matches = sessions
+    .filter(
+      (s): s is PresetSessionResponse =>
+        s.type === 'preset' &&
+        String(s.workout_preset_id) === String(presetId) &&
+        Number.isFinite(s.total_duration_minutes) &&
+        s.total_duration_minutes > 0
+    )
+    .slice(0, 3);
+  if (
+    matches.length < 2 ||
+    matches.some((s) => s.total_duration_minutes < thresholdMinutes)
+  ) {
+    return null;
+  }
+  return {
+    averageMinutes: Math.round(
+      matches.reduce((sum, s) => sum + s.total_duration_minutes, 0) /
+        matches.length
+    ),
+    count: matches.length,
+  };
+}

@@ -21,7 +21,10 @@ import { useWorkoutCompletePresetSync } from '../hooks/useWorkoutCompletePresetS
 import { getWorkout } from '../services/api/exerciseApi';
 import { fireSuccessHaptic } from '../services/haptics';
 import { formatDateToTimeLabel } from '../utils/entryTimeDisplay';
-import { volumeChangeByEntry } from '../utils/workoutComparison';
+import {
+  volumeChangeByEntry,
+  workoutTakeaway,
+} from '../utils/workoutComparison';
 import { setsDurationMinutes } from '@workspace/shared';
 import {
   buildSessionDurationMinutes,
@@ -165,6 +168,15 @@ function WorkoutCompleteScreen({ navigation, route }: Props) {
     () => volumeChangeByEntry(session, summary.exercises, previousSessionSets),
     [session, summary.exercises, previousSessionSets]
   );
+  const takeaway = useMemo(
+    () =>
+      workoutTakeaway(
+        volumeChange,
+        summary.skippedSetCount,
+        summary.prRows.length
+      ),
+    [volumeChange, summary.skippedSetCount, summary.prRows.length]
+  );
 
   // Stable identity: the prompt's memo and timer effect key off it.
   const assumeSources = useMemo(
@@ -270,6 +282,48 @@ function WorkoutCompleteScreen({ navigation, route }: Props) {
             prRows={summary.prRows}
             weightUnit={weightUnit}
           />
+
+          <View
+            className="bg-surface rounded-2xl p-4 mb-4"
+            testID="workout-takeaway"
+          >
+            <Text className="text-text-primary font-semibold">
+              {t('workoutComplete.takeaway.title', {
+                defaultValue: 'What changed',
+              })}
+            </Text>
+            <Text className="text-text-secondary text-sm mt-1">
+              {takeaway.compared > 0
+                ? t('workoutComplete.takeaway.comparison', {
+                    defaultValue:
+                      'Compared with the last session: {{higher}} exercises with more volume, {{lower}} with less, {{unchanged}} unchanged.',
+                    higher: takeaway.higher,
+                    lower: takeaway.lower,
+                    unchanged: takeaway.unchanged,
+                  })
+                : t('workoutComplete.takeaway.noComparison', {
+                    defaultValue:
+                      'No comparable weighted sets from the previous session yet.',
+                  })}
+            </Text>
+            {takeaway.skippedSets > 0 ? (
+              <Text className="text-text-secondary text-sm mt-2">
+                {t('workoutComplete.takeaway.skipped', {
+                  defaultValue:
+                    '{{count}} planned sets were not completed. If time was the reason, consider shortening this routine next time.',
+                  count: takeaway.skippedSets,
+                })}
+              </Text>
+            ) : null}
+            {takeaway.personalRecords > 0 ? (
+              <Text className="text-text-secondary text-sm mt-2">
+                {t('workoutComplete.takeaway.records', {
+                  defaultValue: '{{count}} personal records logged.',
+                  count: takeaway.personalRecords,
+                })}
+              </Text>
+            ) : null}
+          </View>
 
           <WorkoutFeedbackCard
             presetEntryId={session.id}

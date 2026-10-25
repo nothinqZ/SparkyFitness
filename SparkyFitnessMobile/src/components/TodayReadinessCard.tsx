@@ -50,9 +50,10 @@ const TodayReadinessCard: React.FC<{
     })[status];
 
   let sentence: string;
-  if (!view) {
+  if (!view || view.advice === 'unknown') {
     sentence = t('readiness.advice.unknown', {
-      defaultValue: 'Not enough recovery data for today yet.',
+      defaultValue:
+        'Not enough current recovery data for a training recommendation.',
     });
   } else if (view.advice === 'easy') {
     sentence = view.limiting
@@ -124,7 +125,7 @@ const TodayReadinessCard: React.FC<{
       testID="today-readiness-card"
     >
       <View className="flex-row items-center">
-        {view ? (
+        {view?.current && view.advice !== 'unknown' ? (
           <ReadinessGauge
             value={view.score}
             colorToken={STATUS_TOKENS[levelStatus(view.level)]}
@@ -139,14 +140,15 @@ const TodayReadinessCard: React.FC<{
               ? ` · ${t('performance.provenance.estimated', { defaultValue: 'Estimated' })}`
               : ''}
             {view?.source === 'estimated' &&
-            data?.recovery.readiness.device != null
+            view.current &&
+            data?.today?.trainingReadiness != null
               ? ` · ${t('readiness.garmin', {
                   defaultValue: 'Garmin: {{value}}',
-                  value: data.recovery.readiness.device,
+                  value: data.today.trainingReadiness,
                 })}`
               : ''}
           </Text>
-          {view ? (
+          {view?.current && view.advice !== 'unknown' ? (
             <Text
               className={`text-base font-semibold ${STATUS_TEXT[levelStatus(view.level)]}`}
             >
@@ -165,6 +167,24 @@ const TodayReadinessCard: React.FC<{
           <Text className="text-text-primary text-sm mt-1">{sentence}</Text>
         </View>
       </View>
+
+      {view && !view.current ? (
+        <Text className="text-text-muted text-xs mt-2">
+          {t('readiness.stale', {
+            defaultValue:
+              'Latest wearable data: {{date}}. No current-day score yet.',
+            date: data?.today?.date ?? '—',
+          })}
+        </Text>
+      ) : null}
+      {view?.current && view.missingFactors.length > 0 ? (
+        <Text className="text-text-muted text-xs mt-2">
+          {t('readiness.missingFactors', {
+            defaultValue: 'Not available: {{factors}}',
+            factors: view.missingFactors.map(factorLabel).join(', '),
+          })}
+        </Text>
+      ) : null}
 
       {view && view.factors.length > 0 ? (
         <View

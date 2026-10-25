@@ -5,6 +5,7 @@ import type {
 import {
   previousWorkingVolumeKg,
   volumeChangeByEntry,
+  workoutTakeaway,
 } from '../../src/utils/workoutComparison';
 
 const set = (
@@ -40,5 +41,16 @@ describe('workout comparison', () => {
       { bench: [set(80, 8), set(80, 6)], pullup: [set(null, 10)] }
     );
     expect(change).toEqual({ a: 120 });
+  });
+
+  it('recaps comparable volume without treating missing comparisons as declines', () => {
+    expect(workoutTakeaway({ a: 120, b: -50, c: 0 }, 2, 1)).toEqual({
+      compared: 3,
+      higher: 1,
+      lower: 1,
+      unchanged: 1,
+      skippedSets: 2,
+      personalRecords: 1,
+    });
   });
 });

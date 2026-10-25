@@ -47,13 +47,18 @@ export interface ReadinessView {
   advice: DayAdvice;
   /** The weakest factor, when it is what holds the day back. */
   limiting: ReadinessFactor | null;
+  /** A score without current-day wearable data is context, not today's advice. */
+  current: boolean;
+  missingFactors: ReadinessFactor[];
 }
 
 export function readinessView(
   data: PerformanceOverviewResponse
 ): ReadinessView | null {
   const estimated = data.recovery.readiness.estimated;
-  const score = estimated?.score ?? data.recovery.readiness.device;
+  const deviceScore =
+    data.today?.date === data.range.end ? data.today.trainingReadiness : null;
+  const score = estimated?.score ?? deviceScore;
   if (score === null || score === undefined) return null;
   const factors = FACTOR_ORDER.flatMap((key) => {
     const value = estimated?.components[key];
@@ -61,20 +66,30 @@ export function readinessView(
       ? []
       : [{ key, value, status: factorStatus(value) }];
   });
+  const current = Boolean(
+    data.today?.date && data.today.date === data.range.end
+  );
+  const missingFactors = FACTOR_ORDER.filter(
+    (key) => !factors.some((factor) => factor.key === key)
+  );
   const level = readinessLevel(score);
   const overloaded = data.load.current?.zone === 'very_high';
   const advice: DayAdvice =
-    overloaded || level === 'poor' || level === 'low'
-      ? 'easy'
-      : level === 'high'
-        ? 'train'
-        : 'steady';
+    !current || (estimated != null && factors.length < 2)
+      ? 'unknown'
+      : overloaded || level === 'poor' || level === 'low'
+        ? 'easy'
+        : level === 'high'
+          ? 'train'
+          : 'steady';
   const weakest = [...factors].sort((a, b) => a.value - b.value)[0];
   return {
     score,
     level,
     source: estimated ? 'estimated' : 'device',
     factors,
+    current,
+    missingFactors,
     advice,
     limiting:
       advice !== 'train' && weakest && weakest.status !== 'good'

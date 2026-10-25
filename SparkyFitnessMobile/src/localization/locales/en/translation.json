@@ -311,6 +311,11 @@
     }
   },
   "activeWorkout": {
+    "phase": {
+      "rest": "Rest now",
+      "paused": "Rest paused",
+      "set": "Set ready"
+    },
     "failedToDeleteWorkout": "Failed to delete discarded workout session from diary.",
     "progression": {
       "toggleSettings": "Toggle progression settings",
@@ -4084,6 +4089,15 @@
     }
   },
   "workoutComplete": {
+    "takeaway": {
+      "title": "What changed",
+      "comparison": "Compared with the last session: {{higher}} exercises with more volume, {{lower}} with less, {{unchanged}} unchanged.",
+      "noComparison": "No comparable weighted sets from the previous session yet.",
+      "skipped_one": "{{count}} planned set was not completed. If time was the reason, consider shortening this routine next time.",
+      "skipped_other": "{{count}} planned sets were not completed. If time was the reason, consider shortening this routine next time.",
+      "records_one": "{{count}} personal record logged.",
+      "records_other": "{{count}} personal records logged."
+    },
     "title": "Workout Complete",
     "stats": {
       "duration": "Duration",
@@ -8557,12 +8571,26 @@
     }
   },
   "trainingHome": {
+    "analysis": "Analysis",
+    "strengthProgress": "Strength progress",
+    "strengthProgressHint": "Exercises, sets and trends",
+    "recoveryAnalysis": "Recovery and load",
+    "recoveryAnalysisHint": "Sources, trends and details",
+    "deferred": "Later today · rotation unchanged",
+    "defer": "Later today",
+    "undoDefer": "Show as next again",
+    "today": "Today",
+    "history": "History",
+    "managePlan": "Review rotation and plan",
+    "planReviewTitle": "Does this routine still fit?",
+    "planReviewBody": "{{name}} took about {{minutes}} minutes in the last {{sessions}} sessions. If that is too long, review the split. Nothing changes automatically.",
+    "reviewRoutine": "Review routine",
     "resume": "Resume workout",
     "start": "Start workout",
     "weekWorkouts": "Workouts",
     "weekSets": "Sets",
     "weekMinutes": "Minutes",
-    "routines": "Routines",
+    "routines": "Your routines",
     "allRoutines": "All",
     "noRoutines": "No routines yet. Create one under All, then start it here with one tap.",
     "startRoutine": "Start routine",
@@ -8581,6 +8609,8 @@
     "weekStreak": "Week streak"
   },
   "readiness": {
+    "stale": "Latest wearable data: {{date}}. No current-day score yet.",
+    "missingFactors": "Not available: {{factors}}",
     "title": "Readiness",
     "factor": {
       "sleep": "Sleep",
@@ -8600,7 +8630,7 @@
       "poor": "Poor"
     },
     "advice": {
-      "unknown": "Not enough recovery data for today yet.",
+      "unknown": "Not enough current recovery data for a training recommendation.",
       "easyBecause": "Take it easier today: {{factor}} is low.",
       "easy": "Take it easier today.",
       "trainRoutine": "Well recovered. {{routine}} is up next.",

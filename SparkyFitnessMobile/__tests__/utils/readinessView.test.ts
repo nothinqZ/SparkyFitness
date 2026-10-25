@@ -12,6 +12,12 @@ const overview = (
   device: number | null = null
 ) =>
   ({
+    range: {
+      start: '2026-10-01',
+      end: '2026-10-25',
+      timezone: 'Europe/Berlin',
+    },
+    today: { date: '2026-10-25', trainingReadiness: device },
     recovery: {
       readiness: {
         estimated: score === null ? null : { score, components },
@@ -72,5 +78,28 @@ describe('readiness view', () => {
     expect(view.level).toBe('moderate');
     expect(view.factors).toEqual([]);
     expect(readinessView(overview(null, {}))).toBeNull();
+  });
+
+  it('does not recommend hard training from yesterday’s data', () => {
+    const data = overview(90, { sleep: 90, hrv: 80 });
+    data.today!.date = '2026-10-24';
+    expect(readinessView(data)).toMatchObject({
+      current: false,
+      advice: 'unknown',
+    });
+  });
+
+  it('does not use a stale device score as today’s score', () => {
+    const data = overview(null, {}, 'optimal', 90);
+    data.today!.date = '2026-10-24';
+    expect(readinessView(data)).toBeNull();
+  });
+
+  it('withholds a recommendation when an estimate has only one factor', () => {
+    expect(readinessView(overview(88, { sleep: 90 }))).toMatchObject({
+      current: true,
+      advice: 'unknown',
+      missingFactors: ['hrv', 'restingHr', 'load'],
+    });
   });
 });

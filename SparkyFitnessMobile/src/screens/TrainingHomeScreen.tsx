@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -31,6 +32,7 @@ import {
 } from '../utils/workoutSession';
 import {
   nextPlanSession,
+  longRoutineSuggestion,
   recentWorkouts,
   shortRoutineName,
   weekSummary,
@@ -44,6 +46,12 @@ type Props = CompositeScreenProps<
 >;
 
 const ROUTINES_SHOWN = 6;
+const DEFERRED_PLAN_KEY = 'trainingHome.deferredPlanSession';
+
+function localDay(): string {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 
 /**
  * Training-first home of the personal build, modelled on Hevy: today's
@@ -62,6 +70,9 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
   const streak = consistency?.weeklyStreak.current ?? 0;
   const { startLiveWorkout, isStarting } = useStartLiveWorkout(navigation);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [deferredSession, setDeferredSession] = React.useState<string | null>(
+    null
+  );
 
   useRefetchOnFocus(refetch, true);
 
@@ -73,6 +84,34 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
   const recent = useMemo(() => recentWorkouts(sessions, 5), [sessions]);
   const week = useMemo(() => weekSummary(sessions, new Date()), [sessions]);
   const next = useMemo(() => nextPlanSession(plans, presets), [plans, presets]);
+  const nextKey = next
+    ? `${localDay()}:${next.plan.id}:${next.assignment.id}`
+    : null;
+  const isDeferred = nextKey != null && deferredSession === nextKey;
+  React.useEffect(() => {
+    let mounted = true;
+    void AsyncStorage.getItem(DEFERRED_PLAN_KEY)
+      .then((value) => {
+        if (mounted) setDeferredSession(value);
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, []);
+  const toggleDeferred = useCallback(() => {
+    const value = isDeferred ? null : nextKey;
+    setDeferredSession(value);
+    void (
+      value
+        ? AsyncStorage.setItem(DEFERRED_PLAN_KEY, value)
+        : AsyncStorage.removeItem(DEFERRED_PLAN_KEY)
+    ).catch(() => undefined);
+  }, [isDeferred, nextKey]);
+  const planReview = useMemo(
+    () => next && longRoutineSuggestion(sessions, next.preset.id),
+    [next, sessions]
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -136,6 +175,9 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
+      <SectionTitle
+        title={t('trainingHome.today', { defaultValue: 'Today' })}
+      />
       <TodayReadinessCard
         nextRoutine={next ? shortRoutineName(next.name) : null}
         onPress={() => navigation.navigate('Performance')}
@@ -152,13 +194,17 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
       ) : next ? (
         <View className="bg-surface rounded-2xl p-4 mb-4" testID="next-up-card">
           <Text className="text-text-secondary text-xs">
-            {next.position
-              ? t('trainingHome.nextUpPosition', {
-                  defaultValue: 'Up next · session {{current}} of {{total}}',
-                  current: next.position.current,
-                  total: next.position.total,
+            {isDeferred
+              ? t('trainingHome.deferred', {
+                  defaultValue: 'Later today · rotation unchanged',
                 })
-              : t('trainingHome.nextUp', { defaultValue: 'Up next' })}
+              : next.position
+                ? t('trainingHome.nextUpPosition', {
+                    defaultValue: 'Up next · session {{current}} of {{total}}',
+                    current: next.position.current,
+                    total: next.position.total,
+                  })
+                : t('trainingHome.nextUp', { defaultValue: 'Up next' })}
           </Text>
           <Text className="text-text-primary text-lg font-semibold mt-0.5">
             {next.name}
@@ -180,10 +226,36 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
           <Pressable
             accessibilityRole="button"
             className="items-center pt-3"
+            onPress={toggleDeferred}
+          >
+            <Text className="text-accent-primary text-sm">
+              {isDeferred
+                ? t('trainingHome.undoDefer', {
+                    defaultValue: 'Show as next again',
+                  })
+                : t('trainingHome.defer', { defaultValue: 'Later today' })}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            className="items-center pt-2"
             onPress={() => navigation.navigate('PresetSearch')}
           >
             <Text className="text-accent-primary text-sm">
               {t('trainingHome.other', { defaultValue: 'Other workout' })}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            className="items-center pt-2"
+            onPress={() =>
+              navigation.navigate('WorkoutPlanForm', { template: next.plan })
+            }
+          >
+            <Text className="text-text-muted text-sm">
+              {t('trainingHome.managePlan', {
+                defaultValue: 'Review rotation and plan',
+              })}
             </Text>
           </Pressable>
         </View>
@@ -198,8 +270,45 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
         </Button>
       )}
 
+      {planReview && next ? (
+        <View
+          className="bg-surface rounded-xl p-4 mb-4"
+          testID="plan-review-suggestion"
+        >
+          <Text className="text-text-primary font-semibold">
+            {t('trainingHome.planReviewTitle', {
+              defaultValue: 'Does this routine still fit?',
+            })}
+          </Text>
+          <Text className="text-text-secondary text-sm mt-1">
+            {t('trainingHome.planReviewBody', {
+              defaultValue:
+                '{{name}} took about {{minutes}} minutes in the last {{sessions}} sessions. If that is too long, review the split. Nothing changes automatically.',
+              name: shortRoutineName(next.name),
+              minutes: planReview.averageMinutes,
+              sessions: planReview.count,
+            })}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            className="pt-3"
+            onPress={() =>
+              navigation.navigate('WorkoutPresetDetail', {
+                preset: next.preset,
+              })
+            }
+          >
+            <Text className="text-accent-primary text-sm">
+              {t('trainingHome.reviewRoutine', {
+                defaultValue: 'Review routine',
+              })}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <SectionTitle
-        title={t('trainingHome.thisWeek', { defaultValue: 'This week' })}
+        title={t('trainingHome.history', { defaultValue: 'History' })}
         action={t('trainingHome.progress', { defaultValue: 'Progress' })}
         onAction={() => navigation.navigate('ExerciseStatistics')}
       />
@@ -226,7 +335,7 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
       </Pressable>
 
       <SectionTitle
-        title={t('trainingHome.routines', { defaultValue: 'Routines' })}
+        title={t('trainingHome.routines', { defaultValue: 'Your routines' })}
         action={t('trainingHome.allRoutines', { defaultValue: 'All' })}
         onAction={() => navigation.navigate('WorkoutPresetsLibrary')}
       />
@@ -325,6 +434,44 @@ const TrainingHomeScreen: React.FC<Props> = ({ navigation }) => {
           ))}
         </View>
       )}
+
+      <SectionTitle
+        title={t('trainingHome.analysis', { defaultValue: 'Analysis' })}
+      />
+      <View className="bg-surface rounded-xl mb-4">
+        <Pressable
+          accessibilityRole="button"
+          className="px-4 py-3 border-b border-border-subtle"
+          onPress={() => navigation.navigate('ExerciseStatistics')}
+        >
+          <Text className="text-text-primary font-semibold">
+            {t('trainingHome.strengthProgress', {
+              defaultValue: 'Strength progress',
+            })}
+          </Text>
+          <Text className="text-text-muted text-xs">
+            {t('trainingHome.strengthProgressHint', {
+              defaultValue: 'Exercises, sets and trends',
+            })}
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          className="px-4 py-3"
+          onPress={() => navigation.navigate('Performance')}
+        >
+          <Text className="text-text-primary font-semibold">
+            {t('trainingHome.recoveryAnalysis', {
+              defaultValue: 'Recovery and load',
+            })}
+          </Text>
+          <Text className="text-text-muted text-xs">
+            {t('trainingHome.recoveryAnalysisHint', {
+              defaultValue: 'Sources, trends and details',
+            })}
+          </Text>
+        </Pressable>
+      </View>
     </ScrollView>
   );
 };

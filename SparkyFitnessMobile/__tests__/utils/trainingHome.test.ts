@@ -1,6 +1,7 @@
 import type { ExerciseSessionResponse } from '@workspace/shared';
 import type { WorkoutPreset } from '../../src/types/workoutPresets';
 import {
+  longRoutineSuggestion,
   nextPlanSession,
   presetExerciseLine,
   shortRoutineName,
@@ -77,6 +78,27 @@ describe('training home', () => {
     } as unknown as WorkoutPreset;
     expect(presetExerciseLine(preset)).toBe('Bench, Row, Squat +2');
     expect(presetExerciseLine(preset, 5)).toBe('Bench, Row, Squat, Curl, Dip');
+  });
+});
+
+describe('plan review suggestion', () => {
+  it('only suggests a review for repeated long sessions of the same routine', () => {
+    const sessions = [
+      { ...workout('a', '2026-10-24', [3], 82), workout_preset_id: 7 },
+      { ...workout('b', '2026-10-20', [3], 78), workout_preset_id: 7 },
+      { ...workout('c', '2026-10-18', [3], 95), workout_preset_id: 9 },
+    ];
+    expect(longRoutineSuggestion(sessions, 7)).toEqual({
+      averageMinutes: 80,
+      count: 2,
+    });
+    expect(longRoutineSuggestion(sessions, 9)).toBeNull();
+    expect(
+      longRoutineSuggestion(
+        [sessions[0]!, { ...sessions[1]!, total_duration_minutes: 45 }],
+        7
+      )
+    ).toBeNull();
   });
 });
 
