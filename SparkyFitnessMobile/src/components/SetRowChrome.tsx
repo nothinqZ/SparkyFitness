@@ -347,6 +347,8 @@ interface StickySetInputAccessoryBarProps {
   actions: SetAccessoryAction[];
   /** A row above the buttons (the live screen's compact rest controls). */
   restSlot?: ReactNode;
+  /** Report the measured height so the focused input can clear this bar. */
+  onHeightChange?: (height: number) => void;
 }
 
 /**
@@ -380,6 +382,7 @@ export const StickySetInputAccessoryBar = memo(
     onDone,
     actions,
     restSlot,
+    onHeightChange,
   }: StickySetInputAccessoryBarProps) {
     const { t } = useTranslation();
     const keyboardVisible = useKeyboardState((state) => state.isVisible);
@@ -450,7 +453,10 @@ export const StickySetInputAccessoryBar = memo(
           // An empty bar lays out at zero; keep the last real height so the
           // next open is parked by the right amount from its first frame.
           const height = Math.ceil(e.nativeEvent.layout.height);
-          if (height > 0) setBarHeight(height);
+          if (height > 0 && height !== barHeight) {
+            setBarHeight(height);
+            onHeightChange?.(height);
+          }
         }}
       >
         <Animated.View style={guardStyle}>
@@ -634,8 +640,12 @@ export function useSetEditAccessoryBar({
     handle: SetRowAccessoryHandle | null
   ) => void;
   accessoryBar: ReactNode;
+  accessoryBarHeight: number;
 } {
   const { t } = useTranslation();
+  const [accessoryBarHeight, setAccessoryBarHeight] = useState(
+    SET_ACCESSORY_BAR_HEIGHT
+  );
   const handlesRef = useRef<Record<string, SetRowAccessoryHandle>>({});
   const onRegisterAccessoryHandle = useCallback(
     (key: string, handle: SetRowAccessoryHandle | null) => {
@@ -711,10 +721,11 @@ export function useSetEditAccessoryBar({
       visible={activeSetKey != null}
       onDone={handleDone}
       actions={actions}
+      onHeightChange={setAccessoryBarHeight}
     />
   );
 
-  return { onRegisterAccessoryHandle, accessoryBar };
+  return { onRegisterAccessoryHandle, accessoryBar, accessoryBarHeight };
 }
 
 /** Right-swipe Delete action for ReanimatedSwipeable's renderRightActions. */

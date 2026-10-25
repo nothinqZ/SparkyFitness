@@ -6,7 +6,7 @@ import React, {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import Animated, { LinearTransition } from 'react-native-reanimated';
@@ -20,10 +20,7 @@ import Button from '../components/ui/Button';
 import WorkoutFormExerciseList, {
   type WorkoutFormExerciseListHandle,
 } from '../components/WorkoutFormExerciseList';
-import {
-  SET_ACCESSORY_BAR_HEIGHT,
-  useSetEditAccessoryBar,
-} from '../components/SetRowChrome';
+import { useSetEditAccessoryBar } from '../components/SetRowChrome';
 import ActiveWorkoutExerciseCard from '../components/ActiveWorkoutExerciseCard';
 import ActionSheet, {
   type ActionSheetItem,
@@ -302,11 +299,12 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // Sticky Done/Next bar for the focused set cell (edit mode), on both
   // platforms.
-  const { onRegisterAccessoryHandle, accessoryBar } = useSetEditAccessoryBar({
-    activeSetKey,
-    activeSetField,
-    onDeactivateSet: deactivateSet,
-  });
+  const { onRegisterAccessoryHandle, accessoryBar, accessoryBarHeight } =
+    useSetEditAccessoryBar({
+      activeSetKey,
+      activeSetField,
+      onDeactivateSet: deactivateSet,
+    });
 
   const isEligibleForPrefill = useCallback(
     (clientId: string) => eligibleIds.has(clientId),
@@ -892,8 +890,9 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
           paddingBottom: insets.bottom + 20 + activeWorkoutBarPadding,
         }}
         // Clear of the set-entry bar riding on top of the keyboard.
-        bottomOffset={SET_ACCESSORY_BAR_HEIGHT + 16}
+        bottomOffset={accessoryBarHeight + 16}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         contentInsetAdjustmentBehavior={
           usesNativeHeader ? 'automatic' : undefined
         }

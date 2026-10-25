@@ -388,12 +388,13 @@ const CreatePresetMode: React.FC<CreatePresetModeProps> = ({
   useSelectedExercise(route.params, exerciseSetEditing.handleAddExercise);
 
   // Sticky Done/Next bar for the focused set cell, on both platforms.
-  const { onRegisterAccessoryHandle, accessoryBar } = useSetEditAccessoryBar({
-    activeSetKey: exerciseSetEditing.activeSetKey,
-    activeSetField: exerciseSetEditing.activeSetField,
-    onDeactivateSet: exerciseSetEditing.deactivateSet,
-    rpeEnabled: false,
-  });
+  const { onRegisterAccessoryHandle, accessoryBar, accessoryBarHeight } =
+    useSetEditAccessoryBar({
+      activeSetKey: exerciseSetEditing.activeSetKey,
+      activeSetField: exerciseSetEditing.activeSetField,
+      onDeactivateSet: exerciseSetEditing.deactivateSet,
+      rpeEnabled: false,
+    });
 
   // "Save as preset" from a logged workout: seed the form from the session
   // once preferences resolve (the weight unit drives the kg→display mapping).
@@ -518,6 +519,7 @@ const CreatePresetMode: React.FC<CreatePresetModeProps> = ({
       isSaving={isPending}
       headerAction={reorderAction}
       keyboardAccessory={accessoryBar}
+      keyboardAccessoryHeight={accessoryBarHeight}
       onSave={() => {
         void handleSave();
       }}
@@ -692,12 +694,13 @@ const EditPresetMode: React.FC<EditPresetModeProps> = ({
   useSelectedExercise(route.params, exerciseSetEditing.handleAddExercise);
 
   // Sticky Done/Next bar for the focused set cell, on both platforms.
-  const { onRegisterAccessoryHandle, accessoryBar } = useSetEditAccessoryBar({
-    activeSetKey: exerciseSetEditing.activeSetKey,
-    activeSetField: exerciseSetEditing.activeSetField,
-    onDeactivateSet: exerciseSetEditing.deactivateSet,
-    rpeEnabled: false,
-  });
+  const { onRegisterAccessoryHandle, accessoryBar, accessoryBarHeight } =
+    useSetEditAccessoryBar({
+      activeSetKey: exerciseSetEditing.activeSetKey,
+      activeSetField: exerciseSetEditing.activeSetField,
+      onDeactivateSet: exerciseSetEditing.deactivateSet,
+      rpeEnabled: false,
+    });
 
   const hasPopulatedRef = useRef(false);
   useEffect(() => {
@@ -809,6 +812,7 @@ const EditPresetMode: React.FC<EditPresetModeProps> = ({
       isSaving={isPending}
       headerAction={reorderAction}
       keyboardAccessory={accessoryBar}
+      keyboardAccessoryHeight={accessoryBarHeight}
       onSave={() => {
         void handleSave();
       }}

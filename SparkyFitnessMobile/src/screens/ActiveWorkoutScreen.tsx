@@ -15,6 +15,7 @@ import {
 import {
   KeyboardAwareScrollView,
   type KeyboardAwareScrollViewRef,
+  useKeyboardState,
 } from 'react-native-keyboard-controller';
 import {
   calculateWarmupSets,
@@ -42,8 +43,7 @@ import {
 import { MetricColumnMenu, SetTypeMenu } from '../components/WorkoutMenus';
 import {
   ActiveWorkoutCompactRestRow,
-  COMPACT_REST_ROW_HEIGHT,
-  MIN_WINDOW_HEIGHT_FOR_COMPACT_REST_ROW,
+  MIN_AVAILABLE_HEIGHT_FOR_COMPACT_REST_ROW,
   LiveActiveWorkoutRestBar,
   REST_BAR_GLASS_CLEARANCE,
 } from '../components/ActiveWorkoutRestBar';
@@ -373,6 +373,8 @@ function ActiveWorkoutScreen({ navigation, route }: Props) {
   );
 
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
+  const cancelRailScrollRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => cancelRailScrollRef.current?.(), []);
   const cardOffsetsRef = useRef<Record<string, number>>({});
   const viewportHeightRef = useRef(0);
   const programmaticScrollUntilRef = useRef(0);
@@ -437,6 +439,8 @@ function ActiveWorkoutScreen({ navigation, route }: Props) {
 
   const handleRailPress = useCallback(
     (entryId: string) => {
+      cancelRailScrollRef.current?.();
+      setFocusedSetKey(null);
       setUserExpandedIds((prev) => {
         if (prev.has(entryId) || autoExpandedId === entryId) return prev;
         const next = new Set(prev);
@@ -444,9 +448,13 @@ function ActiveWorkoutScreen({ navigation, route }: Props) {
         return next;
       });
       setFocusedExerciseId(entryId);
-      setTimeout(() => scrollToExercise(entryId), 100);
+      cancelRailScrollRef.current = runAfterKeyboardSettles(
+        () => scrollToExercise(entryId),
+        100
+      );
+      Keyboard.dismiss();
     },
-    [autoExpandedId, scrollToExercise]
+    [autoExpandedId, scrollToExercise, setFocusedSetKey]
   );
 
   const handlePressRestBar = useCallback(() => {
@@ -667,8 +675,18 @@ function ActiveWorkoutScreen({ navigation, route }: Props) {
   // so the element only changes when a rest starts or ends.
   const restRunning = restState !== 'ready';
   const { height: windowHeight } = useWindowDimensions();
+  const keyboardHeight = useKeyboardState((state) => state.height);
+  const [accessoryBarHeight, setAccessoryBarHeight] = useState(
+    SET_ACCESSORY_BAR_HEIGHT
+  );
+  // Before the keyboard reports its height, reserve a typical numeric-pad
+  // footprint so the extra rest row does not flash over a short viewport.
+  const effectiveKeyboardHeight =
+    keyboardHeight > 0 ? keyboardHeight : focusedSetKey != null ? 290 : 0;
   const barCarriesRest =
-    restRunning && windowHeight >= MIN_WINDOW_HEIGHT_FOR_COMPACT_REST_ROW;
+    restRunning &&
+    windowHeight - effectiveKeyboardHeight >=
+      MIN_AVAILABLE_HEIGHT_FOR_COMPACT_REST_ROW;
   const accessoryRestSlot = useMemo(
     () => (barCarriesRest ? <ActiveWorkoutCompactRestRow /> : undefined),
     [barCarriesRest]
@@ -900,11 +918,7 @@ function ActiveWorkoutScreen({ navigation, route }: Props) {
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         // The focused cell stays clear of the keyboard bar riding on top of
         // the keyboard, and of the rest row it carries while a rest runs.
-        bottomOffset={
-          SET_ACCESSORY_BAR_HEIGHT +
-          (barCarriesRest ? COMPACT_REST_ROW_HEIGHT : 0) +
-          16
-        }
+        bottomOffset={accessoryBarHeight + 16}
         disableScrollOnKeyboardHide
       >
         <ActiveWorkoutIntervalHud getImageSource={getImageSource} />
@@ -991,6 +1005,7 @@ function ActiveWorkoutScreen({ navigation, route }: Props) {
         onDone={handleAccessoryDone}
         actions={accessoryActions}
         restSlot={accessoryRestSlot}
+        onHeightChange={setAccessoryBarHeight}
       />
 
       <ExerciseSetRestSheet

@@ -535,16 +535,24 @@ describe('StickySetInputAccessoryBar', () => {
   });
 
   it('parks by its measured height, keeping it while empty', () => {
-    const { getByTestId } = renderBar({ visible: false });
+    const onHeightChange = jest.fn();
+    const { getByTestId } = renderBar({ visible: false, onHeightChange });
     const sticky = () => getByTestId('set-accessory-sticky', INCLUDE_HIDDEN);
 
     fireEvent(sticky(), 'layout', {
       nativeEvent: { layout: { height: 97.4 } },
     });
     expect(sticky().props.offset).toEqual({ closed: 98, opened: 0 });
+    expect(onHeightChange).toHaveBeenCalledWith(98);
+
+    fireEvent(sticky(), 'layout', {
+      nativeEvent: { layout: { height: 97.4 } },
+    });
+    expect(onHeightChange).toHaveBeenCalledTimes(1);
 
     fireEvent(sticky(), 'layout', { nativeEvent: { layout: { height: 0 } } });
     expect(sticky().props.offset).toEqual({ closed: 98, opened: 0 });
+    expect(onHeightChange).toHaveBeenCalledTimes(1);
   });
 
   it('shows Done and the actions as a toolbar while visible', () => {

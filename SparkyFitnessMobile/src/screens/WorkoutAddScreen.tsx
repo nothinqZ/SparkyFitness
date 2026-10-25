@@ -7,6 +7,7 @@ import {
   Pressable,
   Keyboard,
   Alert,
+  Platform,
 } from 'react-native';
 import FadeView from '../components/FadeView';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -19,10 +20,7 @@ import StatusView from '../components/StatusView';
 import WorkoutFormExerciseList, {
   type WorkoutFormExerciseListHandle,
 } from '../components/WorkoutFormExerciseList';
-import {
-  SET_ACCESSORY_BAR_HEIGHT,
-  useSetEditAccessoryBar,
-} from '../components/SetRowChrome';
+import { useSetEditAccessoryBar } from '../components/SetRowChrome';
 import CalendarSheet, {
   type CalendarSheetRef,
 } from '../components/CalendarSheet';
@@ -163,11 +161,12 @@ const WorkoutAddScreen: React.FC<Props> = ({ navigation, route }) => {
   });
 
   // Sticky Done/Next bar for the focused set cell, on both platforms.
-  const { onRegisterAccessoryHandle, accessoryBar } = useSetEditAccessoryBar({
-    activeSetKey,
-    activeSetField,
-    onDeactivateSet: deactivateSet,
-  });
+  const { onRegisterAccessoryHandle, accessoryBar, accessoryBarHeight } =
+    useSetEditAccessoryBar({
+      activeSetKey,
+      activeSetField,
+      onDeactivateSet: deactivateSet,
+    });
 
   const isEligibleForPrefill = useCallback(
     (clientId: string) => eligibleIds.has(clientId),
@@ -417,8 +416,11 @@ const WorkoutAddScreen: React.FC<Props> = ({ navigation, route }) => {
           <KeyboardAwareScrollView
             contentContainerClassName="px-4"
             // Clear of the set-entry bar riding on top of the keyboard.
-            bottomOffset={SET_ACCESSORY_BAR_HEIGHT + 16}
+            bottomOffset={accessoryBarHeight + 16}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={
+              Platform.OS === 'ios' ? 'interactive' : 'on-drag'
+            }
             // Set-row taps remount the focused input; stop the keyboard-hide
             // restore scroll so the refocus lands on the tapped cell (see
             // ActiveWorkoutScreen's scroll view).

@@ -89,6 +89,7 @@ interface FormScreenChromeProps {
    * height, so the focused input lands above the bar, not under it.
    */
   keyboardAccessory?: React.ReactNode;
+  keyboardAccessoryHeight?: number;
   children: React.ReactNode;
 }
 
@@ -101,6 +102,7 @@ const FormScreenChrome: React.FC<FormScreenChromeProps> = ({
   onCancel,
   headerAction,
   keyboardAccessory,
+  keyboardAccessoryHeight = SET_ACCESSORY_BAR_HEIGHT,
   children,
 }) => {
   const insets = useSafeAreaInsets();
@@ -133,8 +135,9 @@ const FormScreenChrome: React.FC<FormScreenChromeProps> = ({
         className="flex-1"
         contentContainerClassName="px-4 pt-4 pb-20 gap-4"
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         bottomOffset={
-          keyboardAccessory != null ? SET_ACCESSORY_BAR_HEIGHT + 16 : 20
+          keyboardAccessory != null ? keyboardAccessoryHeight + 16 : 20
         }
         contentInsetAdjustmentBehavior={
           usesNativeHeader ? 'automatic' : undefined
