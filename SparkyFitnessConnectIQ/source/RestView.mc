@@ -230,6 +230,16 @@ class RestDelegate extends WatchUi.BehaviorDelegate {
     }
 
     function onSelect() as Boolean {
+        // A tap is also Select on Garmin touch devices. Keep it for
+        // correction, and reserve ending the rest for the physical key.
+        return false;
+    }
+
+    function onKey(event as WatchUi.KeyEvent) as Boolean {
+        var key = event.getKey();
+        if (key != WatchUi.KEY_ENTER && key != WatchUi.KEY_START) {
+            return false;
+        }
         _view.finish();
         return true;
     }
@@ -243,7 +253,7 @@ class RestDelegate extends WatchUi.BehaviorDelegate {
     function onTap(event as WatchUi.ClickEvent) as Boolean {
         var session = _view.session();
         if (session.lastLogged() == null) {
-            return false;
+            return true;
         }
         var editor = new SetEditorView(session, true);
         WatchUi.pushView(editor, new SetEditorDelegate(editor), WatchUi.SLIDE_UP);

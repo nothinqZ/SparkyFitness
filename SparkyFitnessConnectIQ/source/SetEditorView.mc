@@ -234,6 +234,16 @@ class SetEditorDelegate extends WatchUi.BehaviorDelegate {
     }
 
     function onSelect() as Boolean {
+        // Garmin maps both START and a screen tap to Select. Let the raw
+        // event below decide: touching a value must never log a set.
+        return false;
+    }
+
+    function onKey(event as WatchUi.KeyEvent) as Boolean {
+        var key = event.getKey();
+        if (key != WatchUi.KEY_ENTER && key != WatchUi.KEY_START) {
+            return false;
+        }
         _view.confirm();
         return true;
     }
