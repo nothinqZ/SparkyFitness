@@ -37,6 +37,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -231,7 +232,7 @@ def prune(cfg: Config, keep: int | None = None) -> list[str]:
 # --- AltSource ----------------------------------------------------------------
 
 def build_source(cfg: Config, state: dict) -> dict:
-    url = lambda path: f"{cfg.base_url}/{path}"  # noqa: E731
+    url = lambda path: f"{cfg.base_url}/{urllib.parse.quote(path, safe='/')}"  # noqa: E731
     active = active_releases(state)
     latest = active[0] if active else None
     privacy = latest["privacy"] if latest else {}
@@ -279,7 +280,8 @@ def render_index(cfg: Config, state: dict) -> str:
     rows = []
     for r in sorted(state["releases"], key=version_key, reverse=True):
         status = "pruned" if r.get("pruned") else "withdrawn" if r.get("withdrawn") else "available"
-        link = (f'<a href="{html.escape(r["file"])}">IPA</a>' if status != "pruned" else "")
+        link = (f'<a href="{html.escape(urllib.parse.quote(r["file"], safe="/"))}">IPA</a>'
+                if status != "pruned" else "")
         rows.append(
             f"<tr><td>{html.escape(r['version'])} ({html.escape(r['build'])})</td>"
             f"<td>{html.escape(r['published_at'])}</td><td>{status}</td>"

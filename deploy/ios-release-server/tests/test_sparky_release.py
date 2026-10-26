@@ -91,6 +91,16 @@ class PublisherTest(Base):
         self.assertTrue((self.cfg.public / "icon.png").exists())
         self.assertIn("sidestore://source?url=", (self.cfg.public / "index.html").read_text())
 
+    def test_download_url_escapes_spaces_in_app_name(self):
+        self.cfg.app_name = "Fitness Intelligence"
+        sr.publish(self.cfg, self.ipa(build="8"))
+        version = self.source()["apps"][0]["versions"][0]
+        self.assertEqual(
+            version["downloadURL"],
+            "https://apps.example.ts.net/releases/1.8.0-8/Fitness%20Intelligence-1.8.0-8.ipa",
+        )
+        self.assertIn("Fitness%20Intelligence-1.8.0-8.ipa", (self.cfg.public / "index.html").read_text())
+
     def test_publish_is_idempotent_but_refuses_changed_content(self):
         first = sr.publish(self.cfg, self.ipa(build="2"))
         again = sr.publish(self.cfg, self.ipa(build="2"))
