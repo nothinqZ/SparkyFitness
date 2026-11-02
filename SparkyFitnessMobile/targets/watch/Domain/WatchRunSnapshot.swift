@@ -33,6 +33,9 @@ struct WatchRunSnapshot: Codable {
     var planCursor: WatchRunPlan.Cursor?
     /// Auto-pause and voice cues as last set. Optional for older snapshots.
     var settings: WatchRunSettings?
+    /// Where the route tracker stood. Separate from `routeSegment`, which
+    /// counts pause segments of the recorded route. Optional for older snapshots.
+    var routeProgress: WatchRouteTracker.State?
 
     /// A run left this long ago is not one the wearer is still doing.
     static let maxAge: TimeInterval = 12 * 60 * 60

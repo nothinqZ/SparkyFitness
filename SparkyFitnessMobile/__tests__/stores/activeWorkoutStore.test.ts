@@ -2701,7 +2701,7 @@ describe('activeWorkoutStore', () => {
         tags: [],
       };
 
-      it('swaps the exercise in place and resets to one default set', () => {
+      it('swaps the exercise in place and keeps the sets when the modality matches', () => {
         useActiveWorkoutStore
           .getState()
           .replaceExercise('ex-uuid-1', replacement);
@@ -2710,11 +2710,24 @@ describe('activeWorkoutStore', () => {
         expect(entry.id).toBe('ex-uuid-1'); // entry id (position) preserved
         expect(entry.exercise_id).toBe('ex-9');
         expect(entry.exercise_snapshot?.name).toBe('Overhead Press');
+        expect(
+          entry.sets.map((s) => [s.id, s.weight, s.reps, s.set_type])
+        ).toEqual([
+          [101, 60, 10, 'working'],
+          [102, 70, 8, 'working'],
+        ]);
+        expect(state.session!.exercises[1].id).toBe('ex-uuid-2'); // sibling untouched
+        expect(state.hasUnsavedChanges).toBe(true);
+      });
+
+      it('resets to one default set when the modality changes', () => {
+        useActiveWorkoutStore
+          .getState()
+          .replaceExercise('ex-uuid-1', { ...replacement, category: 'Cardio' });
+        const entry = useActiveWorkoutStore.getState().session!.exercises[0];
         expect(entry.sets).toHaveLength(1);
         expect(entry.sets[0].id).toBe(-1);
         expect(entry.sets[0].set_type).toBe('normal');
-        expect(state.session!.exercises[1].id).toBe('ex-uuid-2'); // sibling untouched
-        expect(state.hasUnsavedChanges).toBe(true);
       });
 
       it('forgets a declined adaptive suggestion for the replaced entry', () => {
@@ -2744,7 +2757,7 @@ describe('activeWorkoutStore', () => {
         });
       });
 
-      it('prunes completions for the replaced sets and repoints the cursor', async () => {
+      it('clears completions on the kept sets and repoints the cursor', async () => {
         useActiveWorkoutStore.getState().completeActiveSet(); // 101 done, cursor 102
         await flushPromises();
         useActiveWorkoutStore
@@ -2752,8 +2765,8 @@ describe('activeWorkoutStore', () => {
           .replaceExercise('ex-uuid-1', replacement);
         const state = useActiveWorkoutStore.getState();
         expect(state.completedSetIds['101']).toBeUndefined();
-        expect(state.activeSetId).toBe('-1');
-        expect(state.steps.map((s) => s.setId)).toEqual(['-1', '201']);
+        expect(state.activeSetId).toBe('101');
+        expect(state.steps.map((s) => s.setId)).toEqual(['101', '102', '201']);
       });
 
       it('is a no-op for an unknown entry id', () => {
@@ -3357,6 +3370,69 @@ describe('activeWorkoutStore', () => {
     });
   });
 
+  describe('doExerciseNow', () => {
+    beforeEach(() => {
+      useActiveWorkoutStore.getState().startWorkout(makeSession());
+    });
+
+    it('moves an upcoming exercise before the current one and starts it', () => {
+      useActiveWorkoutStore.getState().doExerciseNow('ex-uuid-2');
+      const state = useActiveWorkoutStore.getState();
+      expect(state.session!.exercises.map((e) => e.id)).toEqual([
+        'ex-uuid-2',
+        'ex-uuid-1',
+      ]);
+      expect(state.activeSetId).toBe('201');
+      expect(state.hasUnsavedChanges).toBe(true);
+    });
+
+    it('ends a running rest and comes back to the skipped exercise after', async () => {
+      useActiveWorkoutStore.getState().completeActiveSet(); // 101 done, cursor → 102, resting
+      await flushPromises();
+      expect(useActiveWorkoutStore.getState().rest.state).toBe('resting');
+      mockCancel.mockClear();
+
+      useActiveWorkoutStore.getState().doExerciseNow('ex-uuid-2');
+
+      let state = useActiveWorkoutStore.getState();
+      expect(state.activeSetId).toBe('201');
+      expect(state.rest.state).toBe('ready');
+      expect(mockCancel).toHaveBeenCalled();
+      expect(state.completedSetIds).toEqual({ '101': FIXED_NOW });
+
+      useActiveWorkoutStore.getState().completeActiveSet();
+      state = useActiveWorkoutStore.getState();
+      expect(state.activeSetId).toBe('102');
+    });
+
+    it('moves in front of the anchor the watch sends, not the phone cursor', () => {
+      useActiveWorkoutStore.getState().completeActiveSet(); // 101
+      useActiveWorkoutStore.getState().completeActiveSet(); // 102, cursor → 201
+      // The phone's cursor is already on ex-uuid-2, so without an anchor this
+      // would be a no-op. The watch is still on ex-uuid-1, and the move is
+      // relative to it.
+      useActiveWorkoutStore.getState().doExerciseNow('ex-uuid-2', 'ex-uuid-1');
+      const state = useActiveWorkoutStore.getState();
+      expect(state.session!.exercises.map((e) => e.id)).toEqual([
+        'ex-uuid-2',
+        'ex-uuid-1',
+      ]);
+      expect(state.activeSetId).toBe('201');
+    });
+
+    it('ignores the current exercise and earlier ones', () => {
+      useActiveWorkoutStore.getState().doExerciseNow('ex-uuid-1');
+      expect(useActiveWorkoutStore.getState().sessionRevision).toBe(0);
+
+      useActiveWorkoutStore.getState().completeActiveSet(); // 101
+      useActiveWorkoutStore.getState().completeActiveSet(); // 102, cursor → 201
+      const revision = useActiveWorkoutStore.getState().sessionRevision;
+      useActiveWorkoutStore.getState().doExerciseNow('ex-uuid-1');
+      expect(useActiveWorkoutStore.getState().sessionRevision).toBe(revision);
+      expect(useActiveWorkoutStore.getState().activeSetId).toBe('201');
+    });
+  });
+
   describe('reorderExercises', () => {
     beforeEach(() => {
       useActiveWorkoutStore.getState().startWorkout(makeSession());
@@ -3585,6 +3661,25 @@ describe('activeWorkoutStore', () => {
           })
         );
       });
+    });
+
+    it('doExerciseNow moves a picked superset member together with its whole superset', () => {
+      useActiveWorkoutStore.getState().startWorkout(makeThreeExerciseSession());
+      // ex-uuid-2 and ex-uuid-3 form a superset after ex-uuid-1.
+      useActiveWorkoutStore.getState().supersetWith('ex-uuid-2', 'ex-uuid-3');
+
+      useActiveWorkoutStore.getState().doExerciseNow('ex-uuid-3');
+
+      const state = useActiveWorkoutStore.getState();
+      expect(state.session!.exercises.map((e) => e.id)).toEqual([
+        'ex-uuid-2',
+        'ex-uuid-3',
+        'ex-uuid-1',
+      ]);
+      expect(state.session!.exercises[0].superset_group).toBe(
+        state.session!.exercises[1].superset_group
+      );
+      expect(state.activeSetId).toBe('301');
     });
 
     describe('supersetWith', () => {

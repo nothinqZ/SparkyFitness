@@ -1,6 +1,8 @@
 import express from 'express';
 import {
   createRouteBodySchema,
+  generateRouteBodySchema,
+  generateRouteResponseSchema,
   importGpxRouteBodySchema,
   parseGpx,
   routeFromActivityBodySchema,
@@ -9,6 +11,13 @@ import {
 } from '@workspace/shared';
 import { fitRouteName } from '../../utils/routePrep.js';
 import requireSelfActor from '../../middleware/requireSelfMiddleware.js';
+import { generateRoute } from '../../services/routeGenerationService.js';
+import {
+  getRouteGenerateCapabilities,
+  resolveRoutingProvider,
+} from '../../services/routing/routingConfig.js';
+import { RoutingProviderError } from '../../services/routing/routingProvider.js';
+import { createUserRateLimiter } from '../../utils/userRateLimiter.js';
 import {
   ActivityHasNoRouteError,
   createRoute,
@@ -28,6 +37,14 @@ import {
 const router = express.Router();
 
 router.use(requireSelfActor);
+
+/** Each generate call can cost several engine calls, so keep it modest. */
+export const GENERATE_RATE_LIMIT_MAX = 10;
+export const GENERATE_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+export const generateRateLimiter = createUserRateLimiter(
+  GENERATE_RATE_LIMIT_MAX,
+  GENERATE_RATE_LIMIT_WINDOW_MS
+);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -66,7 +83,8 @@ function sendRouteError(res: express.Response, error: unknown): boolean {
  *     summary: Save a route from a list of points
  *     description: >
  *       The track is thinned for storage; distance and climb are measured on
- *       the full track.
+ *       the full track. `source` may be `drawn` (default) or `generated` for a
+ *       route returned by `POST /v2/routes/generate`.
  *     tags: [Exercise]
  *     responses:
  *       201:
@@ -96,7 +114,7 @@ router.post('/', async (req, res, next) => {
     }
     const route = await createRoute(
       req.userId,
-      { ...parsed.data, source: 'drawn' },
+      parsed.data,
       req.authenticatedUserId
     );
     res.status(201).json({ route });
@@ -200,6 +218,128 @@ router.post('/from-activity/:exerciseEntryId', async (req, res, next) => {
 
 /**
  * @swagger
+ * /v2/routes/generate/capabilities:
+ *   get:
+ *     summary: Whether route generation is available to the person
+ *     description: >
+ *       Generation needs a routing provider: the Valhalla routing provider the
+ *       person (or the admin, as a public provider, or a family member who
+ *       shared theirs) added in Settings > External Providers. Clients use this
+ *       to show or hide the feature and only the style controls the engine
+ *       supports.
+ *     tags: [Exercise]
+ *     responses:
+ *       200:
+ *         description: >
+ *           `{ available, maxAlternatives, style: { surface, hilliness,
+ *           avoidSteps, avoidBusyRoads }, stops, source }`. `stops` is false.
+ *           `source` is `provider` when `available`, else null.
+ */
+router.get('/generate/capabilities', async (req, res, next) => {
+  try {
+    res.json(await getRouteGenerateCapabilities(req.userId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @swagger
+ * /v2/routes/generate:
+ *   post:
+ *     summary: Generate a preview route with the configured routing engine
+ *     description: >
+ *       Either `mode: "loop"` (a loop or out-and-back of about `distanceM`
+ *       from `start`) or `mode: "waypoints"` (route through an ordered list).
+ *       Nothing is saved: the response is a preview whose fields can be sent
+ *       as-is to `POST /v2/routes` (with `source: "generated"`). Limited to
+ *       10 requests per user per 10 minutes.
+ *     tags: [Exercise]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [mode, start]
+ *             properties:
+ *               mode: { type: string, enum: [loop, waypoints] }
+ *               start: { type: object, properties: { lat: { type: number }, lon: { type: number } } }
+ *               activity: { type: string, enum: [run, walk, ride, hike] }
+ *               name: { type: string }
+ *               distanceM: { type: number, description: 'Loop mode: target distance in metres.' }
+ *               shape: { type: string, enum: [loop, out_and_back] }
+ *               bearingDeg: { type: number }
+ *               alternatives: { type: integer, minimum: 1, maximum: 3, description: 'Loop mode: how many distinct candidates to return, at most.' }
+ *               style:
+ *                 type: object
+ *                 description: Preferences; ignored where the engine does not support them.
+ *                 properties:
+ *                   surface: { type: string, enum: [any, trails, roads] }
+ *                   hilliness: { type: string, enum: [any, flat, hilly] }
+ *                   avoidSteps: { type: boolean }
+ *                   avoidBusyRoads: { type: boolean }
+ *               waypoints: { type: array, items: { type: object } }
+ *               returnToStart: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: >
+ *           `{ route, options }`. `route` is the first candidate (name, activity,
+ *           source, points, cues, distanceM, elevationGainM); `options` lists the
+ *           candidates, each as `{ route, label, trailShare }`.
+ *       400:
+ *         description: Invalid body.
+ *       422:
+ *         description: The engine found no route between those points.
+ *       429:
+ *         description: Too many generate requests.
+ *       502:
+ *         description: The routing engine failed, was unreachable, or refused the server's credentials.
+ *       503:
+ *         description: The person has no routing provider.
+ *       504:
+ *         description: The routing engine timed out.
+ */
+router.post('/generate', async (req, res, next) => {
+  try {
+    const resolved = await resolveRoutingProvider(req.userId);
+    if (!resolved) {
+      return res.status(503).json({
+        error:
+          'Route generation needs a routing provider. Add one in Settings > External Providers.',
+      });
+    }
+    const parsed = generateRouteBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Invalid request body',
+        details: parsed.error.format(),
+      });
+    }
+    const retryAfter = generateRateLimiter.hit(req.userId);
+    if (retryAfter > 0) {
+      res.set('Retry-After', String(retryAfter));
+      return res
+        .status(429)
+        .json({ error: 'Too many route requests. Try again shortly.' });
+    }
+    const generated = await generateRoute(resolved.provider, parsed.data);
+    res.json(generateRouteResponseSchema.parse(generated));
+  } catch (error) {
+    if (error instanceof RoutingProviderError) {
+      const status =
+        error.kind === 'timeout' ? 504 : error.kind === 'no_route' ? 422 : 502;
+      return res.status(status).json({ error: error.message });
+    }
+    if (error instanceof InvalidRouteError) {
+      return res.status(422).json({ error: error.message });
+    }
+    if (!sendRouteError(res, error)) next(error);
+  }
+});
+
+/**
+ * @swagger
  * /v2/routes/{id}:
  *   get:
  *     summary: Get a saved route with its points and cues
@@ -210,7 +350,7 @@ router.post('/from-activity/:exerciseEntryId', async (req, res, next) => {
  *       404:
  *         description: Not found.
  *   patch:
- *     summary: Rename a route or change its activity
+ *     summary: Rename a route, change its activity or replace its line (points and cues)
  *     tags: [Exercise]
  *     responses:
  *       200:
@@ -264,7 +404,7 @@ router.patch('/:id', async (req, res, next) => {
     if (!route) return res.status(404).json({ error: 'Route not found' });
     res.json({ route });
   } catch (error) {
-    next(error);
+    if (!sendRouteError(res, error)) next(error);
   }
 });
 

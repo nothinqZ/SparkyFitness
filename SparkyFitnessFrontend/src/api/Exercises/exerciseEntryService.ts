@@ -11,13 +11,47 @@ import {
   UpdateExerciseEntryRequest,
   exerciseProgressResponseSchema,
   ExerciseProgressResponse,
-  exerciseSnapshotResponseSchema,
-  ExerciseSnapshotResponse,
   PresetSessionResponse,
   presetSessionResponseSchema,
+  calorieLinkSuggestionsResponseSchema,
+  CalorieLinkSuggestionsResponse,
+  SetCalorieLinkRequest,
 } from '@workspace/shared';
 import z from 'zod';
-import { parseJsonArray } from './exerciseService';
+
+/** Synced workouts that may be the same session as this logged workout. */
+export const fetchCalorieLinkSuggestions = async (
+  entryId: string
+): Promise<CalorieLinkSuggestionsResponse> => {
+  const data = await apiCall(
+    `/exercise-entries/${encodeURIComponent(entryId)}/calorie-link/suggestions`,
+    { method: 'GET' }
+  );
+  return calorieLinkSuggestionsResponseSchema.parse(data);
+};
+
+export const setCalorieLink = async (
+  entryId: string,
+  body: SetCalorieLinkRequest
+): Promise<void> => {
+  await apiCall(
+    `/exercise-entries/${encodeURIComponent(entryId)}/calorie-link`,
+    {
+      method: 'PUT',
+      body,
+      headers: { 'Content-Type': 'application/json' },
+    }
+  );
+};
+
+export const clearCalorieLink = async (entryId: string): Promise<void> => {
+  await apiCall(
+    `/exercise-entries/${encodeURIComponent(entryId)}/calorie-link`,
+    {
+      method: 'DELETE',
+    }
+  );
+};
 
 /** The user's own previously logged workout locations, most recent first. */
 export const fetchWorkoutLocations = async (): Promise<string[]> => {
@@ -183,6 +217,11 @@ export const updateExerciseEntry = async (
       formData.append('distance', '');
     }
 
+    // And for calories_applied: null means "count the estimate again".
+    if (entryData.calories_applied === null) {
+      formData.append('calories_applied', '');
+    }
+
     return apiCall(`/exercise-entries/${entryId}`, {
       method: 'PUT',
       body: formData,
@@ -235,29 +274,6 @@ export const getExerciseHistory = async (
     }
   );
   return response;
-};
-
-export const fetchExerciseDetails = async (
-  exerciseId: string
-): Promise<ExerciseSnapshotResponse> => {
-  const response = await apiCall(`/exercises/${exerciseId}`, {
-    method: 'GET',
-  });
-
-  const parsedResponse = { ...response };
-  const arrayFields = [
-    'images',
-    'primary_muscles',
-    'secondary_muscles',
-    'equipment',
-    'instructions',
-  ];
-
-  arrayFields.forEach((field) => {
-    parsedResponse[field] = parseJsonArray(parsedResponse[field]) || [];
-  });
-
-  return exerciseSnapshotResponseSchema.parse(parsedResponse);
 };
 
 export const fetchExerciseEntryById = async (

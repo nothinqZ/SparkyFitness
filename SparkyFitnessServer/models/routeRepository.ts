@@ -110,7 +110,7 @@ export async function getRoute(
   }
 }
 
-export interface NewRoute extends Omit<CreateRouteBody, 'cues'> {
+export interface NewRoute extends Omit<CreateRouteBody, 'cues' | 'source'> {
   cues?: CreateRouteBody['cues'];
   source: RouteSource;
   sourceExerciseEntryId?: string | null;
@@ -169,16 +169,32 @@ export async function updateRoute(
   patch: UpdateRouteBody,
   authenticatedUserId?: string
 ): Promise<Route | null> {
+  // Validate and measure the new line before touching the row.
+  const prepared = patch.points ? prepareRoute(patch.points, patch.cues) : null;
   const client = await getClient(userId, authenticatedUserId);
   try {
     const result = (await client.query(
       `UPDATE routes
           SET name = COALESCE($3, name),
               activity = COALESCE($4, activity),
+              points = COALESCE($5::jsonb, points),
+              cues = COALESCE($6::jsonb, cues),
+              distance_m = COALESCE($7, distance_m),
+              elevation_gain_m = CASE WHEN $5::jsonb IS NULL
+                                      THEN elevation_gain_m ELSE $8 END,
               updated_at = NOW()
         WHERE id = $1 AND user_id = $2
         RETURNING *`,
-      [routeId, userId, patch.name ?? null, patch.activity ?? null]
+      [
+        routeId,
+        userId,
+        patch.name ?? null,
+        patch.activity ?? null,
+        prepared ? JSON.stringify(prepared.points) : null,
+        prepared ? JSON.stringify(prepared.cues) : null,
+        prepared?.distanceM ?? null,
+        prepared?.elevationGainM ?? null,
+      ]
     )) as { rows: RouteRow[] };
     return result.rows[0] ? mapRoute(result.rows[0]) : null;
   } finally {

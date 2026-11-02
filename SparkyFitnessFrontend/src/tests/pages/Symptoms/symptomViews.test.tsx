@@ -235,6 +235,99 @@ describe('OngoingEpisodeCard', () => {
       screen.getByRole('button', { name: 'Moderate' })
     ).toBeInTheDocument();
   });
+
+  it('sends the effect on the day with the reading, starting from the latest value', () => {
+    render(
+      <OngoingEpisodeCard
+        episodes={[{ ...ongoingEpisode, impact: 'moderate' }]}
+        meds={[]}
+        onOpen={jest.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Update severity' }));
+    const effect = screen.getByRole('group', { name: 'Effect on your day' });
+    expect(
+      within(effect).getByRole('button', { name: 'moderate' })
+    ).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(effect).getByRole('button', { name: 'severe' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save reading' }));
+    expect(mutations.addSeverity.mutate).toHaveBeenCalledWith(
+      { id: 'ep-1', severity: 7, impact: 'severe' },
+      expect.any(Object)
+    );
+  });
+
+  it('starts each opening from the episode as it is now, and keeps a choice made while open', () => {
+    const card = (impact: 'moderate' | 'mild' | 'severe', severity: number) => (
+      <OngoingEpisodeCard
+        episodes={[{ ...ongoingEpisode, impact, severity }]}
+        meds={[]}
+        onOpen={jest.fn()}
+      />
+    );
+    const { rerender } = render(card('moderate', 7));
+    const trigger = screen.getByRole('button', { name: 'Update severity' });
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+    // A reading saved elsewhere since: the next opening shows it.
+    rerender(card('mild', 5));
+    fireEvent.click(trigger);
+    const effect = screen.getByRole('group', { name: 'Effect on your day' });
+    expect(
+      within(effect).getByRole('button', { name: 'mild' })
+    ).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(effect).getByRole('button', { name: 'severe' }));
+    // A refresh while the popover is open does not undo the choice.
+    rerender(card('moderate', 5));
+    fireEvent.click(screen.getByRole('button', { name: 'Save reading' }));
+    expect(mutations.addSeverity.mutate).toHaveBeenCalledWith(
+      { id: 'ep-1', severity: 5, impact: 'severe' },
+      expect.any(Object)
+    );
+  });
+
+  it('asks about the effect when the symptom does, without sending one unchosen', () => {
+    hookState.definitions = [
+      makeDefinition({ id: 'def-1', sections: { impact: true } }),
+    ];
+    render(
+      <OngoingEpisodeCard
+        episodes={[{ ...ongoingEpisode, symptom_id: 'def-1' }]}
+        meds={[]}
+        onOpen={jest.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Update severity' }));
+    expect(
+      screen.getByRole('group', { name: 'Effect on your day' })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save reading' }));
+    expect(mutations.addSeverity.mutate).toHaveBeenCalledWith(
+      { id: 'ep-1', severity: 7 },
+      expect.any(Object)
+    );
+  });
+
+  it('leaves the effect out for a symptom that does not ask about it', () => {
+    hookState.definitions = [
+      makeDefinition({
+        id: 'def-1',
+        template: 'generic',
+        sections: { impact: false },
+      }),
+    ];
+    render(
+      <OngoingEpisodeCard
+        episodes={[{ ...ongoingEpisode, symptom_id: 'def-1' }]}
+        meds={[]}
+        onOpen={jest.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Update severity' }));
+    expect(
+      screen.queryByRole('group', { name: 'Effect on your day' })
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe('SymptomHistoryList', () => {
@@ -421,6 +514,98 @@ describe('EpisodeDetailDialog', () => {
       />
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('shows the effect on the day as a band below the chart', () => {
+    render(
+      <EpisodeDetailDialog
+        entry={{
+          ...timelineEntry,
+          impact: 'mild',
+          impact_timeline: [
+            { at: '2026-09-29T09:00:00.000Z', impact: 'moderate' },
+            { at: '2026-09-29T10:30:00.000Z', impact: 'mild' },
+          ],
+        }}
+        meds={[]}
+        onClose={jest.fn()}
+        onEdit={jest.fn()}
+      />
+    );
+    const band = screen.getByRole('group', { name: 'Effect on your day' });
+    expect(
+      within(band).getByText('Effect on your day: moderate · 09:00')
+    ).toBeInTheDocument();
+    expect(
+      within(band).getByText('Effect on your day: mild · 10:30')
+    ).toBeInTheDocument();
+    // The legend names the colours, so the band reads without hovering.
+    expect(
+      screen.getByText('Effect on your day', { selector: 'span' })
+    ).toBeInTheDocument();
+  });
+
+  it('orders the effect by time, and lists it for screen readers', () => {
+    render(
+      <EpisodeDetailDialog
+        entry={{
+          ...timelineEntry,
+          impact: 'mild',
+          // Out of order, as an edit appends the effect with the current time.
+          impact_timeline: [
+            { at: '2026-09-29T10:30:00.000Z', impact: 'mild' },
+            { at: '2026-09-29T09:00:00.000Z', impact: 'moderate' },
+          ],
+        }}
+        meds={[]}
+        onClose={jest.fn()}
+        onEdit={jest.fn()}
+      />
+    );
+    const band = screen.getByRole('group', { name: 'Effect on your day' });
+    const mild = within(band)
+      .getByText('Effect on your day: mild · 10:30')
+      .closest('rect') as SVGRectElement;
+    // 10:30 to the end at 11:00 is a quarter of the plot, not a sliver.
+    expect(Number(mild.getAttribute('width'))).toBeCloseTo(66);
+    const list = screen.getByRole('list', { name: 'Effect on your day' });
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent)
+    ).toEqual(['moderate · 09:00', 'mild · 10:30']);
+  });
+
+  it('shows the current effect from the start when the server sends no timeline', () => {
+    render(
+      <EpisodeDetailDialog
+        entry={{ ...timelineEntry, impact: 'severe' }}
+        meds={[]}
+        onClose={jest.fn()}
+        onEdit={jest.fn()}
+      />
+    );
+    const band = screen.getByRole('group', { name: 'Effect on your day' });
+    expect(
+      within(band).getByText('Effect on your day: severe · 09:00')
+    ).toBeInTheDocument();
+  });
+
+  it('draws no band when the episode has no effect recorded', () => {
+    render(
+      <EpisodeDetailDialog
+        entry={timelineEntry}
+        meds={[]}
+        onClose={jest.fn()}
+        onEdit={jest.fn()}
+      />
+    );
+    expect(
+      screen.queryByRole('group', { name: 'Effect on your day' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Effect on your day', { selector: 'span' })
+    ).not.toBeInTheDocument();
   });
 
   it('shows the timing, chart, details, notes and photos', () => {

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  COMPARE_METRICS,
+  INSIGHT_COMPARE_METRICS,
   MIN_COMPARE_PAIRS,
   compareMetrics,
   correlationStrength,
@@ -405,7 +405,7 @@ export function CompareCard({
       }),
     }));
     return [
-      ...COMPARE_METRICS.map((m) => ({
+      ...INSIGHT_COMPARE_METRICS.map((m) => ({
         key: m as CompareMetric,
         label: metricLabel(t, m),
       })),

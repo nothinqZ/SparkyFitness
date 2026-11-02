@@ -182,7 +182,7 @@ describe('preferenceRepository bootstrapUserTimezoneIfUnset', () => {
         });
       }
       const [, params] = mockClient.query.mock.calls[0];
-      expect(params.slice(47)).toEqual([
+      expect(params.slice(47, 56)).toEqual([
         true,
         14,
         100,

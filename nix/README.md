@@ -6,7 +6,7 @@ This directory contains a Nix flake and a NixOS module for running SparkyFitness
 ## Layout
 
 - [`../flake.nix`](../flake.nix) — packages, dev shell and NixOS modules.
-- [`backend.nix`](./backend.nix) — the Express API server (`tsx index.ts`).
+- [`backend.nix`](./backend.nix) — the Express API server (`node --import tsx index.ts`).
 - [`frontend.nix`](./frontend.nix) — the static Vite build.
 - [`garmin.nix`](./garmin.nix) — the Garmin Connect microservice
 - [`module.nix`](./module.nix) — the `services.sparkyfitness` NixOS module

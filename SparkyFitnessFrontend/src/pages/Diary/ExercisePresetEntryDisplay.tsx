@@ -11,10 +11,12 @@ import {
 } from '@/components/ui/tooltip';
 import {
   Trash2,
+  Link2,
   ChevronDown,
   Flame,
   Clock,
   Activity,
+  Gauge,
   Layers,
   MapPin,
 } from 'lucide-react';
@@ -26,7 +28,12 @@ import {
   formatTimeOfDayString,
 } from '@/utils/timeFormatters';
 import { Exercise, ExerciseEntry, PresetSessionEntry } from '@/types/exercises';
-import { earliestEntryTime, setsDurationMinutes } from '@workspace/shared';
+import {
+  earliestEntryTime,
+  entryCaloriesCounted,
+  isAppLoggedWorkoutSource,
+  setsDurationMinutes,
+} from '@workspace/shared';
 import { useActiveUser } from '@/contexts/ActiveUserContext';
 import WorkoutFeedbackPanel from './WorkoutFeedbackPanel';
 
@@ -37,6 +44,8 @@ interface ExercisePresetEntryDisplayProps {
   handleDeleteExerciseEntry: (entryId: string) => void;
   handleEdit: (entry: ExerciseEntry) => void;
   handleEditExerciseDatabase: (exerciseId: string) => void;
+  /** Opens the dialog that links this session to a synced workout; omitted when the diary is read-only. */
+  onLink?: (entryId: string) => void;
   setExerciseToPlay: (exercise: Exercise | null) => void;
   setIsPlaybackModalOpen: (isOpen: boolean) => void;
   energyUnit: 'kcal' | 'kJ';
@@ -55,6 +64,7 @@ const ExercisePresetEntryDisplay: React.FC<ExercisePresetEntryDisplayProps> = ({
   handleDeleteExerciseEntry,
   handleEdit,
   handleEditExerciseDatabase,
+  onLink,
   setExerciseToPlay,
   setIsPlaybackModalOpen,
   energyUnit,
@@ -68,6 +78,13 @@ const ExercisePresetEntryDisplay: React.FC<ExercisePresetEntryDisplayProps> = ({
   // get it (#1560); report-only viewers can't save and don't see it here.
   const { hasWritePermission } = useActiveUser();
   const canGiveFeedback = hasWritePermission('diary');
+
+  // Linking works on the whole session, so any of its exercises will do.
+  const linkableEntry = presetEntry.exercises?.[0];
+  const linkableEntryId =
+    linkableEntry && isAppLoggedWorkoutSource(linkableEntry.source)
+      ? linkableEntry.id
+      : null;
 
   const toggleExpansion = useCallback(() => {
     setIsExpanded((prev) => !prev);
@@ -98,12 +115,21 @@ const ExercisePresetEntryDisplay: React.FC<ExercisePresetEntryDisplayProps> = ({
       : 0;
   })();
 
+  // A strength session stores the person's rating on every exercise, so any
+  // one that has it speaks for the session.
+  const effort = (() => {
+    const ratings = (presetEntry.exercises ?? [])
+      .map((ex) => ex.workout_effort)
+      .filter((value): value is number => typeof value === 'number');
+    return ratings.length > 0 ? Math.max(...ratings) : null;
+  })();
+
   const earliestTime = earliestEntryTime(presetEntry.exercises ?? []);
 
   const totalCalories = Math.round(
     convertEnergy(
       presetEntry.exercises?.reduce(
-        (sum, ex) => sum + (ex.calories_burned || 0),
+        (sum, ex) => sum + entryCaloriesCounted(ex),
         0
       ) ?? 0,
       'kcal',
@@ -236,7 +262,31 @@ const ExercisePresetEntryDisplay: React.FC<ExercisePresetEntryDisplayProps> = ({
               </div>
             </button>
 
-            {/* Right: delete */}
+            {/* Right: link to a synced workout, then delete */}
+            {onLink && linkableEntryId && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onLink(linkableEntryId)}
+                      className="flex-shrink-0 h-8 w-8 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors"
+                    >
+                      <Link2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>
+                      {t(
+                        'exercise.calorieLink.action',
+                        'Link a synced workout'
+                      )}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -287,7 +337,9 @@ const ExercisePresetEntryDisplay: React.FC<ExercisePresetEntryDisplayProps> = ({
 
           {/* Stats strip */}
           {hasExercises && (
-            <div className="mx-4 mb-4 mt-1 grid grid-cols-4 divide-x divide-gray-100 dark:divide-gray-800 bg-gray-50 dark:bg-gray-800/60 rounded-lg overflow-hidden">
+            <div
+              className={`mx-4 mb-4 mt-1 grid ${effort != null ? 'grid-cols-5' : 'grid-cols-4'} divide-x divide-gray-100 dark:divide-gray-800 bg-gray-50 dark:bg-gray-800/60 rounded-lg overflow-hidden`}
+            >
               <StatCell
                 icon={<Layers className="w-3 h-3" />}
                 value={String(totalSets)}
@@ -306,6 +358,17 @@ const ExercisePresetEntryDisplay: React.FC<ExercisePresetEntryDisplayProps> = ({
                 label={t('common.avgHrUnit', 'Avg HR')}
                 color="text-rose-500 dark:text-rose-400"
               />
+              {effort != null && (
+                <StatCell
+                  icon={<Gauge className="w-3 h-3" />}
+                  value={t('exerciseCard.effortOutOf', {
+                    defaultValue: '{{rating}}/10',
+                    rating: effort,
+                  })}
+                  label={t('exerciseCard.effort', 'Effort')}
+                  color="text-purple-600 dark:text-purple-400"
+                />
+              )}
               <StatCell
                 icon={<Flame className="w-3 h-3" />}
                 value={String(totalCalories)}

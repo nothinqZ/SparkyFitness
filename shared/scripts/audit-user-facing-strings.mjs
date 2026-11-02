@@ -84,7 +84,8 @@ function scanFile(file) {
 const results = {};
 for (const file of listSourceFiles(srcDir)) {
   const findings = scanFile(file);
-  if (findings.length > 0) results[path.relative(rootDir, file)] = findings;
+  if (findings.length > 0)
+    results[path.relative(rootDir, file).split(path.sep).join('/')] = findings;
 }
 const counts = Object.fromEntries(
   Object.entries(results).map(([file, f]) => [file, f.length])

@@ -15,8 +15,14 @@ import RunProgramCard, {
   programDescription,
   programName,
 } from '../components/recording/RunProgramCard';
+import RunGoalsCard from '../components/recording/RunGoalsCard';
 import PaceReferenceCard from '../components/recording/PaceReferenceCard';
+import FitnessTestPanel from '../components/recording/FitnessTestPanel';
 import RunProgramCalendar from '../components/recording/RunProgramCalendar';
+import RunProgramRealignCard, {
+  realignIsOffered,
+  realignOutcomeFor,
+} from '../components/recording/RunProgramRealignCard';
 import RunProgramGuide, {
   programStructure,
 } from '../components/recording/RunProgramGuide';
@@ -28,8 +34,11 @@ import ProgramActionRow, {
 import CalendarSheet, {
   type CalendarSheetRef,
 } from '../components/CalendarSheet';
+import { useRunGoals } from '../hooks/useRunGoals';
 import { useScreenHeader } from '../hooks/useScreenHeader';
+import { useRefetchOnFocus } from '../hooks/useRefetchOnFocus';
 import {
+  applyProgramRealign,
   restartProgram,
   setProgramEnabled,
   setProgramSchedule,
@@ -39,10 +48,13 @@ import {
   useCustomRunPrograms,
   useRunProgram,
 } from '../services/runProgramService';
+import { useFitnessTests } from '../services/fitnessTestService';
 import { addLog } from '../services/LogService';
 import { useAppPreferencesStore } from '../stores/appPreferencesStore';
 import { formatLocalizedNumber } from '../localization';
 import type { RootStackScreenProps } from '../types/navigation';
+import { isValidTimeZone, todayInZone } from '@workspace/shared';
+import { usePreferences } from '../hooks/usePreferences';
 import { addDays, toLocalDateString } from '../utils/dateUtils';
 
 type Props = RootStackScreenProps<'RunPrograms'>;
@@ -54,10 +66,25 @@ type Props = RootStackScreenProps<'RunPrograms'>;
 const RunProgramsScreen: React.FC<Props> = ({ navigation }) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { status, enabled, lastAdjustment, schedule, doneDay, loaded } =
-    useRunProgram();
+  const {
+    program,
+    status,
+    enabled,
+    lastAdjustment,
+    schedule,
+    doneDay,
+    loaded,
+  } = useRunProgram();
+  const goals = useRunGoals();
   const [now] = useState(() => Date.now());
   const today = toLocalDateString(new Date(now));
+  // The race day is compared in the account timezone, like the goals service.
+  const { preferences } = usePreferences();
+  const accountToday = todayInZone(
+    preferences?.timezone && isValidTimeZone(preferences.timezone)
+      ? preferences.timezone
+      : 'UTC'
+  );
   const [chosenId, setChosenId] = useState('beginner5k');
   const storedId = status?.program.id;
   const startCalendarRef = useRef<CalendarSheetRef>(null);
@@ -65,6 +92,11 @@ const RunProgramsScreen: React.FC<Props> = ({ navigation }) => {
   // Which version (3 or 4 runs a week) is picked on a card that has both.
   const [versionOf, setVersionOf] = useState<Record<string, string>>({});
   const { programs: customPrograms } = useCustomRunPrograms();
+  const distanceUnit =
+    (preferences?.default_distance_unit as 'km' | 'miles') ?? 'km';
+  const { latest: latestTest, refetch: refetchTests } = useFitnessTests();
+  // A test may have been added since this screen was last open.
+  useRefetchOnFocus(refetchTests, true);
   const paceReferenceRace = useAppPreferencesStore((s) => s.paceReferenceRace);
   const setPaceReferenceRace = useAppPreferencesStore(
     (s) => s.setPaceReferenceRace
@@ -99,6 +131,32 @@ const RunProgramsScreen: React.FC<Props> = ({ navigation }) => {
       });
     },
     [t]
+  );
+
+  // Accepting a realignment rewrites the rest of the plan; a failure is shown
+  // here and the card is worked out again from the server's copy.
+  const realign = useCallback(
+    async (token: string, force: boolean) => {
+      try {
+        await applyProgramRealign({ token, force, today });
+        Toast.show({
+          type: 'success',
+          text1: t('runPrograms.realign.done', {
+            defaultValue: 'Your plan was realigned',
+          }),
+        });
+      } catch (error) {
+        addLog(`[Run Program] Could not realign the plan: ${error}`, 'WARNING');
+        Toast.show({
+          type: 'error',
+          text1: t('runPrograms.realign.error', {
+            defaultValue: 'Could not realign your plan',
+          }),
+          text2: t('common.tryAgain', { defaultValue: 'Please try again.' }),
+        });
+      }
+    },
+    [t, today]
   );
 
   // Starting asks when the first workout is: today, or a date from the calendar.
@@ -254,10 +312,29 @@ const RunProgramsScreen: React.FC<Props> = ({ navigation }) => {
     </View>
   );
 
+  const fitnessPanel = (
+    <FitnessTestPanel
+      compact={Boolean(status)}
+      today={today}
+      unit={distanceUnit}
+      onOpenTests={() => navigation.navigate('FitnessTest')}
+      onPlanRace={() => navigation.navigate('RunProgramRace')}
+      onStartProgram={(id) => (status ? chooseProgram(id) : askStart(id))}
+    />
+  );
+  // The realign card sits under the program card; while it is offering a fix
+  // the Schedule's own "skip workouts" shortcut would be a second, competing one.
+  const realignOffered =
+    program !== null &&
+    program !== undefined &&
+    enabled &&
+    realignIsOffered(realignOutcomeFor(program, today));
+
   let body: React.ReactNode = null;
   if (loaded && status) {
     body = (
       <>
+        {fitnessPanel}
         <RunProgramCard
           programId={storedId ?? chosenId}
           onChooseProgram={chooseProgram}
@@ -265,6 +342,8 @@ const RunProgramsScreen: React.FC<Props> = ({ navigation }) => {
           now={now}
           schedule={schedule}
           onSchedule={(next) => change(() => setProgramSchedule(next))}
+          raceDay={goals.data?.goals?.race_date ?? null}
+          accountToday={accountToday}
           onPickWorkout={(index) => change(() => setProgramPosition(index))}
           status={status}
           loaded={loaded}
@@ -283,6 +362,22 @@ const RunProgramsScreen: React.FC<Props> = ({ navigation }) => {
           onRestart={() => change(restartProgram)}
           onSkip={() => change(skipProgramWorkout)}
         />
+        {program && enabled ? (
+          <RunProgramRealignCard
+            program={program}
+            today={today}
+            onAccept={realign}
+            onMoveGoal={(day) =>
+              change(() => setProgramSchedule({ endDay: day }))
+            }
+            onPlanShorter={(distance) =>
+              navigation.navigate('RunProgramRace', {
+                distance,
+                raceDay: schedule.endDay ?? undefined,
+              })
+            }
+          />
+        ) : null}
         <View className="bg-surface rounded-xl px-4 mt-4">
           <ProgramActionList>
             <ProgramActionRow
@@ -317,16 +412,22 @@ const RunProgramsScreen: React.FC<Props> = ({ navigation }) => {
           schedule={schedule}
           doneDay={doneDay}
           today={today}
-          onCatchUp={(next) => change(() => setProgramPosition(next))}
+          onCatchUp={
+            realignOffered
+              ? undefined
+              : (next) => change(() => setProgramPosition(next))
+          }
         />
         <RunProgramGuide
           programId={status.program.custom ? undefined : storedId}
         />
         <PaceReferenceCard
+          collapsible
           race={paceReferenceRace}
+          overriddenByTest={latestTest !== null}
           onSave={setPaceReferenceRace}
           watch={
-            Platform.OS === 'ios'
+            Platform.OS === 'ios' || Platform.OS === 'android'
               ? {
                   value: paceReferenceOnWatch,
                   onChange: setPaceReferenceOnWatch,
@@ -340,6 +441,7 @@ const RunProgramsScreen: React.FC<Props> = ({ navigation }) => {
   } else if (loaded) {
     body = (
       <>
+        {fitnessPanel}
         <Text className="text-text-secondary text-sm">
           {t('runPrograms.intro', {
             defaultValue:
@@ -410,7 +512,7 @@ const RunProgramsScreen: React.FC<Props> = ({ navigation }) => {
                       weekOne: outline.firstWeek.join(', '),
                       peak: outline.peakRunMinutes,
                       defaultValue:
-                        'Week 1: workouts of {{weekOne}} minutes. Builds to {{peak}} minutes of running.',
+                        'Week 1: workouts of {{weekOne}} minutes. Builds to {{peak}} minutes of effort.',
                     })}
               </Text>
               <View className="mt-3">
@@ -438,9 +540,10 @@ const RunProgramsScreen: React.FC<Props> = ({ navigation }) => {
         })}
         <PaceReferenceCard
           race={paceReferenceRace}
+          overriddenByTest={latestTest !== null}
           onSave={setPaceReferenceRace}
           watch={
-            Platform.OS === 'ios'
+            Platform.OS === 'ios' || Platform.OS === 'android'
               ? {
                   value: paceReferenceOnWatch,
                   onChange: setPaceReferenceOnWatch,
@@ -453,6 +556,16 @@ const RunProgramsScreen: React.FC<Props> = ({ navigation }) => {
     );
   }
 
+  const goalsCard = goals.data ? (
+    <RunGoalsCard
+      data={goals.data}
+      distanceUnit={goals.distanceUnit}
+      today={accountToday}
+      saving={goals.isSaving}
+      onSave={goals.save}
+    />
+  ) : null;
+
   return (
     <>
       {header}
@@ -463,6 +576,7 @@ const RunProgramsScreen: React.FC<Props> = ({ navigation }) => {
           paddingBottom: insets.bottom + 24,
         }}
       >
+        {goalsCard}
         {body}
       </ScrollView>
       <CalendarSheet

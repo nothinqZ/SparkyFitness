@@ -86,6 +86,14 @@ export function daysBetween(a: string, b: string): number {
   return Math.round((ub - ua) / 86_400_000);
 }
 
+/** Every day from `start` to `end` inclusive; empty when `end` precedes `start`. */
+export function daysInRange(start: string, end: string): string[] {
+  const days: string[] = [];
+  const count = daysBetween(start, end);
+  for (let i = 0; i <= count; i++) days.push(addDays(start, i));
+  return days;
+}
+
 // ---------------------------------------------------------------------------
 // Timezone-aware operations
 // ---------------------------------------------------------------------------

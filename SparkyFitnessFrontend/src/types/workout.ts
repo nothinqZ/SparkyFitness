@@ -106,6 +106,7 @@ export interface ExerciseToLog extends Exercise {
   exercise_name?: string; // Added to match PresetExercise
   distance?: number; // New field
   avg_heart_rate?: number; // New field
+  workout_effort?: number | null; // 1 (easy) to 10 (maximal), the person's own rating
 }
 
 // The combined type for an exercise block

@@ -84,6 +84,12 @@ jest.mock('../../src/hooks/useWatchConnectivity', () => ({
 jest.mock('../../src/services/watchRunControl', () => ({
   startRunOnWatch: jest.fn(() => Promise.resolve('q1')),
 }));
+const mockRoutes = jest.fn(() => ({ routes: [] as unknown[] }));
+const mockRoute = jest.fn((_id: string) => ({ route: undefined as unknown }));
+jest.mock('../../src/services/routeService', () => ({
+  useRoutes: () => mockRoutes(),
+  useRoute: (id: string) => mockRoute(id),
+}));
 jest.mock('../../src/services/runProgramService', () => ({
   useRunProgram: jest.fn(),
   completeProgramWorkout: jest.fn(() => Promise.resolve()),
@@ -104,6 +110,9 @@ jest.mock('../../src/hooks/useIndoorDistanceEstimate', () => ({
 }));
 jest.mock('../../src/hooks/usePreferences', () => ({
   usePreferences: () => ({ preferences: { default_distance_unit: 'km' } }),
+}));
+jest.mock('../../src/hooks/useHeartRateZones', () => ({
+  useHeartRateZones: () => ({ zones: undefined }),
 }));
 const mockSuggestedRanges = jest.fn(() => ({ pace: null, heartRate: null }));
 jest.mock('../../src/hooks/useSuggestedRanges', () => ({
@@ -190,6 +199,8 @@ describe('RecordActivityScreen', () => {
   });
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRoutes.mockReturnValue({ routes: [] });
+    mockRoute.mockReturnValue({ route: undefined });
     mockSuggestedRanges.mockReturnValue({ pace: null, heartRate: null });
     jest.mocked(useIndoorDistanceEstimate).mockReturnValue(null);
     useLiveHeartRateStore.setState({ reading: null });
@@ -275,6 +286,8 @@ describe('RecordActivityScreen', () => {
           easy: { minBpm: 110, maxBpm: 130 },
           warm: { minBpm: 95, maxBpm: 120 },
           maxHeartRate: 185,
+          maxHrSource: 'age',
+          zoneMethod: 'percent_max',
         },
       };
 
@@ -398,6 +411,120 @@ describe('RecordActivityScreen', () => {
         expect(
           intervals?.steps.some((step) => step.pace || step.heartRate)
         ).toBe(false);
+      });
+    });
+  });
+
+  describe('route picker', () => {
+    const summary = {
+      id: 'hill',
+      name: 'Hill loop',
+      distanceM: 5000,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const fullRoute = {
+      ...summary,
+      points: [
+        { lat: 51.5, lon: -0.12 },
+        { lat: 51.51, lon: -0.12 },
+      ],
+      cues: [],
+    };
+    const withRoutes = () => {
+      mockRoutes.mockReturnValue({ routes: [summary] });
+      mockRoute.mockImplementation((id: string) => ({
+        route: id === 'hill' ? fullRoute : undefined,
+      }));
+    };
+
+    it('is hidden when there are no saved routes', async () => {
+      state(null);
+      const screen = await renderScreen();
+      expect(screen.queryAllByText('Route')).toHaveLength(0);
+    });
+
+    const pairedWatch = () =>
+      jest.mocked(useWatchConnectivity).mockReturnValue({
+        isSupported: true,
+        isPaired: true,
+        isReachable: true,
+      });
+
+    it('is not offered for a phone recording, which has no route to follow', async () => {
+      state(null);
+      withRoutes();
+      const screen = await renderScreen();
+      expect(screen.queryAllByText('Route')).toHaveLength(0);
+    });
+
+    it('is offered for an outdoor watch run, not indoors', async () => {
+      state(null);
+      withRoutes();
+      pairedWatch();
+      const screen = await renderScreen();
+      fireEvent.press(screen.getByText('Watch GPS'));
+      expect(screen.getAllByText('Route').length).toBeGreaterThan(0);
+      fireEvent.press(screen.getByText('Indoor'));
+      expect(screen.queryAllByText('Route')).toHaveLength(0);
+    });
+
+    it('lists the saved routes with their distance', async () => {
+      state(null);
+      withRoutes();
+      pairedWatch();
+      const screen = await renderScreen();
+      fireEvent.press(screen.getByText('Watch GPS'));
+      expect(screen.getAllByText('No route').length).toBeGreaterThan(0);
+      expect(screen.getByText('Hill loop · 5.00 km')).toBeTruthy();
+    });
+
+    it('sends the chosen route to the watch with a watch run', async () => {
+      state(null);
+      withRoutes();
+      jest.mocked(useWatchConnectivity).mockReturnValue({
+        isSupported: true,
+        isPaired: true,
+        isReachable: true,
+      });
+      const screen = await renderScreen();
+      fireEvent.press(screen.getByText('Watch GPS'));
+      fireEvent.press(screen.getByText('Hill loop · 5.00 km'));
+      fireEvent.press(screen.getByText('Start'));
+      await waitFor(() =>
+        expect(startRunOnWatch).toHaveBeenCalledWith(
+          expect.objectContaining({
+            kind: 'run',
+            place: 'outdoor',
+            route: fullRoute,
+          })
+        )
+      );
+      jest.mocked(useWatchConnectivity).mockReturnValue({
+        isSupported: false,
+        isPaired: false,
+        isReachable: false,
+      });
+    });
+
+    it('sends no route when none is chosen', async () => {
+      state(null);
+      withRoutes();
+      jest.mocked(useWatchConnectivity).mockReturnValue({
+        isSupported: true,
+        isPaired: true,
+        isReachable: true,
+      });
+      const screen = await renderScreen();
+      fireEvent.press(screen.getByText('Watch GPS'));
+      fireEvent.press(screen.getByText('Start'));
+      await waitFor(() => expect(startRunOnWatch).toHaveBeenCalled());
+      expect(jest.mocked(startRunOnWatch).mock.calls[0][0]).not.toHaveProperty(
+        'route'
+      );
+      jest.mocked(useWatchConnectivity).mockReturnValue({
+        isSupported: false,
+        isPaired: false,
+        isReachable: false,
       });
     });
   });
@@ -820,8 +947,8 @@ describe('RecordActivityScreen', () => {
     const screen = await renderScreen();
 
     expect(screen.getByText('Splits')).toBeTruthy();
-    expect(screen.getByText('1 km')).toBeTruthy();
-    expect(screen.getByText('2 km')).toBeTruthy();
+    expect(screen.getByTestId('split-row-1')).toBeTruthy();
+    expect(screen.getByTestId('split-row-2')).toBeTruthy();
 
     fireEvent.press(screen.getByText('Save activity'));
 

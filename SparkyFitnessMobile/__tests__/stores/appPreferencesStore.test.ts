@@ -76,6 +76,28 @@ describe('appPreferencesStore', () => {
     });
   });
 
+  describe('add menu row styles', () => {
+    it('keeps a choice that differs from the default and drops one that matches it', () => {
+      const { setAddMenuRowStyle } = useAppPreferencesStore.getState();
+
+      setAddMenuRowStyle('mood', 'action');
+      expect(useAppPreferencesStore.getState().addMenuRowStyles).toEqual({
+        mood: 'action',
+      });
+
+      // Mood's own style is a pair.
+      setAddMenuRowStyle('mood', 'compact');
+      expect(useAppPreferencesStore.getState().addMenuRowStyles).toEqual({});
+    });
+
+    it('is cleared by resetting the menu', () => {
+      useAppPreferencesStore.getState().setAddMenuRowStyle('mood', 'list');
+      useAppPreferencesStore.getState().resetAddMenu();
+
+      expect(useAppPreferencesStore.getState().addMenuRowStyles).toEqual({});
+    });
+  });
+
   describe('health trend preferences', () => {
     it('defaults to the full registry order with nothing hidden', () => {
       const state = useAppPreferencesStore.getState();
@@ -296,6 +318,60 @@ describe('appPreferencesStore', () => {
       const state = useAppPreferencesStore.getState();
       expect(state.soundsEnabled).toBe(false); // persisted values honoured
       expect(state.activeWorkoutMetricColumn).toBe('rpe'); // shallow-merge backfill
+    });
+  });
+
+  describe('guided check-in preference', () => {
+    it('defaults to off', () => {
+      expect(PREFERENCE_DEFAULTS.guidedCheckInEnabled).toBe(false);
+      expect(useAppPreferencesStore.getState().guidedCheckInEnabled).toBe(
+        false
+      );
+    });
+
+    it('setGuidedCheckInEnabled updates only the guided check-in opt-in', () => {
+      const store = useAppPreferencesStore.getState();
+
+      store.setGuidedCheckInEnabled(true);
+      expect(useAppPreferencesStore.getState().guidedCheckInEnabled).toBe(true);
+      expect(useAppPreferencesStore.getState().diarySummaryVisible).toBe(false);
+      expect(useAppPreferencesStore.getState().checkinRemindersEnabled).toBe(
+        PREFERENCE_DEFAULTS.checkinRemindersEnabled
+      );
+
+      store.setGuidedCheckInEnabled(false);
+      expect(useAppPreferencesStore.getState().guidedCheckInEnabled).toBe(
+        false
+      );
+    });
+
+    it('persists guidedCheckInEnabled across storage write', async () => {
+      useAppPreferencesStore.getState().setGuidedCheckInEnabled(true);
+      const raw = await AsyncStorage.getItem('@SparkyFitness/app-preferences');
+      expect(raw).toBeTruthy();
+      const parsed = JSON.parse(raw!);
+      expect(parsed.state.guidedCheckInEnabled).toBe(true);
+    });
+
+    it('falls back to off when an older persisted blob lacks the key', async () => {
+      const withoutGuidedCheckIn = { ...PREFERENCE_DEFAULTS } as Record<
+        string,
+        unknown
+      >;
+      delete withoutGuidedCheckIn.guidedCheckInEnabled;
+      await AsyncStorage.setItem(
+        '@SparkyFitness/app-preferences',
+        JSON.stringify({
+          state: { ...withoutGuidedCheckIn, soundsEnabled: false },
+          version: 1,
+        })
+      );
+
+      await useAppPreferencesStore.persist.rehydrate();
+
+      const state = useAppPreferencesStore.getState();
+      expect(state.soundsEnabled).toBe(false); // persisted values honoured
+      expect(state.guidedCheckInEnabled).toBe(false); // shallow-merge backfill
     });
   });
 

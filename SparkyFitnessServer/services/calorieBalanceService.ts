@@ -1,6 +1,6 @@
 import bmrService from './bmrService.js';
 import { log } from '../config/logging.js';
-import { userAge } from '../utils/dateHelpers.js';
+import { ageOnDay } from '../utils/dateHelpers.js';
 import type {
   ExerciseSessionResponse,
   CalorieBalance,
@@ -10,17 +10,19 @@ import {
   CALORIE_CALCULATION_CONSTANTS,
   instantHourMinute,
   instantToDay,
+  entryCaloriesCounted,
   resolveExerciseCalories,
   computeSparkyfitnessBurned,
   computeCaloriesRemaining,
   computeCalorieProgress,
-  getGoalModeAdjustment,
+  getGoalModeDailyAdjustment,
   getRecommendedCalorieSafetyFloor,
   isUsableMeasuredBmr,
   MAX_HEALTH_TOTAL_CALORIES_PER_DAY,
   MIN_CALORIE_SAFETY_FLOOR,
   resolveCalorieSafetyFloor,
   isAdaptiveEarnBackSuppressed,
+  isAdaptiveActivitySeparated,
 } from '@workspace/shared';
 
 /**
@@ -41,6 +43,7 @@ export interface CalorieBalanceUserProfile {
 }
 
 export interface CalorieBalanceUserPreferences {
+  adaptive_activity_separate?: boolean | null;
   timezone?: string | null;
   activity_level?: string | null;
   bmr_algorithm?: string | null;
@@ -53,6 +56,7 @@ export interface CalorieBalanceUserPreferences {
   goal_mode?: string | null;
   goal_mode_calculation_method?: string | null;
   goal_mode_custom_percentage?: number | null;
+  goal_mode_weekly_change_kg?: number | null;
   calorie_safety_floor_mode?: string | null;
   calorie_safety_floor_value?: number | null;
 }
@@ -77,6 +81,8 @@ export interface FoodEntryCalorieLike {
 }
 
 export interface CalorieBalanceInputs {
+  /** The calendar day balanced, 'YYYY-MM-DD'. */
+  date: string;
   /** Food + supplement kcal for the day, already scaled by quantity/serving size. */
   eatenCalories: number;
   /** The day's exercise entries, split by source. */
@@ -89,7 +95,7 @@ export interface CalorieBalanceInputs {
   userPreferences: CalorieBalanceUserPreferences | null;
   /** Latest measurement on or before the day. Drives the BMR formula. */
   measurements: CalorieBalanceMeasurements | null;
-  /** Health Connect total (resting + active) calories accumulated for this day. */
+  /** Device total (resting + active) calories accumulated for this day, from one source (see `pickDeviceTotalPerDay`). */
   deviceTotalCalories?: number | null;
   /** Fraction of the day elapsed when the cumulative device total was captured. */
   deviceTotalDayFraction?: number | null;
@@ -98,6 +104,39 @@ export interface CalorieBalanceInputs {
    * See `resolveDayFraction` -- pass 1 for a completed day.
    */
   dayFraction: number;
+}
+
+export interface BmrInputs {
+  age: number;
+  gender: string;
+  weightKg: number;
+  heightCm: number;
+  bodyFatPercentage?: number;
+}
+
+/**
+ * The body inputs the BMR formula uses on `date`, with the defaults applied.
+ * Shared with the daily summary so the Diary explains the BMR with these same
+ * values. Age is taken on that day, so a birthday does not move past days.
+ */
+export function resolveBmrInputs(
+  userProfile: CalorieBalanceUserProfile | null,
+  measurements: CalorieBalanceMeasurements | null,
+  date: string
+): BmrInputs {
+  return {
+    age: ageOnDay(userProfile?.date_of_birth, date) ?? 30,
+    gender: userProfile?.gender || 'male',
+    weightKg:
+      parseFloat(String(measurements?.weight ?? '')) ||
+      CALORIE_CALCULATION_CONSTANTS.DEFAULT_WEIGHT_KG,
+    heightCm:
+      parseFloat(String(measurements?.height ?? '')) ||
+      CALORIE_CALCULATION_CONSTANTS.DEFAULT_HEIGHT_CM,
+    bodyFatPercentage: measurements?.body_fat_percentage
+      ? parseFloat(String(measurements.body_fat_percentage))
+      : undefined,
+  };
 }
 
 /** Below this the day is too young to extrapolate from without wild swings (~72 min). */
@@ -196,7 +235,7 @@ export function extractExerciseStats(
 
   for (const session of sessions) {
     if (session.type === 'individual') {
-      const cal = session.calories_burned || 0;
+      const cal = entryCaloriesCounted(session);
       if (session.name === ACTIVE_CALORIES_EXERCISE_NAME) {
         activeCalories += cal;
       } else {
@@ -205,7 +244,7 @@ export function extractExerciseStats(
       activitySteps += session.steps || 0;
     } else {
       for (const exercise of session.exercises) {
-        otherCalories += exercise.calories_burned || 0;
+        otherCalories += entryCaloriesCounted(exercise);
         activitySteps += exercise.steps || 0;
       }
     }
@@ -239,6 +278,7 @@ export function sumFoodEntryCalories(
  * Explicit Device Projection modes continue to use their device-based goal.
  */
 export function computeCalorieBalance({
+  date,
   eatenCalories,
   exercise,
   backgroundStepCalories,
@@ -256,19 +296,9 @@ export function computeCalorieBalance({
   const includeInNet = userPreferences?.include_bmr_in_net_calories || false;
 
   if (userProfile && userPreferences) {
-    const tz = userPreferences.timezone || 'UTC';
-    const age = userAge(userProfile.date_of_birth ?? '', tz) ?? 30;
-    const gender = userProfile.gender || 'male';
     const bmrAlgorithm = userPreferences.bmr_algorithm || 'Mifflin-St Jeor';
-    const weightKg =
-      parseFloat(String(measurements?.weight ?? '')) ||
-      CALORIE_CALCULATION_CONSTANTS.DEFAULT_WEIGHT_KG;
-    const heightCm =
-      parseFloat(String(measurements?.height ?? '')) ||
-      CALORIE_CALCULATION_CONSTANTS.DEFAULT_HEIGHT_CM;
-    const bodyFat = measurements?.body_fat_percentage
-      ? parseFloat(String(measurements.body_fat_percentage))
-      : undefined;
+    const { age, gender, weightKg, heightCm, bodyFatPercentage } =
+      resolveBmrInputs(userProfile, measurements, date);
 
     try {
       bmr = bmrService.calculateBmr(
@@ -277,7 +307,7 @@ export function computeCalorieBalance({
         heightCm,
         age,
         gender,
-        bodyFat
+        bodyFatPercentage
       );
     } catch (error: unknown) {
       log(
@@ -355,12 +385,17 @@ export function computeCalorieBalance({
       validDeviceTotal && projectedDeviceTotal !== null
         ? projectedDeviceTotal
         : bmr + projectedDeviceCalories;
-    const goalModeAdjustment = getGoalModeAdjustment(
+    const goalModeAdjustment = getGoalModeDailyAdjustment(
       userPreferences?.goal_mode || 'maintain',
-      userPreferences?.goal_mode_custom_percentage ?? 0
+      userPreferences?.goal_mode_custom_percentage ?? 0,
+      projectedBurn,
+      userPreferences?.goal_mode_weekly_change_kg ?? 0
     );
-    let projectedTarget = Math.round(projectedBurn * (1 - goalModeAdjustment));
-    if (userPreferences?.goal_mode_calculation_method === 'adaptive') {
+    let projectedTarget = Math.round(projectedBurn + goalModeAdjustment);
+    if (
+      userPreferences?.goal_mode_calculation_method === 'adaptive' ||
+      userPreferences?.goal_mode === 'weekly'
+    ) {
       const safetyFloor = resolveCalorieSafetyFloor(
         userPreferences.calorie_safety_floor_mode,
         userPreferences.calorie_safety_floor_value,
@@ -389,6 +424,8 @@ export function computeCalorieBalance({
       baselineBurn: sparkyfitnessBurned,
       adjustment: tdeeAdjustment,
       targetCalories: goalCalories,
+      // 'health_connect_total' means any device total now (Garmin and Polar
+      // too); the value stays because older apps check for it.
       source: validDeviceTotal ? 'health_connect_total' : 'active_plus_bmr',
     };
   }
@@ -402,7 +439,8 @@ export function computeCalorieBalance({
     bmr > 0 &&
     isAdaptiveEarnBackSuppressed(
       adjustmentMode,
-      userPreferences?.goal_mode_calculation_method
+      userPreferences?.goal_mode_calculation_method,
+      userPreferences?.adaptive_activity_separate
     )
       ? 'adaptive'
       : adjustmentMode;
@@ -415,14 +453,24 @@ export function computeCalorieBalance({
         ? adjustedGoalCalories
         : goalCalories,
     eatenCalories,
-    netCalories,
+    // The learned baseline already includes resting expenditure. Only today's
+    // resolved activity is earned back; BMR remains in the reporting statistics.
+    netCalories:
+      bmr > 0 &&
+      isAdaptiveActivitySeparated(
+        adjustmentMode,
+        userPreferences?.goal_mode_calculation_method,
+        userPreferences?.adaptive_activity_separate
+      )
+        ? eatenCalories - exerciseCaloriesBurned
+        : netCalories,
     exerciseCaloriesBurned,
     bmrCalories,
     exerciseCaloriePercentage,
     tdeeAdjustment,
   });
 
-  const progress = computeCalorieProgress(goalCalories, remaining);
+  const progress = computeCalorieProgress(eatenCalories, remaining);
 
   return {
     eaten: Math.round(eatenCalories),

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import {
   equivalent5kPace,
@@ -10,6 +10,7 @@ import {
 import Button from '../ui/Button';
 import FormInput from '../FormInput';
 import SegmentedControl from '../SegmentedControl';
+import ProgramActionRow from './ProgramActionRow';
 import RecordingSwitchRow from './RecordingSwitchRow';
 import { raceDistanceName, raceIdForDistance } from '../../utils/paceReference';
 import { formatClock } from '../../utils/gpsRecording';
@@ -33,12 +34,16 @@ const parts = (seconds: number) => {
 export interface PaceReferenceCardProps {
   /** The saved race result, or null when none is set. */
   race: PaceReferenceRace | null;
+  /** The person has a fitness test, which is used for their paces instead of this race. */
+  overriddenByTest?: boolean;
   onSave: (race: PaceReferenceRace | null) => void;
   /**
    * The switch that also puts the ranges on the program workout offered on the
    * Apple Watch. Left out where there is no watch to offer it on.
    */
   watch?: { value: boolean; onChange: (value: boolean) => void };
+  /** Fold the form away behind a row that says what is saved; tap to open it. */
+  collapsible?: boolean;
 }
 
 /**
@@ -49,10 +54,13 @@ export interface PaceReferenceCardProps {
  */
 const PaceReferenceCard: React.FC<PaceReferenceCardProps> = ({
   race,
+  overriddenByTest = false,
   onSave,
   watch,
+  collapsible = false,
 }) => {
   const { t } = useTranslation();
+  const [open, setOpen] = useState(!collapsible);
   const [raceId, setRaceId] = useState<PaceReferenceRaceId>(
     (race && raceIdForDistance(race.distanceKm)) ?? '5k'
   );
@@ -85,6 +93,39 @@ const PaceReferenceCard: React.FC<PaceReferenceCardProps> = ({
     onSave(null);
   };
 
+  if (!open) {
+    return (
+      <View
+        className="bg-surface rounded-xl px-4 mt-4"
+        testID="pace-reference-card"
+      >
+        <ProgramActionRow
+          label={t('paceReference.title', { defaultValue: 'Your race pace' })}
+          hint={
+            overriddenByTest
+              ? t('paceReference.collapsedTest', {
+                  defaultValue: 'Your fitness test sets your paces',
+                })
+              : race
+                ? t('paceReference.saved', {
+                    race: raceDistanceName(
+                      t,
+                      raceIdForDistance(race.distanceKm) ?? '5k'
+                    ),
+                    time: formatClock(race.seconds),
+                    defaultValue: 'Saved: {{race}} in {{time}}.',
+                  })
+                : t('paceReference.collapsedEmpty', {
+                    defaultValue: 'Add a recent race time to set your paces',
+                  })
+          }
+          onPress={() => setOpen(true)}
+          testID="pace-reference-toggle"
+        />
+      </View>
+    );
+  }
+
   return (
     <View
       className="bg-surface rounded-xl p-4 mt-4"
@@ -99,6 +140,17 @@ const PaceReferenceCard: React.FC<PaceReferenceCardProps> = ({
             'Enter a recent race time to get pace ranges for easy runs, tempo, marathon pace, strides and fast stretches. Kept on this device.',
         })}
       </Text>
+      {overriddenByTest ? (
+        <Text
+          className="text-text-muted text-xs mt-2"
+          testID="pace-reference-test-note"
+        >
+          {t('paceReference.testNote', {
+            defaultValue:
+              'You have a fitness test, so your latest test sets your paces while it is saved. This race time is used again if you delete your tests.',
+          })}
+        </Text>
+      ) : null}
       <View className="mt-3">
         <SegmentedControl
           segments={PACE_REFERENCE_RACES.map((r) => ({
@@ -207,9 +259,15 @@ const PaceReferenceCard: React.FC<PaceReferenceCardProps> = ({
         <View className="-mx-4 -mb-4">
           <RecordingSwitchRow
             testID="pace-reference-watch"
-            title={t('paceReference.watch', {
-              defaultValue: 'Also use on my Apple Watch',
-            })}
+            title={
+              Platform.OS === 'android'
+                ? t('paceReference.wearOs', {
+                    defaultValue: 'Also use on my Wear OS watch',
+                  })
+                : t('paceReference.watch', {
+                    defaultValue: 'Also use on my Apple Watch',
+                  })
+            }
             description={t('paceReference.watchHint', {
               defaultValue:
                 'Holds the program workout offered on the watch to these ranges. Runs only.',

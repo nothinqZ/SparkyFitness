@@ -210,8 +210,7 @@ router.delete('/', authenticate, async (req, res, next) => {
 router.get('/', authenticate, async (req, res, next) => {
   try {
     const preferences = await preferenceService.getUserPreferences(
-      req.userId,
-
+      req.authenticatedUserId ?? req.userId,
       req.userId
     );
     res.status(200).json(preferences);

@@ -2,6 +2,7 @@ import { vi, beforeEach, describe, expect, it } from 'vitest';
 // @ts-expect-error TS7016 supertest typing
 import request from 'supertest';
 import express from 'express';
+import { addDays, dayOfWeek, findProgram } from '@workspace/shared';
 import errorHandler from '../middleware/errorHandler.js';
 import runProgramRoutes from '../routes/v2/runProgramRoutes.js';
 import {
@@ -17,6 +18,10 @@ import {
   UnknownRunProgramError,
   upsertRunProgram,
 } from '../models/runProgramRepository.js';
+
+vi.mock('../utils/timezoneLoader.js', () => ({
+  loadUserTimezone: vi.fn().mockResolvedValue('UTC'),
+}));
 
 vi.mock('../models/runProgramRepository.js', () => {
   class UnknownRunProgramError extends Error {}
@@ -93,6 +98,22 @@ describe('run program routes', () => {
     expect(upsertRunProgram).toHaveBeenCalledWith(
       'test-user-id',
       { program_id: 'beginner5k' },
+      'test-user-id'
+    );
+  });
+
+  it('starts the Zone 2 program in either version', async () => {
+    vi.mocked(upsertRunProgram).mockResolvedValue({
+      ...program,
+      program_id: 'zone2Base4',
+    });
+    const res = await request(app)
+      .put('/api/v2/run-program')
+      .send({ program_id: 'zone2Base4' });
+    expect(res.status).toBe(200);
+    expect(upsertRunProgram).toHaveBeenCalledWith(
+      'test-user-id',
+      { program_id: 'zone2Base4' },
       'test-user-id'
     );
   });
@@ -461,5 +482,155 @@ describe('run program routes', () => {
       expect(res.status).toBe(403);
       expect(listCustomRunPrograms).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('POST /api/v2/run-program/realign', () => {
+  // A Monday; three workout days a week.
+  const today = '2026-11-02';
+  const endForSlots = (slots: number): string => {
+    let seen = 0;
+    for (let d = today; ; d = addDays(d, 1)) {
+      if ([1, 3, 5].includes(dayOfWeek(d)) && ++seen === slots) return d;
+    }
+  };
+  const behind = (slots: number) => ({
+    ...program,
+    program_id: 'halfMarathon',
+    workouts: findProgram('halfMarathon')!.workouts,
+    next_index: 3,
+    run_days: [1, 3, 5],
+    end_date: endForSlots(slots),
+  });
+
+  it('previews without saving anything', async () => {
+    vi.mocked(getRunProgram).mockResolvedValue(behind(30));
+    const res = await request(app)
+      .post('/api/v2/run-program/realign')
+      .send({ today });
+    expect(res.status).toBe(200);
+    expect(res.body.applied).toBe(false);
+    expect(res.body.program).toBeNull();
+    expect(res.body.realign.state).toBe('plan');
+    expect(res.body.realign.preview).toMatchObject({
+      slots: 30,
+      dropped: 3,
+      keptTail: 6,
+    });
+    expect(res.body.realign.preview.token).toEqual(expect.any(String));
+    expect(adjustRunProgram).not.toHaveBeenCalled();
+  });
+
+  it('reports an unrealistic goal with the options instead of forcing it', async () => {
+    vi.mocked(getRunProgram).mockResolvedValue(behind(24));
+    const res = await request(app)
+      .post('/api/v2/run-program/realign')
+      .send({ today });
+    expect(res.status).toBe(200);
+    expect(res.body.realign).toMatchObject({
+      state: 'unrealistic',
+      reasons: ['tooMuchToDrop'],
+      distance: 'half',
+      lowerDistance: '10k',
+      options: ['later', 'lower', 'continue'],
+    });
+    expect(res.body.realign.continuePreview.after.workouts).toBe(24);
+  });
+
+  it('applies only when confirmed, as the person, under the row lock', async () => {
+    const held = behind(30);
+    vi.mocked(getRunProgram).mockResolvedValue(held);
+    const preview = (
+      await request(app).post('/api/v2/run-program/realign').send({ today })
+    ).body.realign.preview;
+    vi.mocked(adjustRunProgram).mockImplementation(
+      async (_user, source, change) => {
+        expect(source).toBe('user');
+        const result = change({
+          workouts: held.workouts,
+          next: held.next_index,
+          programId: held.program_id,
+          program: held,
+        });
+        expect(result.workouts).toHaveLength(held.workouts.length - 3);
+        expect(result.summary).toBe(preview.summary);
+        return { ...held, workouts: result.workouts };
+      }
+    );
+    const res = await request(app)
+      .post('/api/v2/run-program/realign')
+      .send({ today, confirmed: true, token: preview.token });
+    expect(res.status).toBe(200);
+    expect(res.body.applied).toBe(true);
+    expect(res.body.program.workouts).toHaveLength(held.workouts.length - 3);
+    expect(adjustRunProgram).toHaveBeenCalledWith(
+      'test-user-id',
+      'user',
+      expect.any(Function),
+      'test-user-id'
+    );
+  });
+
+  it('refuses with 409 when the plan changed since the preview', async () => {
+    const held = behind(30);
+    vi.mocked(adjustRunProgram).mockImplementation(async (_u, _s, change) => {
+      change({
+        workouts: held.workouts,
+        next: held.next_index,
+        programId: held.program_id,
+        program: held,
+      });
+      return held;
+    });
+    const res = await request(app)
+      .post('/api/v2/run-program/realign')
+      .send({ today, confirmed: true, token: 'stale' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain('plan changed');
+  });
+
+  it('refuses an unrealistic goal when confirmed without force, and allows it with force', async () => {
+    const held = behind(24);
+    vi.mocked(adjustRunProgram).mockImplementation(async (_u, _s, change) => {
+      const result = change({
+        workouts: held.workouts,
+        next: held.next_index,
+        programId: held.program_id,
+        program: held,
+      });
+      return { ...held, workouts: result.workouts };
+    });
+    const refused = await request(app)
+      .post('/api/v2/run-program/realign')
+      .send({ today, confirmed: true });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error).toContain('not realistic');
+    const forced = await request(app)
+      .post('/api/v2/run-program/realign')
+      .send({ today, confirmed: true, force: true });
+    expect(forced.status).toBe(200);
+    expect(forced.body.program.workouts).toHaveLength(held.workouts.length - 9);
+  });
+
+  it('says there is no program, rejects a bad body, and is owner-only', async () => {
+    vi.mocked(getRunProgram).mockResolvedValue(null);
+    const none = await request(app)
+      .post('/api/v2/run-program/realign')
+      .send({ today });
+    expect(none.status).toBe(400);
+    vi.mocked(adjustRunProgram).mockResolvedValue(null);
+    const none2 = await request(app)
+      .post('/api/v2/run-program/realign')
+      .send({ today, confirmed: true });
+    expect(none2.status).toBe(400);
+    const bad = await request(app)
+      .post('/api/v2/run-program/realign')
+      .send({ today: '2026-02-31' });
+    expect(bad.status).toBe(400);
+    actingAs = 'someone-else';
+    const delegated = await request(app)
+      .post('/api/v2/run-program/realign')
+      .send({ today });
+    expect(delegated.status).toBe(403);
   });
 });

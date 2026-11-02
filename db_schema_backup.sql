@@ -1223,6 +1223,96 @@ $$;
 
 
 --
+-- Name: record_calorie_rule_change(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.record_calorie_rule_change() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  zone TEXT;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    -- A preferences row created again after a delete. With no history its
+    -- settings already apply to every day; with history they must be recorded,
+    -- or the last recorded row would override them.
+    IF NOT EXISTS (
+      SELECT 1 FROM public.user_calorie_rule_history WHERE user_id = NEW.user_id
+    ) THEN
+      RETURN NULL;
+    END IF;
+  ELSE
+    -- The first change after this migration also keeps the old rules for every
+    -- earlier day; without it those days would fall back to the new settings.
+    INSERT INTO public.user_calorie_rule_history (
+      user_id, effective_date,
+      goal_mode, goal_mode_calculation_method, goal_mode_custom_percentage,
+      goal_mode_weekly_change_kg, calorie_goal_adjustment_mode, exercise_calorie_percentage,
+      tdee_allow_negative_adjustment, calorie_safety_floor_mode,
+      calorie_safety_floor_value, adaptive_activity_separate, bmr_algorithm,
+      activity_level, use_external_bmr, include_bmr_in_net_calories
+    )
+    SELECT
+      OLD.user_id, '-infinity',
+      OLD.goal_mode, OLD.goal_mode_calculation_method, OLD.goal_mode_custom_percentage,
+      OLD.goal_mode_weekly_change_kg, OLD.calorie_goal_adjustment_mode, OLD.exercise_calorie_percentage,
+      OLD.tdee_allow_negative_adjustment, OLD.calorie_safety_floor_mode,
+      OLD.calorie_safety_floor_value, OLD.adaptive_activity_separate, OLD.bmr_algorithm,
+      OLD.activity_level, OLD.use_external_bmr, OLD.include_bmr_in_net_calories
+    WHERE NOT EXISTS (
+      SELECT 1 FROM public.user_calorie_rule_history WHERE user_id = OLD.user_id
+    );
+  END IF;
+
+  -- An unknown zone would make AT TIME ZONE fail the whole preference update.
+  -- Case-insensitive, because the server accepts any casing Intl accepts.
+  zone := COALESCE(
+    (SELECT name FROM pg_timezone_names
+     WHERE lower(name) = lower(NEW.timezone) LIMIT 1),
+    'UTC'
+  );
+
+  -- A change applies from today in the user's zone; a second change on the
+  -- same day replaces the first.
+  INSERT INTO public.user_calorie_rule_history (
+    user_id, effective_date,
+    goal_mode, goal_mode_calculation_method, goal_mode_custom_percentage,
+    goal_mode_weekly_change_kg, calorie_goal_adjustment_mode, exercise_calorie_percentage,
+    tdee_allow_negative_adjustment, calorie_safety_floor_mode,
+    calorie_safety_floor_value, adaptive_activity_separate, bmr_algorithm,
+    activity_level, use_external_bmr, include_bmr_in_net_calories
+  )
+  VALUES (
+    NEW.user_id, (now() AT TIME ZONE zone)::date,
+    NEW.goal_mode, NEW.goal_mode_calculation_method, NEW.goal_mode_custom_percentage,
+    NEW.goal_mode_weekly_change_kg, NEW.calorie_goal_adjustment_mode, NEW.exercise_calorie_percentage,
+    NEW.tdee_allow_negative_adjustment, NEW.calorie_safety_floor_mode,
+    NEW.calorie_safety_floor_value, NEW.adaptive_activity_separate, NEW.bmr_algorithm,
+    NEW.activity_level, NEW.use_external_bmr, NEW.include_bmr_in_net_calories
+  )
+  ON CONFLICT (user_id, effective_date) DO UPDATE SET
+    goal_mode = EXCLUDED.goal_mode,
+    goal_mode_calculation_method = EXCLUDED.goal_mode_calculation_method,
+    goal_mode_custom_percentage = EXCLUDED.goal_mode_custom_percentage,
+    goal_mode_weekly_change_kg = EXCLUDED.goal_mode_weekly_change_kg,
+    calorie_goal_adjustment_mode = EXCLUDED.calorie_goal_adjustment_mode,
+    exercise_calorie_percentage = EXCLUDED.exercise_calorie_percentage,
+    tdee_allow_negative_adjustment = EXCLUDED.tdee_allow_negative_adjustment,
+    calorie_safety_floor_mode = EXCLUDED.calorie_safety_floor_mode,
+    calorie_safety_floor_value = EXCLUDED.calorie_safety_floor_value,
+    adaptive_activity_separate = EXCLUDED.adaptive_activity_separate,
+    bmr_algorithm = EXCLUDED.bmr_algorithm,
+    activity_level = EXCLUDED.activity_level,
+    use_external_bmr = EXCLUDED.use_external_bmr,
+    include_bmr_in_net_calories = EXCLUDED.include_bmr_in_net_calories,
+    updated_at = now();
+
+  RETURN NULL;
+END;
+$$;
+
+
+--
 -- Name: refresh_openfoodfacts_sync_queue(uuid[]); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1713,7 +1803,9 @@ CREATE TABLE public.check_in_measurements (
     bone_mass_kg numeric(5,2),
     body_water_percentage numeric(5,2),
     bmr numeric(6,1),
-    CONSTRAINT check_in_measurements_bmr_check CHECK (((bmr IS NULL) OR ((bmr >= (600)::numeric) AND (bmr <= (6000)::numeric))))
+    resting_heart_rate smallint,
+    CONSTRAINT check_in_measurements_bmr_check CHECK (((bmr IS NULL) OR ((bmr >= (600)::numeric) AND (bmr <= (6000)::numeric)))),
+    CONSTRAINT check_in_measurements_resting_heart_rate_check CHECK (((resting_heart_rate IS NULL) OR ((resting_heart_rate >= 25) AND (resting_heart_rate <= 250))))
 );
 
 
@@ -2091,6 +2183,14 @@ CREATE TABLE public.exercise_entries (
     watch_duration_minutes numeric,
     record_timezone text,
     shoe_id uuid,
+    manual_fields text[],
+    workout_effort smallint,
+    calories_applied numeric,
+    calorie_link_id uuid,
+    calorie_link_resolution text,
+    CONSTRAINT chk_exercise_entries_calorie_link_resolution CHECK (((calorie_link_resolution IS NULL) OR (calorie_link_resolution = ANY (ARRAY['sparkyfitness'::text, 'synced'::text, 'higher'::text, 'lower'::text, 'average'::text, 'custom'::text])))),
+    CONSTRAINT chk_exercise_entries_calories_applied CHECK (((calories_applied IS NULL) OR (calories_applied >= (0)::numeric))),
+    CONSTRAINT chk_exercise_entries_workout_effort CHECK (((workout_effort IS NULL) OR ((workout_effort >= 1) AND (workout_effort <= 10)))),
     CONSTRAINT exercise_entries_modality_check CHECK ((modality = ANY (ARRAY['weight_reps'::text, 'reps_only'::text, 'bodyweight_reps'::text, 'weight_duration'::text, 'weight_distance'::text, 'duration'::text, 'duration_distance'::text])))
 );
 
@@ -2186,8 +2286,17 @@ CREATE TABLE public.exercise_entry_hr_zones (
     zone_upper_bpm integer,
     seconds_in_zone integer NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    zone_method text,
+    CONSTRAINT exercise_entry_hr_zones_zone_method_check CHECK (((zone_method IS NULL) OR (zone_method = ANY (ARRAY['percent_max'::text, 'heart_rate_reserve'::text, 'custom'::text, 'device'::text]))))
 );
+
+
+--
+-- Name: COLUMN exercise_entry_hr_zones.zone_method; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.exercise_entry_hr_zones.zone_method IS 'Method the zone bounds were computed with when stored; device = zones supplied by the recording device (Garmin, Apple).';
 
 
 --
@@ -2400,7 +2509,9 @@ CREATE TABLE public.external_data_providers (
     oauth_state text,
     sort_order integer,
     is_public boolean DEFAULT false NOT NULL,
-    sync_started_at timestamp with time zone
+    sync_started_at timestamp with time zone,
+    fit_downloads_day date,
+    fit_downloads_used integer DEFAULT 0 NOT NULL
 );
 
 
@@ -2471,6 +2582,37 @@ CREATE TABLE public.fasting_logs (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
     CONSTRAINT fasting_logs_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'COMPLETED'::character varying, 'CANCELLED'::character varying])::text[])))
+);
+
+
+--
+-- Name: fitness_tests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fitness_tests (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    test_type character varying(10) NOT NULL,
+    test_date date NOT NULL,
+    exercise_entry_id uuid,
+    distance_meters numeric(9,1) NOT NULL,
+    duration_seconds integer NOT NULL,
+    split_distance_meters numeric(9,1),
+    result_value numeric(9,1) NOT NULL,
+    threshold_pace_seconds_per_km integer NOT NULL,
+    equivalent_5k_seconds integer NOT NULL,
+    paces jsonb DEFAULT '{}'::jsonb NOT NULL,
+    surface character varying(10) DEFAULT 'outdoor'::character varying NOT NULL,
+    incline_percent numeric(3,1),
+    incline_adjusted boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fitness_tests_distance_meters_check CHECK ((distance_meters > (0)::numeric)),
+    CONSTRAINT fitness_tests_duration_seconds_check CHECK ((duration_seconds > 0)),
+    CONSTRAINT fitness_tests_incline_percent_check CHECK (((incline_percent IS NULL) OR ((incline_percent >= (0)::numeric) AND (incline_percent <= (15)::numeric)))),
+    CONSTRAINT fitness_tests_split_distance_meters_check CHECK (((split_distance_meters IS NULL) OR (split_distance_meters >= (0)::numeric))),
+    CONSTRAINT fitness_tests_surface_check CHECK (((surface)::text = ANY ((ARRAY['outdoor'::character varying, 'indoor'::character varying])::text[]))),
+    CONSTRAINT fitness_tests_test_type_check CHECK (((test_type)::text = ANY ((ARRAY['5k'::character varying, '30min'::character varying, 'cooper'::character varying])::text[])))
 );
 
 
@@ -2849,6 +2991,9 @@ CREATE TABLE public.global_settings (
     dev_tools_enabled boolean DEFAULT false NOT NULL,
     mock_data_enabled boolean DEFAULT false NOT NULL,
     enable_passkey_login boolean DEFAULT true NOT NULL,
+    mcp_oauth_enabled boolean DEFAULT false NOT NULL,
+    mcp_oauth_allowed_redirect_uris text[] DEFAULT ARRAY['https://claude.ai/api/mcp/auth_callback'::text, 'https://claude.com/api/mcp/auth_callback'::text, 'http://localhost:*'::text, 'http://127.0.0.1:*'::text, 'http://[::1]:*'::text] NOT NULL,
+    enable_version_check boolean DEFAULT true NOT NULL,
     CONSTRAINT single_row_check CHECK ((id = 1))
 );
 
@@ -2961,6 +3106,104 @@ CREATE TABLE public.injection_entries (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+
+--
+-- Name: jwks; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.jwks (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    public_key text NOT NULL,
+    private_key text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone,
+    alg text,
+    crv text
+);
+
+
+--
+-- Name: lab_markers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_markers (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    name text NOT NULL,
+    unit text DEFAULT ''::text NOT NULL,
+    ref_range_low double precision,
+    ref_range_high double precision,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_user_id uuid,
+    updated_by_user_id uuid,
+    CONSTRAINT lab_markers_ref_range_check CHECK (((ref_range_low IS NULL) OR (ref_range_high IS NULL) OR (ref_range_low <= ref_range_high)))
+);
+
+
+--
+-- Name: TABLE lab_markers; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.lab_markers IS 'A user''s own lab markers. Built-in markers are identified by key in @workspace/shared and are not stored.';
+
+
+--
+-- Name: COLUMN lab_markers.ref_range_low; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.lab_markers.ref_range_low IS 'Default lower reference bound, in the marker unit. NULL when unknown.';
+
+
+--
+-- Name: lab_results; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_results (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    marker_key text,
+    custom_marker_id uuid,
+    entry_date date DEFAULT CURRENT_DATE NOT NULL,
+    value_numeric double precision,
+    value_text text,
+    unit text DEFAULT ''::text NOT NULL,
+    ref_range_low double precision,
+    ref_range_high double precision,
+    lab_name text,
+    notes text,
+    source text DEFAULT 'manual'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_user_id uuid,
+    updated_by_user_id uuid,
+    CONSTRAINT lab_results_one_marker_check CHECK (((marker_key IS NOT NULL) <> (custom_marker_id IS NOT NULL))),
+    CONSTRAINT lab_results_ref_range_check CHECK (((ref_range_low IS NULL) OR (ref_range_high IS NULL) OR (ref_range_low <= ref_range_high))),
+    CONSTRAINT lab_results_source_check CHECK ((source = ANY (ARRAY['manual'::text, 'report'::text, 'fhir'::text]))),
+    CONSTRAINT lab_results_value_check CHECK (((value_numeric IS NOT NULL) OR (value_text IS NOT NULL)))
+);
+
+
+--
+-- Name: TABLE lab_results; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.lab_results IS 'One lab result for a built-in marker (marker_key) or a custom marker (custom_marker_id). Keeps its own unit and reference range as printed by the lab.';
+
+
+--
+-- Name: COLUMN lab_results.value_text; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.lab_results.value_text IS 'Qualitative result (e.g. Negative, Trace) when there is no number.';
+
+
+--
+-- Name: COLUMN lab_results.source; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.lab_results.source IS 'How the result got here: manual, report (imported from a PDF or photo) or fhir.';
 
 
 --
@@ -3415,6 +3658,173 @@ CREATE TABLE public.mood_entries (
 
 
 --
+-- Name: oauth_access_token; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_access_token (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    token text NOT NULL,
+    client_id text NOT NULL,
+    session_id uuid,
+    user_id uuid,
+    reference_id text,
+    authorization_code_id text,
+    resources text,
+    requested_user_info_claims text,
+    refresh_id uuid,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    revoked timestamp with time zone,
+    confirmation jsonb,
+    scopes text NOT NULL
+);
+
+
+--
+-- Name: oauth_authorization_revocation; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_authorization_revocation (
+    user_id uuid NOT NULL,
+    client_id text NOT NULL,
+    revoked_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: oauth_client; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_client (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    client_id text NOT NULL,
+    client_secret text,
+    client_discovery_id text,
+    disabled boolean DEFAULT false NOT NULL,
+    skip_consent boolean,
+    enable_end_session boolean,
+    subject_type text,
+    scopes text,
+    client_credentials_scopes text DEFAULT '[]'::text NOT NULL,
+    user_id uuid,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    name text,
+    uri text,
+    icon text,
+    contacts text,
+    tos text,
+    policy text,
+    software_id text,
+    software_version text,
+    software_statement text,
+    redirect_uris text NOT NULL,
+    post_logout_redirect_uris text,
+    backchannel_logout_uri text,
+    backchannel_logout_session_required boolean,
+    token_endpoint_auth_method text,
+    application_type text,
+    jwks text,
+    jwks_uri text,
+    grant_types text,
+    response_types text,
+    require_pkce boolean,
+    dpop_bound_access_tokens boolean DEFAULT false NOT NULL,
+    reference_id text,
+    metadata jsonb
+);
+
+
+--
+-- Name: oauth_client_assertion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_client_assertion (
+    id text NOT NULL,
+    expires_at timestamp with time zone NOT NULL
+);
+
+
+--
+-- Name: oauth_client_resource; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_client_resource (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    client_id text NOT NULL,
+    resource_id text NOT NULL,
+    metadata jsonb,
+    created_at timestamp with time zone DEFAULT now()
+);
+
+
+--
+-- Name: oauth_consent; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_consent (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    client_id text NOT NULL,
+    user_id uuid,
+    reference_id text,
+    resources text,
+    requested_user_info_claims text,
+    scopes text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: oauth_refresh_token; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_refresh_token (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    token text NOT NULL,
+    client_id text NOT NULL,
+    session_id uuid,
+    user_id uuid NOT NULL,
+    reference_id text,
+    authorization_code_id text,
+    resources text,
+    requested_user_info_claims text,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    revoked timestamp with time zone,
+    rotated_at timestamp with time zone,
+    rotation_replay_response text,
+    rotation_replay_expires_at timestamp with time zone,
+    auth_time timestamp with time zone,
+    confirmation jsonb,
+    scopes text NOT NULL
+);
+
+
+--
+-- Name: oauth_resource; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_resource (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    identifier text NOT NULL,
+    name text NOT NULL,
+    access_token_ttl integer,
+    refresh_token_ttl integer,
+    signing_algorithm text,
+    signing_key_id text,
+    allowed_scopes text,
+    custom_claims jsonb,
+    dpop_bound_access_tokens_required boolean DEFAULT false NOT NULL,
+    disabled boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    policy_version integer DEFAULT 1 NOT NULL,
+    metadata jsonb
+);
+
+
+--
 -- Name: oidc_providers; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3591,6 +4001,29 @@ CREATE TABLE public.passkey_registration_tickets (
     expires_at timestamp with time zone NOT NULL,
     used_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: plate_inventories; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.plate_inventories (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    weight_unit character varying(3) DEFAULT 'kg'::character varying NOT NULL,
+    bars jsonb DEFAULT '[]'::jsonb NOT NULL,
+    plates jsonb DEFAULT '[]'::jsonb NOT NULL,
+    collars_enabled boolean DEFAULT false NOT NULL,
+    collar_weight numeric(7,3) DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_user_id uuid,
+    updated_by_user_id uuid,
+    CONSTRAINT plate_inventories_bars_check CHECK ((jsonb_typeof(bars) = 'array'::text)),
+    CONSTRAINT plate_inventories_collar_check CHECK ((collar_weight >= (0)::numeric)),
+    CONSTRAINT plate_inventories_plates_check CHECK ((jsonb_typeof(plates) = 'array'::text)),
+    CONSTRAINT plate_inventories_unit_check CHECK (((weight_unit)::text = ANY ((ARRAY['kg'::character varying, 'lbs'::character varying])::text[])))
 );
 
 
@@ -3801,7 +4234,26 @@ CREATE TABLE public.routes (
     CONSTRAINT routes_distance_m_check CHECK ((distance_m >= (0)::double precision)),
     CONSTRAINT routes_elevation_gain_m_check CHECK (((elevation_gain_m IS NULL) OR (elevation_gain_m >= (0)::double precision))),
     CONSTRAINT routes_points_check CHECK ((jsonb_typeof(points) = 'array'::text)),
-    CONSTRAINT routes_source_check CHECK (((source)::text = ANY ((ARRAY['drawn'::character varying, 'gpx'::character varying, 'activity'::character varying])::text[])))
+    CONSTRAINT routes_source_check CHECK (((source)::text = ANY ((ARRAY['drawn'::character varying, 'gpx'::character varying, 'activity'::character varying, 'generated'::character varying])::text[])))
+);
+
+
+--
+-- Name: run_goals; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.run_goals (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    weekly_distance_km numeric(6,1),
+    race_name character varying(100),
+    race_date date,
+    race_distance_km numeric(6,2),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_run_goals_race_has_date CHECK (((race_date IS NOT NULL) OR ((race_name IS NULL) AND (race_distance_km IS NULL)))),
+    CONSTRAINT run_goals_race_distance_km_check CHECK (((race_distance_km IS NULL) OR ((race_distance_km > (0)::numeric) AND (race_distance_km <= (1000)::numeric)))),
+    CONSTRAINT run_goals_weekly_distance_km_check CHECK (((weekly_distance_km IS NULL) OR ((weekly_distance_km > (0)::numeric) AND (weekly_distance_km <= (1000)::numeric))))
 );
 
 
@@ -4075,6 +4527,7 @@ CREATE TABLE public.symptom_entries (
     impact character varying(20),
     peak_severity numeric,
     severity_timeline jsonb DEFAULT '[]'::jsonb NOT NULL,
+    impact_timeline jsonb DEFAULT '[]'::jsonb NOT NULL,
     CONSTRAINT symptom_entries_episode_order_check CHECK (((ended_at IS NULL) OR (started_at IS NULL) OR (ended_at >= started_at))),
     CONSTRAINT symptom_entries_impact_check CHECK (((impact IS NULL) OR ((impact)::text = ANY ((ARRAY['none'::character varying, 'mild'::character varying, 'moderate'::character varying, 'severe'::character varying])::text[]))))
 );
@@ -4198,6 +4651,40 @@ CREATE TABLE public.user_allergen_preferences (
     allergen_name text NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
+
+
+--
+-- Name: user_calorie_rule_history; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_calorie_rule_history (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    effective_date date NOT NULL,
+    goal_mode character varying(50),
+    goal_mode_calculation_method character varying(50),
+    goal_mode_custom_percentage integer,
+    goal_mode_weekly_change_kg double precision,
+    calorie_goal_adjustment_mode text,
+    exercise_calorie_percentage integer,
+    tdee_allow_negative_adjustment boolean,
+    calorie_safety_floor_mode text,
+    calorie_safety_floor_value integer,
+    adaptive_activity_separate boolean,
+    bmr_algorithm text,
+    activity_level character varying(20),
+    use_external_bmr boolean,
+    include_bmr_in_net_calories boolean,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE user_calorie_rule_history; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.user_calorie_rule_history IS 'The calorie settings in force from effective_date on, so a past day keeps the target it was logged against. Written by a trigger on user_preferences.';
 
 
 --
@@ -4610,17 +5097,30 @@ CREATE TABLE public.user_preferences (
     adaptive_workout_suggestions boolean DEFAULT true NOT NULL,
     active_voice_ai_service_id uuid,
     voice_input_enabled boolean DEFAULT true NOT NULL,
+    adaptive_activity_separate boolean DEFAULT false NOT NULL,
+    max_heart_rate smallint,
+    resting_heart_rate smallint,
+    hr_zone_method text DEFAULT 'percent_max'::text NOT NULL,
+    hr_zone_custom_floors smallint[],
+    goal_mode_weekly_change_kg double precision DEFAULT 0 NOT NULL,
+    hr_zone_display_count smallint DEFAULT 5 NOT NULL,
     CONSTRAINT check_energy_unit CHECK (((energy_unit)::text = ANY ((ARRAY['kcal'::character varying, 'kJ'::character varying])::text[]))),
     CONSTRAINT logging_level_check CHECK ((logging_level = ANY (ARRAY['DEBUG'::text, 'INFO'::text, 'WARN'::text, 'ERROR'::text, 'SILENT'::text]))),
     CONSTRAINT user_preferences_caffeine_half_life_range CHECK (((caffeine_half_life_hours >= 2.0) AND (caffeine_half_life_hours <= 8.0))),
     CONSTRAINT user_preferences_calorie_safety_floor_mode_check CHECK ((calorie_safety_floor_mode = ANY (ARRAY['standard'::text, 'custom'::text, 'disabled'::text]))),
     CONSTRAINT user_preferences_calorie_safety_floor_value_check CHECK (((calorie_safety_floor_value >= 800) AND (calorie_safety_floor_value <= 5000))),
     CONSTRAINT user_preferences_chart_scale_mode_check CHECK ((chart_scale_mode = ANY (ARRAY['time'::text, 'point'::text]))),
+    CONSTRAINT user_preferences_hr_zone_custom_floors_check CHECK (((hr_zone_custom_floors IS NULL) OR (array_length(hr_zone_custom_floors, 1) = 5))),
+    CONSTRAINT user_preferences_hr_zone_display_count_check CHECK ((hr_zone_display_count = ANY (ARRAY[4, 5]))),
+    CONSTRAINT user_preferences_hr_zone_method_check CHECK ((hr_zone_method = ANY (ARRAY['percent_max'::text, 'heart_rate_reserve'::text, 'custom'::text]))),
+    CONSTRAINT user_preferences_max_heart_rate_check CHECK (((max_heart_rate IS NULL) OR ((max_heart_rate >= 100) AND (max_heart_rate <= 250)))),
     CONSTRAINT user_preferences_openfoodfacts_product_language_check CHECK ((openfoodfacts_product_language ~ '^[a-z]{2}$'::text)),
+    CONSTRAINT user_preferences_resting_heart_rate_check CHECK (((resting_heart_rate IS NULL) OR ((resting_heart_rate >= 25) AND (resting_heart_rate <= 150)))),
     CONSTRAINT user_preferences_standard_drink_grams_range CHECK (((standard_drink_grams > (0)::numeric) AND (standard_drink_grams <= (50)::numeric))),
     CONSTRAINT user_preferences_time_format_check CHECK ((time_format = ANY (ARRAY['HH:mm'::text, 'h:mm A'::text, 'h:mm a'::text]))),
     CONSTRAINT user_preferences_timezone_not_empty CHECK (((timezone IS NULL) OR (timezone <> ''::text))),
-    CONSTRAINT user_preferences_weekly_alcohol_limit_positive CHECK (((weekly_alcohol_limit_g IS NULL) OR (weekly_alcohol_limit_g > (0)::numeric)))
+    CONSTRAINT user_preferences_weekly_alcohol_limit_positive CHECK (((weekly_alcohol_limit_g IS NULL) OR (weekly_alcohol_limit_g > (0)::numeric))),
+    CONSTRAINT user_preferences_weekly_weight_goal_range CHECK ((((goal_mode_weekly_change_kg >= ('-2'::integer)::double precision) AND (goal_mode_weekly_change_kg <= (2)::double precision)) AND (abs(((goal_mode_weekly_change_kg * (1000)::double precision) - round((goal_mode_weekly_change_kg * (1000)::double precision)))) < (0.000001)::double precision)))
 );
 
 
@@ -4734,6 +5234,55 @@ COMMENT ON COLUMN public.user_preferences.adaptive_workout_suggestions IS 'When 
 --
 
 COMMENT ON COLUMN public.user_preferences.voice_input_enabled IS 'Shows voice input in web and mobile chat. Disabling preserves the selected Voice configuration.';
+
+
+--
+-- Name: COLUMN user_preferences.adaptive_activity_separate; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.user_preferences.adaptive_activity_separate IS 'Opt-in for Dynamic + Adaptive: learn a baseline without recorded activity and credit daily activity separately.';
+
+
+--
+-- Name: COLUMN user_preferences.max_heart_rate; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.user_preferences.max_heart_rate IS 'Max heart rate the person set, in bpm. NULL derives it from date of birth.';
+
+
+--
+-- Name: COLUMN user_preferences.resting_heart_rate; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.user_preferences.resting_heart_rate IS 'Resting heart rate the person set, in bpm. Needed for the heart_rate_reserve method.';
+
+
+--
+-- Name: COLUMN user_preferences.hr_zone_method; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.user_preferences.hr_zone_method IS 'How the five zone floors are worked out: percent_max, heart_rate_reserve (Karvonen) or custom.';
+
+
+--
+-- Name: COLUMN user_preferences.hr_zone_custom_floors; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.user_preferences.hr_zone_custom_floors IS 'Five ascending bpm floors, zone 1 first, used when hr_zone_method is custom.';
+
+
+--
+-- Name: COLUMN user_preferences.goal_mode_weekly_change_kg; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.user_preferences.goal_mode_weekly_change_kg IS 'Signed kilograms per week for goal_mode=weekly: negative loses, positive gains, zero maintains. Stored to gram precision; does not change existing percentage goals.';
+
+
+--
+-- Name: COLUMN user_preferences.hr_zone_display_count; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.user_preferences.hr_zone_display_count IS 'Heart rate bands shown in reports and settings: 5 zones or 4 tiers (zones 1-2 merged as Light). Storage and training load always use five zones.';
 
 
 --
@@ -4972,7 +5521,9 @@ CREATE TABLE public.vitals_entries (
     device_name text,
     external_id text,
     created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    pulse_bpm smallint,
+    CONSTRAINT vitals_entries_pulse_bpm_check CHECK (((pulse_bpm IS NULL) OR ((pulse_bpm >= 25) AND (pulse_bpm <= 250))))
 );
 
 
@@ -5156,6 +5707,7 @@ CREATE TABLE public.workout_plan_template_assignments (
     sort_order integer DEFAULT 0,
     session_index integer,
     session_name character varying(100),
+    proposals_applied_at timestamp with time zone,
     CONSTRAINT chk_workout_assignment_type CHECK ((((workout_preset_id IS NOT NULL) AND (exercise_id IS NULL)) OR ((workout_preset_id IS NULL) AND (exercise_id IS NOT NULL))))
 );
 
@@ -5353,6 +5905,31 @@ CREATE SEQUENCE public.workout_presets_id_seq
 --
 
 ALTER SEQUENCE public.workout_presets_id_seq OWNED BY public.workout_presets.id;
+
+
+--
+-- Name: rate_limit_windows; Type: TABLE; Schema: system; Owner: -
+--
+
+CREATE TABLE system.rate_limit_windows (
+    key text NOT NULL,
+    window_start timestamp with time zone NOT NULL,
+    count integer NOT NULL,
+    expires_at timestamp with time zone NOT NULL
+);
+
+
+--
+-- Name: rls_policy_state; Type: TABLE; Schema: system; Owner: -
+--
+
+CREATE TABLE system.rls_policy_state (
+    id boolean DEFAULT true NOT NULL,
+    file_sha256 text NOT NULL,
+    catalog_fingerprint text NOT NULL,
+    applied_at timestamp with time zone NOT NULL,
+    CONSTRAINT rls_policy_state_id_check CHECK (id)
+);
 
 
 --
@@ -5753,6 +6330,14 @@ ALTER TABLE ONLY public.fasting_logs
 
 
 --
+-- Name: fitness_tests fitness_tests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fitness_tests
+    ADD CONSTRAINT fitness_tests_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: food_assistant_operations food_assistant_operations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5886,6 +6471,30 @@ ALTER TABLE ONLY public.health_metric_samples
 
 ALTER TABLE ONLY public.injection_entries
     ADD CONSTRAINT injection_entries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: jwks jwks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.jwks
+    ADD CONSTRAINT jwks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lab_markers lab_markers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_markers
+    ADD CONSTRAINT lab_markers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lab_results lab_results_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_results
+    ADD CONSTRAINT lab_results_pkey PRIMARY KEY (id);
 
 
 --
@@ -6025,6 +6634,110 @@ ALTER TABLE ONLY public.mood_entries
 
 
 --
+-- Name: oauth_access_token oauth_access_token_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_token
+    ADD CONSTRAINT oauth_access_token_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_access_token oauth_access_token_token_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_token
+    ADD CONSTRAINT oauth_access_token_token_key UNIQUE (token);
+
+
+--
+-- Name: oauth_authorization_revocation oauth_authorization_revocation_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_authorization_revocation
+    ADD CONSTRAINT oauth_authorization_revocation_pkey PRIMARY KEY (user_id, client_id);
+
+
+--
+-- Name: oauth_client_assertion oauth_client_assertion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_client_assertion
+    ADD CONSTRAINT oauth_client_assertion_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_client oauth_client_client_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_client
+    ADD CONSTRAINT oauth_client_client_id_key UNIQUE (client_id);
+
+
+--
+-- Name: oauth_client oauth_client_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_client
+    ADD CONSTRAINT oauth_client_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_client_resource oauth_client_resource_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_client_resource
+    ADD CONSTRAINT oauth_client_resource_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_client_resource oauth_client_resource_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_client_resource
+    ADD CONSTRAINT oauth_client_resource_unique UNIQUE (client_id, resource_id);
+
+
+--
+-- Name: oauth_consent oauth_consent_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_consent
+    ADD CONSTRAINT oauth_consent_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_refresh_token oauth_refresh_token_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_refresh_token
+    ADD CONSTRAINT oauth_refresh_token_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_refresh_token oauth_refresh_token_token_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_refresh_token
+    ADD CONSTRAINT oauth_refresh_token_token_key UNIQUE (token);
+
+
+--
+-- Name: oauth_resource oauth_resource_identifier_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_resource
+    ADD CONSTRAINT oauth_resource_identifier_key UNIQUE (identifier);
+
+
+--
+-- Name: oauth_resource oauth_resource_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_resource
+    ADD CONSTRAINT oauth_resource_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: oidc_providers oidc_providers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6105,6 +6818,22 @@ ALTER TABLE ONLY public.passkey_registration_tickets
 
 
 --
+-- Name: plate_inventories plate_inventories_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plate_inventories
+    ADD CONSTRAINT plate_inventories_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: plate_inventories plate_inventories_user_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plate_inventories
+    ADD CONSTRAINT plate_inventories_user_unique UNIQUE (user_id);
+
+
+--
 -- Name: pregnancies pregnancies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6166,6 +6895,14 @@ ALTER TABLE ONLY public.rate_limit
 
 ALTER TABLE ONLY public.routes
     ADD CONSTRAINT routes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: run_goals run_goals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.run_goals
+    ADD CONSTRAINT run_goals_pkey PRIMARY KEY (id);
 
 
 --
@@ -6425,6 +7162,14 @@ ALTER TABLE ONLY public.health_metric_samples
 
 
 --
+-- Name: run_goals uq_run_goals_user; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.run_goals
+    ADD CONSTRAINT uq_run_goals_user UNIQUE (user_id);
+
+
+--
 -- Name: run_programs uq_run_programs_user; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6454,6 +7199,22 @@ ALTER TABLE ONLY public.user_allergen_preferences
 
 ALTER TABLE ONLY public.user_allergen_preferences
     ADD CONSTRAINT user_allergen_preferences_user_id_allergen_name_key UNIQUE (user_id, allergen_name);
+
+
+--
+-- Name: user_calorie_rule_history user_calorie_rule_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_calorie_rule_history
+    ADD CONSTRAINT user_calorie_rule_history_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_calorie_rule_history user_calorie_rule_history_user_day_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_calorie_rule_history
+    ADD CONSTRAINT user_calorie_rule_history_user_day_key UNIQUE (user_id, effective_date);
 
 
 --
@@ -6737,6 +7498,22 @@ ALTER TABLE ONLY public.workout_presets
 
 
 --
+-- Name: rate_limit_windows rate_limit_windows_pkey; Type: CONSTRAINT; Schema: system; Owner: -
+--
+
+ALTER TABLE ONLY system.rate_limit_windows
+    ADD CONSTRAINT rate_limit_windows_pkey PRIMARY KEY (key);
+
+
+--
+-- Name: rls_policy_state rls_policy_state_pkey; Type: CONSTRAINT; Schema: system; Owner: -
+--
+
+ALTER TABLE ONLY system.rls_policy_state
+    ADD CONSTRAINT rls_policy_state_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: schema_migrations schema_migrations_name_key; Type: CONSTRAINT; Schema: system; Owner: -
 --
 
@@ -6957,6 +7734,13 @@ CREATE INDEX idx_day_classification_user ON public.day_classification_cache USIN
 
 
 --
+-- Name: idx_exercise_entries_calorie_link_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_exercise_entries_calorie_link_id ON public.exercise_entries USING btree (calorie_link_id) WHERE (calorie_link_id IS NOT NULL);
+
+
+--
 -- Name: idx_exercise_entries_exercise_preset_entry_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7059,6 +7843,13 @@ CREATE UNIQUE INDEX idx_exercises_user_source_source_id_unique ON public.exercis
 --
 
 CREATE INDEX idx_external_data_providers_is_public ON public.external_data_providers USING btree (is_public);
+
+
+--
+-- Name: idx_fitness_tests_user_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fitness_tests_user_date ON public.fitness_tests USING btree (user_id, test_date DESC, created_at DESC);
 
 
 --
@@ -7188,6 +7979,34 @@ CREATE INDEX idx_injection_entries_user_id ON public.injection_entries USING btr
 
 
 --
+-- Name: idx_lab_markers_user_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_lab_markers_user_name ON public.lab_markers USING btree (user_id, lower(name));
+
+
+--
+-- Name: idx_lab_results_user_custom_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_lab_results_user_custom_date ON public.lab_results USING btree (user_id, custom_marker_id, entry_date DESC) WHERE (custom_marker_id IS NOT NULL);
+
+
+--
+-- Name: idx_lab_results_user_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_lab_results_user_date ON public.lab_results USING btree (user_id, entry_date DESC);
+
+
+--
+-- Name: idx_lab_results_user_key_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_lab_results_user_key_date ON public.lab_results USING btree (user_id, marker_key, entry_date DESC) WHERE (marker_key IS NOT NULL);
+
+
+--
 -- Name: idx_meal_foods_child_meal_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7297,6 +8116,104 @@ CREATE UNIQUE INDEX idx_mindfulness_sessions_user_external ON public.mindfulness
 --
 
 CREATE INDEX idx_mindfulness_sessions_user_start ON public.mindfulness_sessions USING btree (user_id, start_time);
+
+
+--
+-- Name: idx_oauth_access_token_authorization_code_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_access_token_authorization_code_id ON public.oauth_access_token USING btree (authorization_code_id);
+
+
+--
+-- Name: idx_oauth_access_token_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_access_token_client_id ON public.oauth_access_token USING btree (client_id);
+
+
+--
+-- Name: idx_oauth_access_token_refresh_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_access_token_refresh_id ON public.oauth_access_token USING btree (refresh_id);
+
+
+--
+-- Name: idx_oauth_access_token_session_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_access_token_session_id ON public.oauth_access_token USING btree (session_id);
+
+
+--
+-- Name: idx_oauth_access_token_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_access_token_user_id ON public.oauth_access_token USING btree (user_id);
+
+
+--
+-- Name: idx_oauth_client_resource_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_client_resource_client_id ON public.oauth_client_resource USING btree (client_id);
+
+
+--
+-- Name: idx_oauth_client_resource_resource_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_client_resource_resource_id ON public.oauth_client_resource USING btree (resource_id);
+
+
+--
+-- Name: idx_oauth_client_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_client_user_id ON public.oauth_client USING btree (user_id);
+
+
+--
+-- Name: idx_oauth_consent_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_consent_client_id ON public.oauth_consent USING btree (client_id);
+
+
+--
+-- Name: idx_oauth_consent_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_consent_user_id ON public.oauth_consent USING btree (user_id);
+
+
+--
+-- Name: idx_oauth_refresh_token_authorization_code_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_refresh_token_authorization_code_id ON public.oauth_refresh_token USING btree (authorization_code_id);
+
+
+--
+-- Name: idx_oauth_refresh_token_client_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_refresh_token_client_id ON public.oauth_refresh_token USING btree (client_id);
+
+
+--
+-- Name: idx_oauth_refresh_token_session_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_refresh_token_session_id ON public.oauth_refresh_token USING btree (session_id);
+
+
+--
+-- Name: idx_oauth_refresh_token_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_oauth_refresh_token_user_id ON public.oauth_refresh_token USING btree (user_id);
 
 
 --
@@ -7423,6 +8340,13 @@ CREATE INDEX idx_shoes_user_status ON public.shoes USING btree (user_id, status)
 --
 
 CREATE INDEX idx_sleep_entries_entry_date ON public.sleep_entries USING btree (entry_date);
+
+
+--
+-- Name: idx_sleep_entries_user_date_source; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_sleep_entries_user_date_source ON public.sleep_entries USING btree (user_id, entry_date, source);
 
 
 --
@@ -7720,13 +8644,6 @@ CREATE INDEX openfoodfacts_sync_queue_user_status_idx ON public.openfoodfacts_sy
 
 
 --
--- Name: sleep_entries_user_date_source_key; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX sleep_entries_user_date_source_key ON public.sleep_entries USING btree (user_id, entry_date, source);
-
-
---
 -- Name: sleep_entry_stages_entry_natural_key_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7748,6 +8665,13 @@ CREATE UNIQUE INDEX unique_backup_settings_row ON public.backup_settings USING b
 
 
 --
+-- Name: uq_fitness_tests_exercise_entry; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_fitness_tests_exercise_entry ON public.fitness_tests USING btree (exercise_entry_id) WHERE (exercise_entry_id IS NOT NULL);
+
+
+--
 -- Name: workout_feedback_exercise_entry_unique; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7766,6 +8690,13 @@ CREATE UNIQUE INDEX workout_feedback_preset_entry_unique ON public.workout_feedb
 --
 
 CREATE INDEX workout_feedback_user_created_idx ON public.workout_feedback USING btree (user_id, created_at DESC);
+
+
+--
+-- Name: idx_rate_limit_windows_expires_at; Type: INDEX; Schema: system; Owner: -
+--
+
+CREATE INDEX idx_rate_limit_windows_expires_at ON system.rate_limit_windows USING btree (expires_at);
 
 
 --
@@ -7808,6 +8739,20 @@ CREATE TRIGGER on_public_user_created AFTER INSERT ON public."user" FOR EACH ROW
 --
 
 COMMENT ON TRIGGER on_public_user_created ON public."user" IS 'Initializes onboarding status and default external providers for new users created via Better Auth.';
+
+
+--
+-- Name: user_preferences record_calorie_rule_change; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER record_calorie_rule_change AFTER UPDATE ON public.user_preferences FOR EACH ROW WHEN ((((((((((((((((old.goal_mode)::text IS DISTINCT FROM (new.goal_mode)::text) OR ((old.goal_mode_calculation_method)::text IS DISTINCT FROM (new.goal_mode_calculation_method)::text)) OR (old.goal_mode_custom_percentage IS DISTINCT FROM new.goal_mode_custom_percentage)) OR (old.goal_mode_weekly_change_kg IS DISTINCT FROM new.goal_mode_weekly_change_kg)) OR (old.calorie_goal_adjustment_mode IS DISTINCT FROM new.calorie_goal_adjustment_mode)) OR (old.exercise_calorie_percentage IS DISTINCT FROM new.exercise_calorie_percentage)) OR (old.tdee_allow_negative_adjustment IS DISTINCT FROM new.tdee_allow_negative_adjustment)) OR (old.calorie_safety_floor_mode IS DISTINCT FROM new.calorie_safety_floor_mode)) OR (old.calorie_safety_floor_value IS DISTINCT FROM new.calorie_safety_floor_value)) OR (old.adaptive_activity_separate IS DISTINCT FROM new.adaptive_activity_separate)) OR (old.bmr_algorithm IS DISTINCT FROM new.bmr_algorithm)) OR ((old.activity_level)::text IS DISTINCT FROM (new.activity_level)::text)) OR (old.use_external_bmr IS DISTINCT FROM new.use_external_bmr)) OR (old.include_bmr_in_net_calories IS DISTINCT FROM new.include_bmr_in_net_calories))) EXECUTE FUNCTION public.record_calorie_rule_change();
+
+
+--
+-- Name: user_preferences record_calorie_rule_change_on_insert; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER record_calorie_rule_change_on_insert AFTER INSERT ON public.user_preferences FOR EACH ROW EXECUTE FUNCTION public.record_calorie_rule_change();
 
 
 --
@@ -8598,6 +9543,22 @@ ALTER TABLE ONLY public.fasting_logs
 
 
 --
+-- Name: fitness_tests fitness_tests_exercise_entry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fitness_tests
+    ADD CONSTRAINT fitness_tests_exercise_entry_id_fkey FOREIGN KEY (exercise_entry_id) REFERENCES public.exercise_entries(id) ON DELETE SET NULL;
+
+
+--
+-- Name: fitness_tests fitness_tests_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fitness_tests
+    ADD CONSTRAINT fitness_tests_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
 -- Name: user_preferences fk_default_barcode_provider; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8867,6 +9828,62 @@ ALTER TABLE ONLY public.injection_entries
 
 ALTER TABLE ONLY public.injection_entries
     ADD CONSTRAINT injection_entries_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_markers lab_markers_created_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_markers
+    ADD CONSTRAINT lab_markers_created_by_user_id_fkey FOREIGN KEY (created_by_user_id) REFERENCES public."user"(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lab_markers lab_markers_updated_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_markers
+    ADD CONSTRAINT lab_markers_updated_by_user_id_fkey FOREIGN KEY (updated_by_user_id) REFERENCES public."user"(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lab_markers lab_markers_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_markers
+    ADD CONSTRAINT lab_markers_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_results lab_results_created_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_results
+    ADD CONSTRAINT lab_results_created_by_user_id_fkey FOREIGN KEY (created_by_user_id) REFERENCES public."user"(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lab_results lab_results_custom_marker_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_results
+    ADD CONSTRAINT lab_results_custom_marker_id_fkey FOREIGN KEY (custom_marker_id) REFERENCES public.lab_markers(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_results lab_results_updated_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_results
+    ADD CONSTRAINT lab_results_updated_by_user_id_fkey FOREIGN KEY (updated_by_user_id) REFERENCES public."user"(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lab_results lab_results_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_results
+    ADD CONSTRAINT lab_results_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -9150,6 +10167,118 @@ ALTER TABLE ONLY public.meal_plan_template_assignments
 
 
 --
+-- Name: oauth_access_token oauth_access_token_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_token
+    ADD CONSTRAINT oauth_access_token_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.oauth_client(client_id) ON DELETE CASCADE;
+
+
+--
+-- Name: oauth_access_token oauth_access_token_refresh_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_token
+    ADD CONSTRAINT oauth_access_token_refresh_id_fkey FOREIGN KEY (refresh_id) REFERENCES public.oauth_refresh_token(id) ON DELETE CASCADE;
+
+
+--
+-- Name: oauth_access_token oauth_access_token_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_token
+    ADD CONSTRAINT oauth_access_token_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.session(id) ON DELETE SET NULL;
+
+
+--
+-- Name: oauth_access_token oauth_access_token_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_token
+    ADD CONSTRAINT oauth_access_token_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: oauth_authorization_revocation oauth_authorization_revocation_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_authorization_revocation
+    ADD CONSTRAINT oauth_authorization_revocation_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.oauth_client(client_id) ON DELETE CASCADE;
+
+
+--
+-- Name: oauth_authorization_revocation oauth_authorization_revocation_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_authorization_revocation
+    ADD CONSTRAINT oauth_authorization_revocation_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: oauth_client_resource oauth_client_resource_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_client_resource
+    ADD CONSTRAINT oauth_client_resource_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.oauth_client(client_id) ON DELETE CASCADE;
+
+
+--
+-- Name: oauth_client_resource oauth_client_resource_resource_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_client_resource
+    ADD CONSTRAINT oauth_client_resource_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.oauth_resource(identifier) ON DELETE CASCADE;
+
+
+--
+-- Name: oauth_client oauth_client_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_client
+    ADD CONSTRAINT oauth_client_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE SET NULL;
+
+
+--
+-- Name: oauth_consent oauth_consent_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_consent
+    ADD CONSTRAINT oauth_consent_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.oauth_client(client_id) ON DELETE CASCADE;
+
+
+--
+-- Name: oauth_consent oauth_consent_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_consent
+    ADD CONSTRAINT oauth_consent_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: oauth_refresh_token oauth_refresh_token_client_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_refresh_token
+    ADD CONSTRAINT oauth_refresh_token_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.oauth_client(client_id) ON DELETE CASCADE;
+
+
+--
+-- Name: oauth_refresh_token oauth_refresh_token_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_refresh_token
+    ADD CONSTRAINT oauth_refresh_token_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.session(id) ON DELETE SET NULL;
+
+
+--
+-- Name: oauth_refresh_token oauth_refresh_token_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_refresh_token
+    ADD CONSTRAINT oauth_refresh_token_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
 -- Name: onboarding_data onboarding_data_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9195,6 +10324,30 @@ ALTER TABLE ONLY public.passkey_registration_tickets
 
 ALTER TABLE ONLY public.passkey
     ADD CONSTRAINT passkey_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: plate_inventories plate_inventories_created_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plate_inventories
+    ADD CONSTRAINT plate_inventories_created_by_user_id_fkey FOREIGN KEY (created_by_user_id) REFERENCES public."user"(id);
+
+
+--
+-- Name: plate_inventories plate_inventories_updated_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plate_inventories
+    ADD CONSTRAINT plate_inventories_updated_by_user_id_fkey FOREIGN KEY (updated_by_user_id) REFERENCES public."user"(id);
+
+
+--
+-- Name: plate_inventories plate_inventories_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plate_inventories
+    ADD CONSTRAINT plate_inventories_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -9307,6 +10460,14 @@ ALTER TABLE ONLY public.routes
 
 ALTER TABLE ONLY public.routes
     ADD CONSTRAINT routes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: run_goals run_goals_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.run_goals
+    ADD CONSTRAINT run_goals_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -9531,6 +10692,14 @@ ALTER TABLE ONLY public.two_factor
 
 ALTER TABLE ONLY public.user_allergen_preferences
     ADD CONSTRAINT user_allergen_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_calorie_rule_history user_calorie_rule_history_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_calorie_rule_history
+    ADD CONSTRAINT user_calorie_rule_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -10120,6 +11289,69 @@ CREATE POLICY delete_policy ON public.food_entries FOR DELETE USING (public.has_
 
 
 --
+-- Name: jwks deny_all_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY deny_all_policy ON public.jwks USING (false) WITH CHECK (false);
+
+
+--
+-- Name: oauth_access_token deny_all_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY deny_all_policy ON public.oauth_access_token USING (false) WITH CHECK (false);
+
+
+--
+-- Name: oauth_authorization_revocation deny_all_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY deny_all_policy ON public.oauth_authorization_revocation USING (false) WITH CHECK (false);
+
+
+--
+-- Name: oauth_client deny_all_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY deny_all_policy ON public.oauth_client USING (false) WITH CHECK (false);
+
+
+--
+-- Name: oauth_client_assertion deny_all_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY deny_all_policy ON public.oauth_client_assertion USING (false) WITH CHECK (false);
+
+
+--
+-- Name: oauth_client_resource deny_all_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY deny_all_policy ON public.oauth_client_resource USING (false) WITH CHECK (false);
+
+
+--
+-- Name: oauth_consent deny_all_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY deny_all_policy ON public.oauth_consent USING (false) WITH CHECK (false);
+
+
+--
+-- Name: oauth_refresh_token deny_all_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY deny_all_policy ON public.oauth_refresh_token USING (false) WITH CHECK (false);
+
+
+--
+-- Name: oauth_resource deny_all_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY deny_all_policy ON public.oauth_resource USING (false) WITH CHECK (false);
+
+
+--
 -- Name: openfoodfacts_product_read_rate_limit deny_all_policy; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -10211,6 +11443,12 @@ ALTER TABLE public.family_access ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.fasting_logs ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fitness_tests; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fitness_tests ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: food_assistant_operations; Type: ROW SECURITY; Schema: public; Owner: -
@@ -10308,6 +11546,24 @@ CREATE POLICY insert_policy ON public.food_entries FOR INSERT WITH CHECK ((publi
    FROM public.meals m
   WHERE (m.id = food_entries.meal_id)))) OR ((food_id IS NULL) AND (meal_id IS NULL) AND (variant_id IS NULL)))));
 
+
+--
+-- Name: jwks; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.jwks ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_markers; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_markers ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_results; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_results ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: meal_foods; Type: ROW SECURITY; Schema: public; Owner: -
@@ -10573,6 +11829,20 @@ CREATE POLICY modify_policy ON public.injection_entries USING (public.has_medica
 
 
 --
+-- Name: lab_markers modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.lab_markers USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
+
+
+--
+-- Name: lab_results modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.lab_results USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
+
+
+--
 -- Name: meal_foods modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -10749,6 +12019,13 @@ CREATE POLICY modify_policy ON public.user_allergen_preferences USING (public.ha
 
 
 --
+-- Name: user_calorie_rule_history modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_calorie_rule_history USING ((public.authenticated_user_id() = user_id)) WITH CHECK ((public.authenticated_user_id() = user_id));
+
+
+--
 -- Name: user_custom_moods modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -10916,6 +12193,54 @@ CREATE POLICY modify_policy ON public.workout_presets USING ((public.authenticat
 ALTER TABLE public.mood_entries ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: oauth_access_token; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.oauth_access_token ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: oauth_authorization_revocation; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.oauth_authorization_revocation ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: oauth_client; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.oauth_client ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: oauth_client_assertion; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.oauth_client_assertion ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: oauth_client_resource; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.oauth_client_resource ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: oauth_consent; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.oauth_consent ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: oauth_refresh_token; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.oauth_refresh_token ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: oauth_resource; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.oauth_resource ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: onboarding_data; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -10982,6 +12307,13 @@ CREATE POLICY owner_policy ON public.cycles USING ((user_id = public.authenticat
 
 
 --
+-- Name: fitness_tests owner_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY owner_policy ON public.fitness_tests USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
+
+
+--
 -- Name: food_assistant_operations owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -11036,6 +12368,13 @@ CREATE POLICY owner_policy ON public.openfoodfacts_sync_queue USING ((user_id = 
 
 
 --
+-- Name: plate_inventories owner_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY owner_policy ON public.plate_inventories USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
+
+
+--
 -- Name: pregnancies owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -11075,6 +12414,13 @@ CREATE POLICY owner_policy ON public.pregnancy_photos USING ((user_id = public.a
 --
 
 CREATE POLICY owner_policy ON public.routes USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
+
+
+--
+-- Name: run_goals owner_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY owner_policy ON public.run_goals USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
@@ -11162,6 +12508,12 @@ CREATE POLICY owner_policy ON public.workout_plan_template_assignments USING ((E
 ALTER TABLE public.passkey_registration_tickets ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: plate_inventories; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.plate_inventories ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: pregnancies; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -11208,6 +12560,12 @@ ALTER TABLE public.rate_limit ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.routes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: run_goals; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.run_goals ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: run_programs; Type: ROW SECURITY; Schema: public; Owner: -
@@ -11346,7 +12704,7 @@ CREATE POLICY select_policy ON public.exercises FOR SELECT USING (public.has_lib
 -- Name: external_data_providers select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.external_data_providers FOR SELECT USING ((((is_public = true) AND (is_active = true) AND (public.authenticated_user_id() IS NOT NULL)) OR ((is_public = false) AND (public.current_user_id() = user_id)) OR ((is_public = false) AND (is_active = true) AND public.has_family_access(user_id, 'share_external_providers'::text) AND (EXISTS ( SELECT 1
+CREATE POLICY select_policy ON public.external_data_providers FOR SELECT USING ((((is_public = true) AND (is_active = true) AND (public.authenticated_user_id() IS NOT NULL)) OR ((is_public = false) AND (public.authenticated_user_id() = user_id)) OR ((is_public = false) AND (is_active = true) AND public.has_family_access(user_id, 'share_external_providers'::text) AND (EXISTS ( SELECT 1
    FROM public.external_provider_types ept
   WHERE (((ept.id)::text = external_data_providers.provider_type) AND (ept.is_strictly_private = false)))))));
 
@@ -11421,6 +12779,20 @@ CREATE POLICY select_policy ON public.health_metric_samples FOR SELECT USING (pu
 --
 
 CREATE POLICY select_policy ON public.injection_entries FOR SELECT USING (public.has_medication_read_access(user_id));
+
+
+--
+-- Name: lab_markers select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.lab_markers FOR SELECT USING (public.has_checkin_read_access(user_id));
+
+
+--
+-- Name: lab_results select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.lab_results FOR SELECT USING (public.has_checkin_read_access(user_id));
 
 
 --
@@ -11591,6 +12963,13 @@ CREATE POLICY select_policy ON public.symptom_free_days FOR SELECT USING (public
 --
 
 CREATE POLICY select_policy ON public.user_allergen_preferences FOR SELECT USING (public.has_diary_read_access(user_id));
+
+
+--
+-- Name: user_calorie_rule_history select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_calorie_rule_history FOR SELECT USING (public.has_profile_read_access(user_id));
 
 
 --
@@ -11817,6 +13196,12 @@ CREATE POLICY update_policy ON public.food_entries FOR UPDATE USING (public.has_
 --
 
 ALTER TABLE public.user_allergen_preferences ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: user_calorie_rule_history; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_calorie_rule_history ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: user_custom_moods; Type: ROW SECURITY; Schema: public; Owner: -
@@ -12337,6 +13722,13 @@ GRANT ALL ON FUNCTION public.queue_openfoodfacts_variant_updates() TO sparky_app
 
 
 --
+-- Name: FUNCTION record_calorie_rule_change(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.record_calorie_rule_change() TO sparky_app;
+
+
+--
 -- Name: FUNCTION refresh_openfoodfacts_sync_queue(changed_food_ids uuid[]); Type: ACL; Schema: public; Owner: -
 --
 
@@ -12673,6 +14065,13 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fasting_logs TO sparky_app;
 
 
 --
+-- Name: TABLE fitness_tests; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fitness_tests TO sparky_app;
+
+
+--
 -- Name: TABLE food_assistant_operations; Type: ACL; Schema: public; Owner: -
 --
 
@@ -12761,6 +14160,27 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.health_metric_samples TO spark
 --
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.injection_entries TO sparky_app;
+
+
+--
+-- Name: TABLE jwks; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.jwks TO sparky_app;
+
+
+--
+-- Name: TABLE lab_markers; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.lab_markers TO sparky_app;
+
+
+--
+-- Name: TABLE lab_results; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.lab_results TO sparky_app;
 
 
 --
@@ -12876,6 +14296,62 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.mood_entries TO sparky_app;
 
 
 --
+-- Name: TABLE oauth_access_token; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.oauth_access_token TO sparky_app;
+
+
+--
+-- Name: TABLE oauth_authorization_revocation; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.oauth_authorization_revocation TO sparky_app;
+
+
+--
+-- Name: TABLE oauth_client; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.oauth_client TO sparky_app;
+
+
+--
+-- Name: TABLE oauth_client_assertion; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.oauth_client_assertion TO sparky_app;
+
+
+--
+-- Name: TABLE oauth_client_resource; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.oauth_client_resource TO sparky_app;
+
+
+--
+-- Name: TABLE oauth_consent; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.oauth_consent TO sparky_app;
+
+
+--
+-- Name: TABLE oauth_refresh_token; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.oauth_refresh_token TO sparky_app;
+
+
+--
+-- Name: TABLE oauth_resource; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.oauth_resource TO sparky_app;
+
+
+--
 -- Name: TABLE oidc_providers; Type: ACL; Schema: public; Owner: -
 --
 
@@ -12939,6 +14415,13 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.passkey_registration_tickets T
 
 
 --
+-- Name: TABLE plate_inventories; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.plate_inventories TO sparky_app;
+
+
+--
 -- Name: TABLE pregnancies; Type: ACL; Schema: public; Owner: -
 --
 
@@ -12992,6 +14475,13 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.rate_limit TO sparky_app;
 --
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.routes TO sparky_app;
+
+
+--
+-- Name: TABLE run_goals; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.run_goals TO sparky_app;
 
 
 --
@@ -13097,6 +14587,13 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public."user" TO sparky_app;
 --
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_allergen_preferences TO sparky_app;
+
+
+--
+-- Name: TABLE user_calorie_rule_history; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_calorie_rule_history TO sparky_app;
 
 
 --

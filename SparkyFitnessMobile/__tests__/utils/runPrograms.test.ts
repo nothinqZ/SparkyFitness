@@ -4,11 +4,17 @@ import {
   planMinutes,
   PICKER_PROGRAMS,
   programActivity,
+  programOutline,
   programStatus,
   programVersions,
   RUN_PROGRAMS,
   isValidIntervalPlan,
+  isZone2Program,
+  isZoneCheckWorkout,
+  planHasZone2,
+  runMinutes,
   runProgramWorkoutSchema,
+  ZONE2_CHECK_WEEKS,
 } from '@workspace/shared';
 
 const program = findProgram('beginner5k')!;
@@ -91,6 +97,8 @@ describe('every program', () => {
       'gentle5k',
       'beginner5k',
       'fiveToTenK',
+      'zone2Base',
+      'zone2Base4',
       'faster5k',
       'beginner10k',
       'faster10k',
@@ -115,6 +123,8 @@ describe('every program', () => {
     ['gentle5k', 12, 36],
     ['beginner5k', 9, 27],
     ['fiveToTenK', 8, 24],
+    ['zone2Base', 10, 30],
+    ['zone2Base4', 10, 40],
     ['faster5k', 6, 18],
     ['beginner10k', 12, 36],
     ['faster10k', 8, 24],
@@ -181,6 +191,7 @@ describe('every program', () => {
 
   test('the four-run and longer plans keep the long run under half the week', () => {
     for (const id of [
+      'zone2Base4',
       'tenKToHalf4',
       'halfMarathon4',
       'fasterHalf4',
@@ -317,13 +328,14 @@ describe('program versions', () => {
 });
 
 describe('the walking program', () => {
-  test('is recorded as a walk, and is fast and easy steps with no running wording', () => {
+  test('is recorded as a walk, with brisk and easy steps and no running wording', () => {
     const p = findProgram('walkFit')!;
     expect(p.activity).toBe('walk');
     expect(programActivity('walkFit')).toBe('walk');
     expect(programActivity('beginner5k')).toBe('run');
     expect(programActivity('gone')).toBe('run');
-    for (const w of p.workouts) expect(w.plan.style).toBe('fastEasy');
+    for (const w of p.workouts) expect(w.plan.style).toBe('briskWalk');
+    expect(runProgramWorkoutSchema.parse(p.workouts[0])).toEqual(p.workouts[0]);
   });
 
   test('builds to half an hour of brisk walking and never repeats the first week', () => {
@@ -337,8 +349,154 @@ describe('the walking program', () => {
     expect(brisk(p.workouts.length - 1)).toBeGreaterThan(brisk(0));
   });
 
+  test('the card quotes brisk minutes for a walk and running minutes for a run', () => {
+    const outline = (id: string) => programOutline(findProgram(id)!);
+    expect(outline('walkFit')).toEqual({
+      firstWeek: [12, 12, 12],
+      peakRunMinutes: 30,
+    });
+    expect(outline('walk10k')).toMatchObject({
+      firstWeek: [30, 30, 40],
+      peakRunMinutes: 105,
+    });
+    expect(outline('halfMarathon')).toEqual({
+      firstWeek: [30, 30, 50],
+      peakRunMinutes: 115,
+    });
+    expect(outline('halfMarathon4').peakRunMinutes).toBe(115);
+    expect(outline('tenKToHalf4').peakRunMinutes).toBe(115);
+    expect(outline('fasterHalf').peakRunMinutes).toBe(110);
+    expect(outline('fasterHalf4').peakRunMinutes).toBe(110);
+    expect(outline('beginnerMarathon4').peakRunMinutes).toBe(150);
+    expect(outline('advancedMarathon').peakRunMinutes).toBe(180);
+    const easyDay = findProgram('faster5k')!.workouts[1].plan;
+    expect(runMinutes(easyDay)).toBe(30);
+    expect(runMinutes(findProgram('walkFit')!.workouts[0].plan)).toBe(12);
+  });
+
+  test('beginner 10k eases off in week 10 and still peaks at an hour', () => {
+    const p = findProgram('beginner10k')!;
+    const longest = (week: number) =>
+      Math.max(
+        ...p.workouts
+          .filter((w) => w.week === week)
+          .map((w) =>
+            w.plan.steps
+              .filter((s) => s.kind === 'work')
+              .reduce((sum, s) => sum + s.seconds, 0)
+          )
+      );
+    expect(longest(8)).toBe(40 * 60);
+    expect(longest(9)).toBe(30 * 60);
+    expect(longest(10)).toBe(50 * 60);
+    expect(longest(11)).toBe(60 * 60);
+  });
+
   test('a stored program carries the activity', () => {
     const status = programStatus({ programId: 'walkFit', next: 0 })!;
     expect(status.program.activity).toBe('walk');
+  });
+});
+
+describe('Zone 2 base', () => {
+  const three = findProgram('zone2Base')!;
+  const four = findProgram('zone2Base4')!;
+  const zoneMinutes = (p: typeof three, week: number) =>
+    p.workouts
+      .filter((w) => w.week === week)
+      .flatMap((w) => w.plan.steps)
+      .filter((s) => s.effort === 'zone2')
+      .reduce((sum, s) => sum + s.seconds, 0) / 60;
+
+  test('is a three-run program with a four-run version the picker offers', () => {
+    expect(three.workoutsPerWeek).toBe(3);
+    expect(four.workoutsPerWeek).toBe(4);
+    expect(four.variantOf).toBe('zone2Base');
+    expect(PICKER_PROGRAMS.map((p) => p.id)).toContain('zone2Base');
+    expect(PICKER_PROGRAMS.map((p) => p.id)).not.toContain('zone2Base4');
+    expect(programVersions('zone2Base').map((p) => p.id)).toEqual([
+      'zone2Base',
+      'zone2Base4',
+    ]);
+    expect(isZone2Program('zone2Base4')).toBe(true);
+    expect(isZone2Program('beginner5k')).toBe(false);
+  });
+
+  test.each(['zone2Base', 'zone2Base4'])(
+    '%s runs every workout by Zone 2 effort, not pace, with no hard work',
+    (id) => {
+      const p = findProgram(id)!;
+      for (const w of p.workouts) {
+        expect(isValidIntervalPlan(w.plan)).toBe(true);
+        expect(planHasZone2(w.plan)).toBe(true);
+        expect(w.plan.style).toBe('runWalk');
+        for (const step of w.plan.steps) {
+          expect(step.pace).toBeUndefined();
+          expect(['tempo', 'marathon', 'hill']).not.toContain(step.effort);
+        }
+      }
+    }
+  );
+
+  test('time in zone grows, with easier fourth and eighth weeks', () => {
+    for (const p of [three, four]) {
+      const totals = Array.from({ length: p.weeks }, (_, w) =>
+        zoneMinutes(p, w)
+      );
+      expect(totals[3]).toBeLessThan(totals[2]);
+      expect(totals[7]).toBeLessThan(totals[6]);
+      expect(totals[8]).toBeGreaterThan(totals[0] * 1.4);
+      // Outside the easier weeks nothing steps up by more than 15 percent.
+      for (let w = 1; w < p.weeks; w++) {
+        if (w === 4 || w === 8) continue;
+        expect(totals[w]).toBeLessThanOrEqual(totals[w - 1] * 1.15);
+      }
+    }
+  });
+
+  test('has one longer run a week, the last workout, under half the week', () => {
+    for (const p of [three, four]) {
+      for (let w = 0; w < p.weeks; w++) {
+        const days = p.workouts.filter((x) => x.week === w);
+        const minutes = days.map((d) => runMinutes(d.plan));
+        expect(minutes[minutes.length - 1]).toBe(Math.max(...minutes));
+        expect(
+          Math.max(...minutes) / minutes.reduce((a, b) => a + b, 0)
+        ).toBeLessThan(0.5);
+      }
+    }
+    expect(
+      Math.max(...three.workouts.map((w) => runMinutes(w.plan)))
+    ).toBeLessThanOrEqual(75);
+  });
+
+  test('strides, where present, are a few short efforts at the end of an easy run', () => {
+    const withStrides = three.workouts.filter((w) =>
+      w.plan.steps.some((s) => s.effort === 'stride')
+    );
+    expect(withStrides.map((w) => [w.week, w.day])).toEqual([
+      [5, 0],
+      [6, 0],
+      [8, 0],
+    ]);
+    for (const w of withStrides) {
+      const strides = w.plan.steps.filter((s) => s.effort === 'stride');
+      expect(strides).toHaveLength(4);
+      expect(strides.every((s) => s.seconds === 20)).toBe(true);
+      expect(w.plan.steps[1].effort).toBe('zone2');
+    }
+  });
+
+  test('the middle run of weeks 4, 8 and 10 is the zone check', () => {
+    expect(ZONE2_CHECK_WEEKS).toEqual([3, 7, 9]);
+    for (const p of [three, four]) {
+      const checks = p.workouts.filter((w) => isZoneCheckWorkout(p.id, w));
+      expect(checks.map((w) => [w.week, w.day])).toEqual([
+        [3, 1],
+        [7, 1],
+        [9, 1],
+      ]);
+    }
+    expect(isZoneCheckWorkout('beginner5k', { week: 3, day: 1 })).toBe(false);
   });
 });

@@ -125,7 +125,7 @@ export function drainQuickActionNavigation(): void {
   for (const run of pending) run();
 }
 
-function whenNavigationReady(run: () => void): void {
+export function whenNavigationReady(run: () => void): void {
   if (navigationRef.isReady()) {
     run();
     return;

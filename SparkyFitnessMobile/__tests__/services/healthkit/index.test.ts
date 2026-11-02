@@ -940,6 +940,51 @@ describe('readHealthRecords', () => {
       );
     });
 
+    test('attaches the rating Apple Health holds for the workout, matched by its start and end', async () => {
+      await initHealthConnect();
+
+      const workout = (start: string, end: string) => ({
+        startDate: start,
+        endDate: end,
+        workoutActivityType: 37,
+        duration: 3600,
+        totalEnergyBurned: { unit: 'kcal', quantity: 500 },
+        totalDistance: { unit: 'm', quantity: 5000 },
+        getStatistic: jest.fn().mockResolvedValue(undefined),
+      });
+      mockQueryWorkoutSamples.mockResolvedValue([
+        workout('2024-01-15T08:00:00Z', '2024-01-15T09:00:00Z'),
+        workout('2024-01-15T17:00:00Z', '2024-01-15T17:30:00Z'),
+      ]);
+      mockQueryQuantitySamples.mockImplementation((identifier: string) =>
+        Promise.resolve(
+          identifier === 'HKQuantityTypeIdentifierWorkoutEffortScore'
+            ? [
+                {
+                  startDate: new Date('2024-01-15T08:00:00Z'),
+                  endDate: new Date('2024-01-15T09:00:00Z'),
+                  quantity: 8,
+                },
+              ]
+            : []
+        )
+      );
+
+      const result = (await readHealthRecords(
+        'Workout',
+        new Date('2024-01-15T00:00:00Z'),
+        new Date('2024-01-15T23:59:59Z')
+      )) as { startTime: string; telemetry?: { workout_effort?: number } }[];
+
+      const rated = result.find((r) => r.startTime === '2024-01-15T08:00:00Z');
+      const unrated = result.find(
+        (r) => r.startTime === '2024-01-15T17:00:00Z'
+      );
+      expect(rated?.telemetry?.workout_effort).toBe(8);
+      expect(unrated?.telemetry?.workout_effort).toBeUndefined();
+      mockQueryQuantitySamples.mockReset();
+    });
+
     test('sets telemetry.elapsed_time_seconds from an object-shaped duration (regression: real HealthKit workouts report duration as {unit, quantity}, not a bare number)', async () => {
       await initHealthConnect();
 
@@ -1596,6 +1641,44 @@ describe('readHealthRecords', () => {
       );
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('MindfulnessSession records', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockIsHealthDataAvailable.mockResolvedValue(true);
+    });
+
+    test('keeps uuid, source and timezone for each session', async () => {
+      await initHealthConnect();
+
+      mockQueryCategorySamples.mockResolvedValue([
+        {
+          uuid: 'hk-uuid-1',
+          startDate: '2024-01-15T08:00:00Z',
+          endDate: '2024-01-15T08:15:00Z',
+          value: 0,
+          metadataTimeZone: 'Europe/Berlin',
+          sourceRevision: { source: { bundleIdentifier: 'com.calm.app' } },
+        },
+      ]);
+
+      const result = await readHealthRecords(
+        'MindfulnessSession',
+        new Date('2024-01-15T00:00:00Z'),
+        new Date('2024-01-15T23:59:59Z')
+      );
+
+      expect(result).toEqual([
+        {
+          uuid: 'hk-uuid-1',
+          startTime: '2024-01-15T08:00:00Z',
+          endTime: '2024-01-15T08:15:00Z',
+          metadata: { HKTimeZone: 'Europe/Berlin' },
+          sourceBundleId: 'com.calm.app',
+        },
+      ]);
     });
   });
 

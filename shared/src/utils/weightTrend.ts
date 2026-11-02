@@ -39,22 +39,19 @@ export interface GoalForecast {
   daysRemaining: number;
 }
 
-/**
- * Smoothed trend for each logged day. Duplicate days keep the last entry and
- * non-finite or non-positive weights are ignored. Output is sorted by date.
- */
-export function computeWeightTrend(
-  samples: readonly WeightSample[]
-): WeightTrendPoint[] {
+function sortedLogged(samples: readonly WeightSample[]): WeightSample[] {
   const byDay = new Map<string, number>();
   for (const s of samples) {
     if (Number.isFinite(s.weight) && s.weight > 0) byDay.set(s.date, s.weight);
   }
-  const logged = [...byDay.entries()]
+  return [...byDay.entries()]
     .map(([date, weight]) => ({ date, weight }))
     .sort((a, b) => compareDays(a.date, b.date));
-  if (logged.length === 0) return [];
+}
 
+/** Trend for every calendar day from `logged[0]` to the last entry (`logged` sorted, deduped). */
+function dailyTrendOf(logged: readonly WeightSample[]): number[] {
+  if (logged.length === 0) return [];
   const first = logged[0]!.date;
   const span = daysBetween(first, logged[logged.length - 1]!.date);
 
@@ -72,16 +69,41 @@ export function computeWeightTrend(
     }
   }
 
-  const trendByIdx = daily.map((_, i) => {
+  return daily.map((_, i) => {
     const from = Math.max(0, i - TREND_WINDOW_DAYS + 1);
     let sum = 0;
     for (let j = from; j <= i; j++) sum += daily[j]!;
     return sum / (i - from + 1);
   });
+}
 
+/**
+ * Smoothed trend for each logged day. Duplicate days keep the last entry and
+ * non-finite or non-positive weights are ignored. Output is sorted by date.
+ */
+export function computeWeightTrend(
+  samples: readonly WeightSample[]
+): WeightTrendPoint[] {
+  const logged = sortedLogged(samples);
+  if (logged.length === 0) return [];
+  const first = logged[0]!.date;
+  const trendByIdx = dailyTrendOf(logged);
   return logged.map((s) => ({
     ...s,
     trend: trendByIdx[daysBetween(first, s.date)]!,
+  }));
+}
+
+/** The smoothed trend on every calendar day from the first to the last weigh-in. */
+export function computeDailyWeightTrend(
+  samples: readonly WeightSample[]
+): { date: string; trend: number }[] {
+  const logged = sortedLogged(samples);
+  if (logged.length === 0) return [];
+  const first = logged[0]!.date;
+  return dailyTrendOf(logged).map((trend, i) => ({
+    date: addDays(first, i),
+    trend,
   }));
 }
 

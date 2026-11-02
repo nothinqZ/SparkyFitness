@@ -3,6 +3,9 @@ import { paginationSchema } from './Pagination.api.zod.ts';
 import { exerciseModalitySchema } from './Exercises.api.zod.ts';
 import { workoutFormatSchema } from './WorkoutPresets.api.zod.ts';
 import { gpsTrackPointSchema } from '../database/ExerciseEntryGpsPoints.zod.ts';
+import { CALORIE_LINK_RESOLUTIONS } from '../../utils/exerciseCalorieLink.ts';
+
+export const calorieLinkResolutionSchema = z.enum(CALORIE_LINK_RESOLUTIONS);
 
 // --- Query contracts ---
 
@@ -345,16 +348,44 @@ export const attachExerciseEntryWatchTelemetryRequestSchema = z
      * nothing on the entry to line up with.
      */
     durationMinutes: z.number().nonnegative().optional(),
+    /**
+     * Apple's time-in-zone for the whole workout, from the finished
+     * HKWorkout. When these five zones are usable they are stored as the
+     * device's zones and the series is not bucketed again. One post per
+     * workout: the server clears zones on the other exercises of the same
+     * session so the chart is not counted twice.
+     */
+    appleZones: z
+      .array(
+        z.object({
+          index: z.number().int().min(0).max(20).optional(),
+          minimumBpm: z.number().min(0).max(300).nullable().optional(),
+          maximumBpm: z.number().min(0).max(300).nullable().optional(),
+          seconds: z
+            .number()
+            .nonnegative()
+            .max(7 * 24 * 60 * 60),
+        })
+      )
+      .max(8)
+      .optional(),
+    /**
+     * Stride length of the entry, in cm; null clears it. Telemetry only: it
+     * leaves the duration and everything else on the entry alone.
+     */
+    strideLengthCm: z.number().positive().max(500).nullable().optional(),
   })
   .strict()
   .refine(
     (body) =>
       body.hrSamples !== undefined ||
       body.activeEnergyKcal !== undefined ||
-      (body.durationMinutes !== undefined && body.durationMinutes > 0),
+      body.strideLengthCm !== undefined ||
+      (body.durationMinutes !== undefined && body.durationMinutes > 0) ||
+      (body.appleZones !== undefined && body.appleZones.length > 0),
     {
       message:
-        'At least one of hrSamples, activeEnergyKcal, or durationMinutes is required.',
+        'At least one of hrSamples, activeEnergyKcal, durationMinutes, strideLengthCm, or appleZones is required.',
     }
   );
 
@@ -406,6 +437,14 @@ export const createExerciseEntryRequestSchema = z
     weather_humidity_percentage: z.coerce.number().nullable().optional(),
     gear_name: z.string().nullable().optional(),
     gear_external_id: z.string().nullable().optional(),
+    workout_effort: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .nullable()
+      .optional(),
+    calories_applied: z.coerce.number().min(0).nullable().optional(),
     steps: z.coerce.number().nullable().optional(),
     water_estimated: z.coerce.number().nullable().optional(),
     moving_time_seconds: z.coerce.number().nullable().optional(),
@@ -490,7 +529,13 @@ export const exerciseEntryResponseSchema = z.object({
   weather_humidity_percentage: z.number().nullable().optional(),
   gear_name: z.string().nullable().optional(),
   gear_external_id: z.string().nullable().optional(),
+  workout_effort: z.number().int().min(1).max(10).nullable().optional(),
   shoe_id: z.string().nullable().optional(),
+  /** Calories the daily balance counts instead of `calories_burned`; null counts the estimate. */
+  calories_applied: z.number().nullable().optional(),
+  /** Shared by the two sides of a calorie link; null when not linked. */
+  calorie_link_id: z.string().nullable().optional(),
+  calorie_link_resolution: calorieLinkResolutionSchema.nullable().optional(),
   water_estimated: z.number().nullable().optional(),
   moving_time_seconds: z.number().nullable().optional(),
   elapsed_time_seconds: z.number().nullable().optional(),
@@ -744,6 +789,74 @@ export const setExerciseEntryDistanceRequestSchema = z
   .strict();
 export type SetExerciseEntryDistanceRequest = z.infer<
   typeof setExerciseEntryDistanceRequestSchema
+>;
+
+// How hard the person rated a finished workout, 1 (easy) to 10 (maximal).
+// A strength session stores it on every exercise entry of the session.
+// --- Calorie link: one session logged here and synced from a watch (#2353) ---
+
+export const setCalorieLinkRequestSchema = z
+  .object({
+    synced_entry_id: z.string().uuid(),
+    resolution: calorieLinkResolutionSchema,
+    /** Calories the session counts in total; required for `custom`. */
+    custom_calories: z.number().min(0).max(100000).optional(),
+  })
+  .strict()
+  .refine(
+    (body) => body.resolution !== 'custom' || body.custom_calories != null,
+    { message: 'custom_calories is required for a custom resolution.' }
+  );
+
+/** What each entry of the linked workout now counts, so a client can update its copy. */
+export const setCalorieLinkResponseSchema = z.object({
+  applied: z.array(
+    z.object({
+      entry_id: z.string(),
+      calories_applied: z.number().nullable(),
+    })
+  ),
+});
+
+export const calorieLinkCandidateSchema = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  source: z.string(),
+  /** Local start, `HH:MM`; null when the workout has no start time. */
+  start_time: z.string().nullable(),
+  duration_minutes: z.number(),
+  calories_burned: z.number(),
+  /** Why it looks like the same session; null when the person must decide. */
+  match: z.enum(['sets_within', 'overlap']).nullable(),
+});
+
+export const calorieLinkSuggestionsResponseSchema = z.object({
+  /** Sum of the SparkyFitness workout's own estimates. */
+  manual_total_calories: z.number(),
+  link: z
+    .object({
+      resolution: calorieLinkResolutionSchema,
+      synced_entry_id: z.string().nullable(),
+    })
+    .nullable(),
+  candidates: z.array(calorieLinkCandidateSchema),
+});
+
+export const setExerciseEntryEffortRequestSchema = z
+  .object({
+    rating: z.number().int().min(1).max(10),
+  })
+  .strict();
+export type SetCalorieLinkRequest = z.infer<typeof setCalorieLinkRequestSchema>;
+export type SetCalorieLinkResponse = z.infer<
+  typeof setCalorieLinkResponseSchema
+>;
+export type CalorieLinkCandidate = z.infer<typeof calorieLinkCandidateSchema>;
+export type CalorieLinkSuggestionsResponse = z.infer<
+  typeof calorieLinkSuggestionsResponseSchema
+>;
+export type SetExerciseEntryEffortRequest = z.infer<
+  typeof setExerciseEntryEffortRequestSchema
 >;
 
 // Distance against active time for an entry with no route, for its pace chart.

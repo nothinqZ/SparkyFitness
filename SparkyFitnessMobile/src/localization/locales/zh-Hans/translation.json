@@ -1014,7 +1014,8 @@
       "logAsTaken": "记录为已服用",
       "skip": "跳过",
       "logAllAsTaken": "全部标记为已服用",
-      "skipAll": "全部跳过"
+      "skipAll": "全部跳过",
+      "remindInMinutes": "{{minutes}} 分钟后提醒"
     },
     "permission": {
       "notificationsOff": "通知已关闭",
@@ -1339,7 +1340,9 @@
       "personalRecords": "个人纪录",
       "personalRecordsSubtitle": "你最佳的 1 公里、5 公里、10 公里等",
       "equipment": "装备",
-      "equipmentSubtitle": "跑鞋与其他装备"
+      "equipmentSubtitle": "跑鞋与其他装备",
+      "routes": "路线",
+      "routesSubtitle": "绘制、导入并保存路线以供跟随"
     },
     "sleep": "睡眠",
     "healthTrendsSettings": "健康趋势",
@@ -1380,7 +1383,10 @@
     "runProgramWorkout": "训练",
     "runProgramEdit": "编辑计划",
     "runProgramNew": "新计划",
-    "runProgramRace": "规划比赛"
+    "runProgramRace": "规划比赛",
+    "activityShare": "分享活动",
+    "routes": "路线",
+    "routeDraw": "绘制路线"
   },
   "healthCategories": {
     "Common": "常用",
@@ -1844,7 +1850,9 @@
     "waterReminderEndAccessibility": "结束时间，{{time}}",
     "waterReminderInvalidWindow": "结束时间必须晚于开始时间。",
     "consolidateReminders": "合并提醒",
-    "consolidateRemindersSubtitle": "将安排在同一时间的药物合并为单个通知。"
+    "consolidateRemindersSubtitle": "将安排在同一时间的药物合并为单个通知。",
+    "medicationSnoozeInterval": "稍后提醒",
+    "snoozeMinutesOption": "{{minutes}} 分钟"
   },
   "workoutSettings": {
     "title": "训练设置",
@@ -2852,7 +2860,17 @@
   "exerciseHistory": {
     "noSetData": "无组数据",
     "loadError": "无法加载历史。",
-    "empty": "暂无已记录的训练。"
+    "empty": "暂无已记录的训练。",
+    "columns": {
+      "set": "组",
+      "weightReps": "重量与次数",
+      "timeDistance": "时间与距离",
+      "time": "时间",
+      "weightDistance": "重量与距离",
+      "weightTime": "重量与时间",
+      "reps": "次数",
+      "rpe": "RPE"
+    }
   },
   "foodFormPersistence": {
     "discardTitle": "放弃未保存的等量规格？",
@@ -4384,6 +4402,15 @@
       "targetGoal": "每日目标",
       "averageVsTarget": "平均值 vs 目标",
       "percentOfGoal": "目标的 {{percent}}%"
+    },
+    "topSources": {
+      "title": "主要来源",
+      "allMeals": "所有餐点",
+      "clearDay": "显示整个期间",
+      "empty": "此选择没有记录 {{nutrient}}",
+      "loadFailed": "无法加载食物来源",
+      "share": "{{percent}}%",
+      "servingAmount": "{{quantity}} {{unit}}"
     }
   },
   "workoutPresetDetail": {
@@ -4610,7 +4637,7 @@
       "goalDate": "目标日期",
       "steady": "稳定",
       "awayFromGoal": "偏离目标",
-      "tooFar": "目标太远，无法显示进度。"
+      "tooFar": "目标以超2年太远，无法显示进度"
     },
     "steps": {
       "title": "步数",
@@ -4663,8 +4690,8 @@
     "noTrendData": "无足够数据显示趋势。",
     "vo2max": {
       "title": "VO2 Max",
-      "loadFailed": "无法加载 VO2 Max 数据。",
-      "empty": "此期间没有 VO2 Max 数据。"
+      "loadFailed": "无法加载 VO2 Max 数据",
+      "empty": "此期间没有 VO2 Max 数据"
     }
   },
   "exerciseLibrary": {
@@ -5206,7 +5233,7 @@
       "itching": "发痒",
       "fever": "发烧"
     },
-    "noHistoryForDay": "此日期无记录",
+    "noHistoryForDay": "此日期无记录.",
     "chart": {
       "summary_other": "发作期间的严重程度，{{count}} 次读数"
     },
@@ -6019,7 +6046,8 @@
     "logWater": "记录饮水",
     "fasting": "断食",
     "waterLogged": "已记录饮水",
-    "waterFailed": "无法记录饮水"
+    "waterFailed": "无法记录饮水",
+    "logWaterInBackground": "无需打开应用即可记录饮水"
   },
   "watchSettings": {
     "gesturesTitle": "手势",
@@ -6047,7 +6075,7 @@
     "setInputCrown": "数码表冠",
     "nutrientsDescription": "在手表的卡路里环下方选择要显示的营养素，并拖动设置顺序。每一项都会显示今日的摄入量与目标的对比。",
     "rpeTitle": "RPE",
-    "rpeSubtitle": "在运动摘要中显示 RPE。"
+    "rpeSubtitle": "在手表上记录一组动作后，转动数码表冠来选择吃力程度（1 至 10），然后点击 “保存”，或点击 “跳过”。"
   },
   "guidedWorkout": {
     "cue": {
@@ -6120,7 +6148,8 @@
       "tooHard": "维持重量：上次感觉太难。",
       "tooHardRepeated": "今日减轻：连续两次训练都觉得太难。",
       "highEffort": "维持重量：你最后的组数接近最大努力。",
-      "tooEasyRepeated": "加重一阶：连续两次训练都太轻松。"
+      "tooEasyRepeated": "加重一阶：连续两次训练都太轻松。",
+      "lowEffort": "加重一点：你最近的组都记录为轻松。"
     },
     "declined": "使用你的惯常建议。",
     "variation": "你最近多数训练都做过这个。试试变化版？",
@@ -6233,7 +6262,11 @@
       "perKm": "/公里",
       "perMile": "/英里",
       "exportGpx": "导出 GPX",
-      "exportGpxFailed": "无法导出 GPX"
+      "exportGpxFailed": "无法导出 GPX",
+      "cadence": "平均步频",
+      "spm": "{{value}} spm",
+      "strideLength": "步幅",
+      "shareImage": "以图片分享"
     },
     "consistency": {
       "title": "训练一致性",
@@ -6259,16 +6292,16 @@
       "weekA11y": "周负荷 {{load}}",
       "fourWeeksAgo": "4 周前",
       "last7": "最近 7 天",
-      "loadFailed": "无法加载训练负荷",
-      "takeRest": "休息一天",
-      "ready": "已恢复",
+      "loadFailed": "无法加载训练负荷.",
+      "takeRest": "在下次高强度训练前，休息一天或做一次轻松的训练。",
+      "ready": "你已充分休息，准备好迎接一堂好的训练。",
       "status": {
-        "noData": "无数据",
-        "learning": "仍在学习",
-        "low": "低于平时",
-        "steady": "与平时一致",
-        "high": "高于平时",
-        "spike": "急升"
+        "noData": "过去四周没有记录任何训练。",
+        "learning": "仍在学习你的正常水平。持续记录，之后就会开始比较你的各周。",
+        "low": "比平时轻。是稍微增加一点，或享受休息的好时机。",
+        "steady": "与你的平时训练一致。稳步累积。",
+        "high": "比平时高。一周尚可，但接下来几次请保持轻松。",
+        "spike": "比平时大幅上升。这么快增加负荷会提高受伤风险，请放缓。"
       }
     },
     "paceZones": {
@@ -6467,7 +6500,7 @@
     "loadFailed": "无法加载你的鞋。",
     "notFound": "找不到此鞋。",
     "assignFailed": "无法指派鞋",
-    "empty": "暂无跑鞋。添加一双，然后在跑步时选用它，开始累计里程。",
+    "empty": "暂无跑鞋。添加一双，然后在跑步时选用它，开始累计里程",
     "emptyHint": "添加一双鞋，然后在跑步时选用它来开始累计里程。",
     "nameRequired": "输入名称。",
     "startingInvalid": "输入 0 或更大的数字。",
@@ -6551,7 +6584,6 @@
     "logTitle": "记录心情",
     "overall": "整体",
     "tags": "标签",
-    "notesPlaceholder": "今天感觉如何？",
     "loggingForDate": "记录 {{date}} 的心情",
     "chartTitle": "每日心情",
     "mostCommon": "最常记录",
@@ -6582,7 +6614,39 @@
       "loggedA11y": "{{date}} 的心情：{{mood}}",
       "log": "记录心情",
       "trend7d": "7 天趋势"
-    }
+    },
+    "energy": "精力",
+    "energyLow": "精力耗尽",
+    "energyHigh": "精力充沛",
+    "focus": "专注度",
+    "focusLow": "难以专注",
+    "focusHigh": "全神贯注",
+    "journalOptional": "日记（可选）",
+    "journalPlaceholder": "有没有想补充的想法或感受？",
+    "ratingsUnsupported": "你的服务器尚不会保存能量与专注度。请更新 SparkyFitness 以保留它们。",
+    "serverCheckFailed": "无法连上你的服务器。请检查连接后再试一次。",
+    "newCheckinTitle": "新增打卡",
+    "editCheckinTitle": "编辑打卡",
+    "time": "时间",
+    "timeA11y": "时间，{{time}}",
+    "deleteCheckin": "删除打卡",
+    "deleteCheckinConfirm": "删除这个打卡？",
+    "deleteCheckinMessage": "这会删除该打卡及其日记条目。",
+    "deleteFailed": "无法删除打卡",
+    "checkinNeedsContent": "请加入心情、能量、专注度、标签或日记条目才能保存。",
+    "checkinMissing": "此打卡已不存在。",
+    "dayTitle": "心情",
+    "dayAverage": "当日平均",
+    "checkinCount_other": "{{count}} 次打卡",
+    "noCheckins": "这一天还没有打卡。",
+    "addCheckin": "新增打卡",
+    "checkinRowA11y": "{{summary}}。编辑打卡。",
+    "checkinAtTime": "于 {{time}} 打卡",
+    "a11yListSeparator": "， ",
+    "energyA11y": "能量 {{value}}/5",
+    "focusA11y": "专注度 {{value}}/5",
+    "energyOutOfFive": "能量 {{value}}/5",
+    "focusOutOfFive": "专注度 {{value}}/5"
   },
   "customNutrients": {
     "title": "自定义营养素",
@@ -6594,7 +6658,7 @@
     "description": "添加你想追踪的自定义营养素。",
     "editTitle": "编辑自定义营养素",
     "createTitle": "添加自定义营养素",
-    "notFound": "找不到此自定义营养素。",
+    "notFound": "找不到此自定义营养素",
     "name": "名称",
     "namePlaceholder": "例如：肌酸",
     "unit": "单位",
@@ -6607,14 +6671,14 @@
     "deleteFailed": "无法删除自定义营养素",
     "delete": "删除",
     "deleteTitle": "删除营养素",
-    "deleteMessage": "删除 {{name}}？",
+    "deleteMessage": "删除 {{name}}？你也可以从过去的目标和日记条目中移除它。",
     "deleteKeepHistory": "删除但保留历史记录",
     "deleteAllHistory": "删除并清除历史记录"
   },
   "nutrientDisplay": {
     "title": "自定义营养素",
     "loading": "正在加载…",
-    "loadFailed": "无法加载营养素显示。",
+    "loadFailed": "无法加载营养素显示",
     "description": "选择各处显示的自定义营养素及其顺序。",
     "groupPicker": "显示在",
     "updateFailed": "无法更新营养素显示。",
@@ -6713,7 +6777,7 @@
     },
     "unitMi": "mi",
     "unitKm": "km",
-    "unitBpm": "bpm",
+    "unitBpm": "次/分钟",
     "bar": {
       "recording": "记录中",
       "saveHint": "点击以检阅并保存",
@@ -6950,7 +7014,7 @@
       "pickOptionCustom": "{{mark}}{{title}} · {{minutes}} 分钟",
       "doThis": "做此训练",
       "switchHint": "遵循逐周建立的计划。默认关闭。",
-      "paused": "{{name}} 在完成 {{total}} 堂中的第 {{done}} 堂时暂停。开启以继续。",
+      "paused": "{{name}} 在完成第 {{done}} 堂时暂停，共 {{total}} 堂。开启以继续。",
       "startOver": "重新开始",
       "startOverHint": "回到第一次训练",
       "skipHint": "不进行此训练，直接继续",
@@ -7041,7 +7105,7 @@
       "description": "需要你的 Apple Watch。当你的心率超出此范围时震动，并在开启语音提示时口头提醒。",
       "lowest": "最低",
       "highest": "最高",
-      "value": "{{value}} bpm",
+      "value": "{{value}} 次/分钟",
       "lower": "{{edge}} 低 5 bpm",
       "higher": "{{edge}} 高 5 bpm",
       "workTitle": "快速段心率",
@@ -7244,7 +7308,7 @@
     "dailyAverages": "每日平均",
     "loadFailed": "无法加载营养数据",
     "empty": "此期间没有记录食物",
-    "kcal": "{{value}} kcal",
+    "kcal": "{{value}} 千卡",
     "grams": "{{value}} g",
     "changeHint": "{{change}}，相比前 {{days}} 天",
     "onTarget": "在目标的 10% 以内",
@@ -7853,7 +7917,7 @@
     "running": "正在你的手表上跑步",
     "next": "下一个：{{step}}",
     "calories": "热量",
-    "kcal": "kcal",
+    "kcal": "千卡",
     "ended": "你手表上的训练已结束或超出范围。完成的训练会加入你的日记。",
     "indoorNote": "室内距离是手表的估算。你可以在结束时更正为跑步机的数字。",
     "starting": "正在你的手表上开始…",
@@ -7946,5 +8010,61 @@
       "lupin": "羽扇豆",
       "sulphites": "亚硫酸盐"
     }
+  },
+  "activityShare": {
+    "title": "分享活动",
+    "choosePhoto": "选择照片",
+    "takePhoto": "拍摄照片",
+    "removePhoto": "移除",
+    "transparentHint": "没有照片时，图像会是透明的 PNG，你可以在其他应用中叠在照片或视频上。",
+    "cameraDenied": "请在“设置”中允许相机访问，才能拍摄照片",
+    "noRoute": "此训练没有保存的 GPS 路线，因此版面仅显示数据。",
+    "layout": "版面",
+    "layoutClassic": "经典",
+    "layoutRoute": "路线",
+    "layoutMinimal": "简约",
+    "textColor": "颜色",
+    "customColor": "自定义颜色十六进制色码",
+    "share": "分享图片",
+    "shareFailed": "无法创建图片"
+  },
+  "exerciseEffort": {
+    "title": "强度",
+    "lastAvg": "上次训练平均 RPE",
+    "trendLabel_other": "你最近 {{count}} 次训练的平均 RPE",
+    "oneRmEffort": "含强度的 1RM 估算",
+    "oneRmPlain": "仅以次数计算",
+    "oneRmNote": "计算你剩下的次数：RPE 8 代表还能多做两下。只使用有 RPE 的组。"
+  },
+  "routes": {
+    "addTitle": "新增路线",
+    "draw": "在地图上绘制",
+    "importGpx": "导入 GPX 文件",
+    "importFailed": "无法导入该文件",
+    "importFailedHint": "请选择包含轨迹或路线的 GPX 文件。",
+    "loadFailed": "无法加载你的路线。",
+    "loadOneFailed": "无法加载这条路线。",
+    "empty": "还没有路线。请在地图上绘制一条、导入 GPX 文件，或从详情保存已记录的跑步或步行。",
+    "mapA11y": "此路线地图，从绿点到红圈",
+    "nameLabel": "路线名称",
+    "namePlaceholder": "为这条路线命名",
+    "climb": "爬升 {{climb}}",
+    "rename": "重命名",
+    "renameFailed": "无法重命名",
+    "shareGpx": "以 GPX 分享",
+    "shareFailed": "无法分享路线",
+    "deleteTitle": "删除这条路线？",
+    "deleteMessage": "从中保存此路线的已记录活动不会受影响。",
+    "deleteFailed": "无法删除路线",
+    "saveFailed": "无法保存路线",
+    "drawHint": "点击地图以添加点",
+    "undo": "撤销",
+    "clear": "清除",
+    "saveAsRoute": "保存为路线",
+    "savedAsRoute": "已保存到路线",
+    "saveAsRouteFailed": "无法保存路线",
+    "fileTooLarge": "该文件太大",
+    "fileTooLargeHint": "路线文件最大可达 10 MB。",
+    "drawLimit": "这已是路线在此可容纳的最大点数。请撤销一些或保存这条。"
   }
 }

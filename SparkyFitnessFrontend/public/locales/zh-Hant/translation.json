@@ -2074,6 +2074,15 @@
         "custom": "自訂",
         "meta": "元",
         "perplexity": "Perplexity AI"
+      },
+      "reasoningEffort": {
+        "label": "推理強度",
+        "low": "低",
+        "medium": "中（建議）",
+        "high": "高",
+        "xhigh": "極高",
+        "max": "最高",
+        "description": "較高的強度會讓複雜的食物與餐點任務獲得更多推理時間，也可能增加回應時間與成本。"
       }
     },
     "apiKeyManagement": {
@@ -2583,7 +2592,7 @@
       "appID": "App ID",
       "enterClientID": "輸入 Client ID",
       "enterAppID": "輸入 App ID",
-      "clientSecret": "Client Secret",
+      "clientSecret": "客戶端密鑰",
       "appKey": "App Key",
       "enterClientSecret": "輸入 Client Secret",
       "enterAppKey": "輸入 App Key",
@@ -2593,9 +2602,9 @@
       "yazioPasswordOptional": "YAZIO 密碼（選填）",
       "leaveBlankToKeepExisting3": "留空以保留現有密碼",
       "emailAndPasswordAreOptional": "電子郵件與密碼為選填。僅需 Client ID 與 Client Secret。",
-      "yazioClientID": "YAZIO Client ID",
+      "yazioClientID": "YAZIO 用戶端 ID",
       "enterYAZIOClientID": "輸入 YAZIO Client ID",
-      "yazioClientSecret": "YAZIO Client Secret",
+      "yazioClientSecret": "YAZIO 用戶端密鑰",
       "leaveBlankToKeepExisting4": "留空以保留現有 client secret",
       "enterUSDAAPIKey": "輸入 USDA API 金鑰",
       "enterWithingsClientID": "輸入 Withings Client ID",
@@ -3582,7 +3591,7 @@
       "setToCurrentLocalTime": "設為目前的當地時間"
     },
     "exerciseEntryDisplay": {
-      "wger": "Wger",
+      "wger": "Wger 運動資料",
       "freeDB": "Free DB"
     }
   },
@@ -3653,7 +3662,6 @@
     "editingTemporarilyUnavailable": "由於架構更改，編輯食物詳細資料暫時不可用."
   },
   "checkIn": {
-    "howAreYouFeelingToday": "您今天的身心狀況如何？",
     "neutral": "普通",
     "anyThoughtsOrFeelings": "有其他心情或想法想要備註嗎？",
     "sleepTracking": "睡眠紀錄",
@@ -3768,17 +3776,13 @@
     "failedToLoadRecentCustom": "載入近期自訂測量值失敗.",
     "failedToLoadRecentStandard": "載入近期標準測量值失敗.",
     "failedToSaveCustomMeasurement": "儲存自訂測量值失敗.",
-    "failedToSaveMood": "儲存心情失敗.",
     "failedToUpdateMeasurement": "更新測量值失敗.",
     "level": "等級",
     "measurementUpdatedSuccessfully": "測量值更新成功.",
-    "moodSaved": "心情已儲存",
-    "moodSavedSuccessfully": "心情儲存成功.",
     "muscleMass": "肌肉量",
     "recentFasts": "近期斷食",
     "recentFastsDescription": "你最近的斷食紀錄與狀態.",
     "recentMeasurementsDescription": "你最近的紀錄，包括測量值、完成的斷食與同步的健康資料.",
-    "saveMood": "儲存心情",
     "stressLevel": "壓力水準",
     "tabs": {
       "fasting": "斷食與心情",
@@ -3797,7 +3801,29 @@
     "mindfulnessSection": {
       "hrvMs": "HRV {{hrv_rmssd}} ms"
     },
-    "failedToCalculateBodyFatWithError": "無法計算體脂：{{error}}"
+    "failedToCalculateBodyFatWithError": "無法計算體脂：{{error}}",
+    "newCheckin": "新增打卡",
+    "editCheckin": "編輯打卡",
+    "addCheckin": "新增打卡",
+    "saveChanges": "儲存變更",
+    "cancelEdit": "取消",
+    "checkinTime": "時間",
+    "dayCheckins": "今日的打卡",
+    "otherDayCheckins": "打卡",
+    "noCheckins": "這一天還沒有打卡。",
+    "dayAverage": "當日平均",
+    "checkinNeedsContent": "請加入心情、能量、專注度、標籤或日記條目才能儲存。",
+    "checkinCount_other": "{{count}} 次打卡",
+    "energyOutOfFive": "能量 {{value}}/5",
+    "focusOutOfFive": "專注度 {{value}}/5",
+    "editCheckinAt": "編輯 {{time}} 的打卡",
+    "deleteCheckinAt": "刪除 {{time}} 的打卡",
+    "checkinSaved": "打卡已儲存",
+    "checkinUpdated": "打卡已更新",
+    "checkinDeleted": "打卡已刪除",
+    "deleteCheckinTitle": "刪除這個打卡？",
+    "deleteCheckinDescription": "這會刪除該打卡及其日記條目。",
+    "journalOptional": "日記（選填）"
   },
   "sleepTimelineEditor": {
     "sleepTimeline": "睡眠階段時間軸",
@@ -3858,7 +3884,15 @@
     "irritable": "易怒",
     "showMood": "顯示心情",
     "hideMood": "隱藏心情",
-    "deleteMood": "刪除心情"
+    "deleteMood": "刪除心情",
+    "noMoodSelected": "未選擇心情",
+    "clearMood": "清除心情",
+    "energy": "精力",
+    "energyLow": "精力耗盡",
+    "energyHigh": "精力充沛",
+    "focus": "專注度",
+    "focusLow": "難以專注",
+    "focusHigh": "全神貫注"
   },
   "sleepEntrySection": {
     "sleepTracking": "睡眠紀錄",
@@ -5646,7 +5680,7 @@
       "pleaseSignInAgainTo": "請重新登入以儲存食物來源。",
       "connectFoodDatabases": "連線食物資料庫",
       "optionalButAddingUSDAAnd": "選填，但加入 USDA 與 FatSecret 到你的搜尋中，會比預設的 Open Food Facts 帶來明顯更好的結果。你之後隨時可在設定中新增或變更。",
-      "usdaFoodDataCentral": "USDA FoodData Central",
+      "usdaFoodDataCentral": "USDA 食物資料中心",
       "getAFreeAPIKey": "取得免費 API 金鑰",
       "usdaAPIKey": "USDA API 金鑰",
       "getAPICredentials": "取得 API 憑證",
@@ -6754,7 +6788,6 @@
   "mood": {
     "dailyMood": "每日心情",
     "date": "日期",
-    "deletedSuccessfully": "心情紀錄刪除成功.",
     "failedAddCustom": "無法新增心情.",
     "failedDeleteCustom": "無法移除心情.",
     "failedLoadPrefs": "載入心情偏好失敗.",
@@ -6762,17 +6795,13 @@
     "failedToDelete": "刪除心情紀錄失敗.",
     "failedToLoadCustom": "載入心情失敗.",
     "failedToLoadEntries": "載入心情紀錄失敗.",
-    "failedToLoadEntry": "載入心情條目失敗.",
     "failedToSave": "儲存心情紀錄失敗.",
     "failedToUpdate": "更新心情紀錄失敗.",
     "intensityTrend": "隨時間變化的整體心情",
     "mood": "心情",
     "moodValue": "心情值",
     "mostCommon": "最常記錄",
-    "noMoodData": "此期間沒有可用的心情資料.",
-    "notes": "備註： ",
-    "savedSuccessfully": "心情紀錄儲存成功.",
-    "updatedSuccessfully": "心情紀錄更新成功."
+    "noMoodData": "此期間沒有可用的心情資料."
   },
   "preferences": {
     "resetError": "重設偏好設定失敗"
@@ -8166,7 +8195,8 @@
       "tooHard": "維持重量：上次感覺太難。",
       "tooHardRepeated": "今日減輕：連續兩次訓練都覺得太難。",
       "highEffort": "維持重量：你最後的組數接近最大努力。",
-      "tooEasyRepeated": "加重一階：連續兩次訓練都太輕鬆。"
+      "tooEasyRepeated": "加重一階：連續兩次訓練都太輕鬆。",
+      "lowEffort": "加重一點：你最近的組都記錄為輕鬆。"
     },
     "declined": "使用你的慣常建議。",
     "variation": "你最近多數訓練都做過這個。試試變化版？",
@@ -8626,7 +8656,7 @@
       "secondary": "次要：",
       "equipment": "器材：",
       "readInstructionsAloud": "朗讀動作說明",
-      "wger": "Wger",
+      "wger": "Wger 運動資料",
       "freeDB": "Free DB",
       "perHour": "{{unit}}／小時"
     },
@@ -8655,8 +8685,6 @@
       "supersetDAmber": "超級組 D（琥珀色）",
       "equipmentBrand": "器材／品牌",
       "eGHammerStrength": "例如：Hammer Strength",
-      "exerciseNotesCuesOptional": "動作備註／提示（選填）",
-      "eGSeatSetting4": "例如：座椅設為 4、寬握、底部停頓…",
       "addSet": "新增一組",
       "workoutPresetBlockEditIndividual": "訓練預設區塊：在預設管理器中編輯個別動作。",
       "understandProgressionTechniquesAndConfig": "了解漸進技巧，並為你的訓練配置自動超負荷目標。",
@@ -8682,9 +8710,6 @@
       "examples25LbsCables": "範例：+2.5 磅（纜繩／微幅片）、+5.0 磅（啞鈴）、+10.0 磅（硬舉）。",
       "theMachineOrStationBranding": "機器或訓練站品牌。不同製造商的槓桿差異極大。",
       "examplesHammerStrengthLifeFitnessCable": "範例：Hammer Strength、LifeFitness、Cable Stack、啞鈴、Power Rack。",
-      "exerciseNotesCues": "動作備註／提示",
-      "equipmentSetupAndFormReminders": "器材設定與姿勢提醒。",
-      "examplesSeatSetting4Pin": "範例：座椅設為 4、插梢 3、寬握、胸部停頓 2 秒。",
       "supersetA": "超級組 A",
       "supersetB": "超級組 B",
       "supersetC": "超級組 C",
@@ -9210,6 +9235,29 @@
       "number": "訓練 {{number}}",
       "titleRun": "第 {{week}} 週，跑第 {{run}} 次",
       "titleWalk": "第 {{week}} 週，走第 {{walk}} 次"
+    }
+  },
+  "foodAssistant": {
+    "state": "食物偏好與任務",
+    "error": "無法更新助手狀態。請重新整理以讀取最新版本。",
+    "memoryHelp": "長期食物偏好會與聊天記錄分開儲存。今日的請求可以覆蓋它們，而不會改變它們本身。",
+    "preference": "偏好",
+    "forget": "忘記",
+    "noPreferences": "沒有已儲存的食物偏好。",
+    "resume": "在對話中繼續",
+    "noTasks": "沒有已儲存的食物任務。",
+    "status": {
+      "draft": "草稿",
+      "running": "進行中",
+      "awaiting_input": "需要輸入",
+      "complete": "已完成",
+      "cancelled": "已取消",
+      "failed": "失敗"
+    },
+    "ingredient": {
+      "unresolved": "需要比對",
+      "selected": "已選擇",
+      "verified": "已驗證"
     }
   }
 }

@@ -1,9 +1,17 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, ScrollView, Text } from 'react-native';
+import { View, ScrollView, Text, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCSSVariable } from 'uniwind';
 import Toast from 'react-native-toast-message';
 
+import Icon from '../components/Icon';
 import SettingsRow, { SettingsRowGroup } from '../components/SettingsRow';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
 import NotificationPermissionBanner, {
@@ -28,6 +36,8 @@ import {
 import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
 import { useScreenHeader } from '../hooks/useScreenHeader';
 import { usePreferences } from '../hooks/usePreferences';
+import { markCheckinReminderOfferShown } from '../services/checkinReminderOffer';
+import { MAX_CHECKIN_REMINDERS } from '../utils/checkinReminderTimes';
 import { formatTimeLabel } from '../utils/entryTimeDisplay';
 import { isValidReminderWindow } from '../utils/hydrationReminder';
 import type { RootStackScreenProps } from '../types/navigation';
@@ -107,9 +117,31 @@ const NotificationSettingsScreen: React.FC<
   const setWaterReminderWindow = useAppPreferencesStore(
     (s) => s.setWaterReminderWindow
   );
+  const checkinRemindersEnabled = useAppPreferencesStore(
+    (s) => s.checkinRemindersEnabled
+  );
+  const setCheckinRemindersEnabled = useAppPreferencesStore(
+    (s) => s.setCheckinRemindersEnabled
+  );
+  const checkinReminderTimes = useAppPreferencesStore(
+    (s) => s.checkinReminderTimes
+  );
+  const setCheckinReminderTimes = useAppPreferencesStore(
+    (s) => s.setCheckinReminderTimes
+  );
   const { preferences } = usePreferences();
+  const checkinTimeSheetRef = useRef<TimeSheetRef>(null);
+  // `nonce` makes reopening the same row a fresh request; the sheet reads its
+  // value at present() time, so presenting waits for the render that applies it.
+  const [editingCheckin, setEditingCheckin] = useState<{
+    index: number;
+    nonce: number;
+  } | null>(null);
   const startTimeSheetRef = useRef<TimeSheetRef>(null);
   const endTimeSheetRef = useRef<TimeSheetRef>(null);
+  const [secondaryColor] = useCSSVariable(['--color-text-secondary']) as [
+    string,
+  ];
   const usesNativeHeader = useNativeIOSHeadersActive();
   const bannerRef = useRef<NotificationPermissionBannerHandle>(null);
 
@@ -118,9 +150,12 @@ const NotificationSettingsScreen: React.FC<
       await setNotificationsEnabled(false);
       return;
     }
-    await setNotificationsEnabled(true);
-    await requestNotificationPermission();
+    // Ask first: switching on without permission would let reminders be
+    // rescheduled (and cancelled) before the grant arrives, and a denial
+    // would leave the toggle showing on. The banner explains a denial.
+    const status = await requestNotificationPermission();
     bannerRef.current?.refresh();
+    if (status === 'granted') await setNotificationsEnabled(true);
   }, []);
 
   const handleMedicationRemindersToggle = useCallback(
@@ -158,6 +193,65 @@ const NotificationSettingsScreen: React.FC<
     },
     [setWaterReminderEnabled]
   );
+
+  const handleCheckinRemindersToggle = useCallback(
+    async (value: boolean) => {
+      // Whoever uses this toggle has made their choice; skip the one-time offer.
+      void markCheckinReminderOfferShown();
+      if (!value) {
+        setCheckinRemindersEnabled(false);
+        return;
+      }
+      const status = await requestNotificationPermission();
+      bannerRef.current?.refresh();
+      // Same rule as the other reminders: never show "on" while the OS would
+      // silently drop every reminder.
+      if (status === 'granted') setCheckinRemindersEnabled(true);
+    },
+    [setCheckinRemindersEnabled]
+  );
+
+  useEffect(() => {
+    if (editingCheckin) checkinTimeSheetRef.current?.present();
+  }, [editingCheckin]);
+
+  const openCheckinTimeSheet = useCallback((index: number) => {
+    setEditingCheckin((prev) => ({ index, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, []);
+
+  const handleCheckinTimeSelect = useCallback(
+    (time: string) => {
+      if (!editingCheckin) return;
+      const next = [...checkinReminderTimes];
+      next[editingCheckin.index] = time;
+      setCheckinReminderTimes(next);
+    },
+    [editingCheckin, checkinReminderTimes, setCheckinReminderTimes]
+  );
+
+  const handleRemoveCheckinTime = useCallback(
+    (index: number) => {
+      setCheckinReminderTimes(
+        checkinReminderTimes.filter((_, i) => i !== index)
+      );
+    },
+    [checkinReminderTimes, setCheckinReminderTimes]
+  );
+
+  const handleAddCheckinTime = useCallback(() => {
+    // Start at noon and take the first free hour after it (wrapping).
+    let newTime = '12:00';
+    for (let offset = 0; offset < 24; offset++) {
+      const candidate = `${String((12 + offset) % 24).padStart(2, '0')}:00`;
+      if (!checkinReminderTimes.includes(candidate)) {
+        newTime = candidate;
+        break;
+      }
+    }
+    const next = [...checkinReminderTimes, newTime].sort();
+    setCheckinReminderTimes(next);
+    openCheckinTimeSheet(next.indexOf(newTime));
+  }, [checkinReminderTimes, setCheckinReminderTimes, openCheckinTimeSheet]);
 
   const intervalSegments = useMemo(
     () =>
@@ -518,8 +612,124 @@ const NotificationSettingsScreen: React.FC<
             )}
           </SettingsRowGroup>
         )}
+
+        {notificationsEnabled && (
+          <SettingsRowGroup
+            title={t('notificationSettings.moodCheckins', {
+              defaultValue: 'Mood check-ins',
+            })}
+          >
+            <SettingsRow
+              title={t('notificationSettings.moodCheckinReminders', {
+                defaultValue: 'Check-in reminders',
+              })}
+              subtitle={t('notificationSettings.moodCheckinRemindersSubtitle', {
+                defaultValue: 'A daily nudge to log how you feel',
+              })}
+              subtitleNumberOfLines={0}
+              rightAccessory={
+                <Switch
+                  accessibilityLabel={t(
+                    'notificationSettings.moodCheckinReminders',
+                    { defaultValue: 'Check-in reminders' }
+                  )}
+                  value={checkinRemindersEnabled}
+                  onValueChange={handleCheckinRemindersToggle}
+                />
+              }
+            />
+            {checkinRemindersEnabled &&
+              checkinReminderTimes.map((time, index) => {
+                const timeLabel = formatTimeLabel(
+                  time,
+                  preferences?.time_format
+                );
+                const removeLabel = t(
+                  'notificationSettings.moodCheckinRemoveReminder',
+                  {
+                    defaultValue: 'Remove reminder {{number}}',
+                    number: index + 1,
+                  }
+                );
+                const canRemove = checkinReminderTimes.length > 1;
+                return (
+                  <SettingsRow
+                    key={time}
+                    title={t('notificationSettings.moodCheckinReminderTime', {
+                      defaultValue: 'Reminder {{number}}',
+                      number: index + 1,
+                    })}
+                    accessibilityLabel={t(
+                      'notificationSettings.moodCheckinReminderTimeAccessibility',
+                      {
+                        defaultValue: 'Reminder {{number}}, {{time}}',
+                        number: index + 1,
+                        time: timeLabel,
+                      }
+                    )}
+                    // The visible remove button sits inside the row's
+                    // accessible Pressable, which screen readers can't reach.
+                    accessibilityActions={
+                      canRemove
+                        ? [{ name: 'remove', label: removeLabel }]
+                        : undefined
+                    }
+                    onAccessibilityAction={(event) => {
+                      if (event.nativeEvent.actionName === 'remove') {
+                        handleRemoveCheckinTime(index);
+                      }
+                    }}
+                    onPress={() => openCheckinTimeSheet(index)}
+                    rightAccessory={
+                      <View className="flex-row items-center">
+                        <Text className="text-sm text-text-secondary">
+                          {timeLabel}
+                        </Text>
+                        {canRemove && (
+                          <Pressable
+                            onPress={() => handleRemoveCheckinTime(index)}
+                            accessibilityRole="button"
+                            accessibilityLabel={removeLabel}
+                            hitSlop={14}
+                            className="ml-3"
+                          >
+                            <Icon
+                              name="close"
+                              size={18}
+                              color={secondaryColor}
+                            />
+                          </Pressable>
+                        )}
+                      </View>
+                    }
+                  />
+                );
+              })}
+            {checkinRemindersEnabled &&
+              checkinReminderTimes.length < MAX_CHECKIN_REMINDERS && (
+                <SettingsRow
+                  icon="add"
+                  title={t('notificationSettings.moodCheckinAddReminder', {
+                    defaultValue: 'Add reminder',
+                  })}
+                  onPress={handleAddCheckinTime}
+                  rightAccessory={null}
+                />
+              )}
+          </SettingsRowGroup>
+        )}
       </ScrollView>
 
+      <TimeSheet
+        ref={checkinTimeSheetRef}
+        value={
+          editingCheckin
+            ? (checkinReminderTimes[editingCheckin.index] ?? '')
+            : ''
+        }
+        onSelectTime={handleCheckinTimeSelect}
+        commitOn="done"
+      />
       <TimeSheet
         ref={startTimeSheetRef}
         value={waterReminderWindowStart}

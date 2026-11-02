@@ -28,17 +28,23 @@ import { useAppPreferencesStore } from '../stores/appPreferencesStore';
 import type { ReportSectionKey } from '../constants/reports';
 import StatusView from '../components/StatusView';
 import CollapsibleSection from '../components/CollapsibleSection';
+import RunningFormCard from '../components/exerciseStats/RunningFormCard';
 import CardioSessionList from '../components/exerciseStats/CardioSessionList';
 import RunningTrendsCard from '../components/exerciseStats/RunningTrendsCard';
 import TrainingConsistencyCard from '../components/exerciseStats/TrainingConsistencyCard';
 import PaceZonesCard from '../components/exerciseStats/PaceZonesCard';
 import TrainingLoadCard from '../components/exerciseStats/TrainingLoadCard';
+import RunEstimatesCard from '../components/exerciseStats/RunEstimatesCard';
+import FitnessFatigueCard from '../components/exerciseStats/FitnessFatigueCard';
 import { useTrainingLoad } from '../hooks/useTrainingLoad';
+import { useRunEstimates } from '../hooks/useRunEstimates';
+import { useFitnessFatigue } from '../hooks/useFitnessFatigue';
 import MuscleFigure, {
   MUSCLE_HEAT_COLORS,
 } from '../components/exerciseStats/MuscleFigure';
 import type { CustomRange, ReportRange } from '../utils/trendRange';
 import { getTodayDate } from '../utils/dateUtils';
+import { runFormTrend } from '../utils/runningForm';
 import { weightFromKg } from '../utils/unitConversions';
 import {
   muscleRecoveryRows,
@@ -138,9 +144,15 @@ const ExerciseStatisticsScreen: React.FC<ExerciseStatisticsScreenProps> = ({
   const { data, isLoading } = useExerciseDashboard(range, customRange);
   const consistency = useTrainingConsistency();
   const trainingLoad = useTrainingLoad();
+  const runEstimates = useRunEstimates();
+  const fitnessFatigue = useFitnessFatigue();
   const cardio = useCardioSessions(range, view === 'cardio', customRange);
   const running = useRunningTrends(view === 'cardio');
   const paceZones = usePaceZones(view === 'cardio');
+  const formTrend = useMemo(
+    () => runFormTrend(cardio.sessions),
+    [cardio.sessions]
+  );
   const { preferences } = usePreferences();
   const weightUnit: 'kg' | 'lbs' =
     preferences?.default_weight_unit === 'lbs' ||
@@ -239,6 +251,7 @@ const ExerciseStatisticsScreen: React.FC<ExerciseStatisticsScreenProps> = ({
             distanceUnit={cardio.distanceUnit}
           />
         ) : null}
+        <RunningFormCard trend={formTrend} distanceUnit={cardio.distanceUnit} />
         <Text className="text-text-secondary text-xs mb-3">
           {t('exerciseStatistics.cardio.hint', {
             defaultValue: 'Tap a workout for its route and heart rate.',
@@ -501,6 +514,21 @@ const ExerciseStatisticsScreen: React.FC<ExerciseStatisticsScreenProps> = ({
         ) : null}
 
         {loadCard}
+
+        {isSectionShown('exercise.load') ? (
+          <>
+            <FitnessFatigueCard
+              data={fitnessFatigue.data}
+              isLoading={fitnessFatigue.isLoading}
+              isError={fitnessFatigue.isError}
+            />
+            <RunEstimatesCard
+              data={runEstimates.data}
+              isLoading={runEstimates.isLoading}
+              isError={runEstimates.isError}
+            />
+          </>
+        ) : null}
 
         {isSectionShown('exercise.consistency') ? (
           <TrainingConsistencyCard

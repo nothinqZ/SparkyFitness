@@ -36,6 +36,10 @@ export const foodAssistantOperationSchema = z.object({
   after_state: z.json(),
   created_at: z.coerce.date(),
 });
+export const foodAssistantPreferencesSchema = foodAssistantPreferenceSchema;
+export const foodAssistantTasksSchema = foodAssistantTaskSchema;
+export const foodAssistantOperationsSchema = foodAssistantOperationSchema;
+
 export type FoodAssistantPreference = z.infer<
   typeof foodAssistantPreferenceSchema
 >;

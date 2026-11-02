@@ -1,5 +1,7 @@
 import type {
   CreateRouteBody,
+  GenerateRouteBody,
+  GenerateRouteResponse,
   ImportGpxRouteBody,
   Route,
   RouteFromActivityBody,
@@ -26,7 +28,7 @@ export const fetchRoute = (id: string): Promise<{ route: Route }> =>
   });
 
 export const createRoute = (
-  body: Omit<CreateRouteBody, 'activity'> & Partial<CreateRouteBody>
+  body: Pick<CreateRouteBody, 'name' | 'points'> & Partial<CreateRouteBody>
 ): Promise<{ route: Route }> =>
   apiFetch<{ route: Route }>({
     endpoint: '/api/v2/routes',
@@ -77,4 +79,30 @@ export const deleteRoute = (id: string): Promise<void> =>
     serviceName: SERVICE,
     operation: 'delete route',
     method: 'DELETE',
+  });
+
+/**
+ * What the server offers for generating routes. Older
+ * servers send only `available`; read the answer with
+ * `resolveRouteGenerateCapabilities`.
+ */
+export const fetchRouteGenerationCapabilities = (): Promise<unknown> =>
+  apiFetch<unknown>({
+    endpoint: '/api/v2/routes/generate/capabilities',
+    serviceName: SERVICE,
+    operation: 'check route generation',
+  });
+
+/** Preview routes from the routing engine: `route` is the first of `options`. */
+export const generateRoute = (
+  body: GenerateRouteBody
+): Promise<GenerateRouteResponse> =>
+  apiFetch<GenerateRouteResponse>({
+    endpoint: '/api/v2/routes/generate',
+    serviceName: SERVICE,
+    operation: 'generate route',
+    method: 'POST',
+    body,
+    // A loop can cost the server a few engine calls, several candidates more.
+    timeoutMs: 90_000,
   });

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // Contract between the server and the SparkyFitness Garmin Connect IQ watch
 // app (`SparkyFitnessConnectIQ/`). The watch downloads a compact manifest of
@@ -8,14 +8,14 @@ import { z } from "zod";
 
 const dateStringSchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
 
 // "YYYY-MM-DDTHH:MM:SS" wall-clock time on the watch, without an offset.
 // Garmin Connect reports `startTimeLocal` in the same shape, which is what the
 // Garmin import matches against when it deduplicates watch sessions.
 const localDateTimeSchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/, "Expected local datetime");
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/, 'Expected local datetime');
 
 export const watchPlannedSetSchema = z.object({
   set_number: z.number().int().positive(),
@@ -59,7 +59,7 @@ export const watchPlannedWorkoutSchema = z.object({
 export const watchManifestResponseSchema = z.object({
   schema_version: z.literal(1),
   generated_at: z.string(),
-  weight_unit: z.enum(["kg", "lbs"]),
+  weight_unit: z.enum(['kg', 'lbs']),
   default_rest_seconds: z.number().int().positive(),
   workouts: z.array(watchPlannedWorkoutSchema),
 });
@@ -107,12 +107,12 @@ export const watchSessionUploadSchema = z
   })
   .strict()
   .refine((s) => Date.parse(s.ended_at) >= Date.parse(s.started_at), {
-    message: "ended_at must not be before started_at",
-    path: ["ended_at"],
+    message: 'ended_at must not be before started_at',
+    path: ['ended_at'],
   });
 
 export const watchSessionUploadResponseSchema = z.object({
-  status: z.enum(["created", "duplicate"]),
+  status: z.enum(['created', 'duplicate']),
   client_session_id: z.string().uuid(),
   exercise_preset_entry_id: z.string().uuid().nullable(),
 });
@@ -127,7 +127,7 @@ export const watchSyncStatusResponseSchema = z.object({
       device_model: z.string().nullable(),
       app_version: z.string().nullable(),
       last_seen_at: z.string(),
-    }),
+    })
   ),
 });
 
@@ -149,7 +149,7 @@ export type WatchSyncStatusResponse = z.infer<
 // while the user confirms the code in SparkyFitness. Confirming mints a
 // regular, revocable API key, which the watch collects exactly once.
 
-export const WATCH_PAIRING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export const WATCH_PAIRING_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export const watchPairingStartRequestSchema = z
   .object({
@@ -169,9 +169,9 @@ export const watchPairingPollRequestSchema = z
   .object({ poll_token: z.string().min(32).max(128) })
   .strict();
 
-export const watchPairingPollResponseSchema = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("pending") }),
-  z.object({ status: z.literal("paired"), api_key: z.string() }),
+export const watchPairingPollResponseSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('pending') }),
+  z.object({ status: z.literal('paired'), api_key: z.string() }),
 ]);
 
 export const watchPairingClaimRequestSchema = z
@@ -179,7 +179,7 @@ export const watchPairingClaimRequestSchema = z
     // Accepts "ABCD-EFGH", "abcd efgh" or "ABCDEFGH".
     pairing_code: z
       .string()
-      .transform((v) => v.toUpperCase().replace(/[^A-Z0-9]/g, ""))
+      .transform((v) => v.toUpperCase().replace(/[^A-Z0-9]/g, ''))
       .pipe(z.string().length(8)),
   })
   .strict();

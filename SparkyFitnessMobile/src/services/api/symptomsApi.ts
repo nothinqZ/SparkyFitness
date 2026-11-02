@@ -24,6 +24,8 @@ export interface SymptomEntry {
   user_id?: string;
   symptom_id?: string | null;
   symptom_name_snapshot: string;
+  /** The medication a side-effect symptom was logged against. */
+  medication_id?: string | null;
   severity: number;
   source?: string;
   entry_date: string;

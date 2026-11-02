@@ -38,6 +38,7 @@ import {
   canReorderDraftExercises,
   exerciseFromSnapshot,
   parseSetWeight,
+  summarizeWorkoutEffort,
   summarizeWorkoutHeartRate,
 } from '../utils/workoutSession';
 import { formatLocalizedNumber } from '../localization';
@@ -57,6 +58,9 @@ import {
   getWorkoutDraftSubmission,
 } from '../hooks/useWorkoutForm';
 import { useExerciseSetEditing } from '../hooks/useExerciseSetEditing';
+import LinkSyncedWorkoutSheet, {
+  type LinkSyncedWorkoutSheetRef,
+} from '../components/LinkSyncedWorkoutSheet';
 import CalendarSheet, {
   type CalendarSheetRef,
 } from '../components/CalendarSheet';
@@ -90,6 +94,8 @@ import type { UpdatePresetSessionRequest } from '@workspace/shared';
 import {
   canEditGroupedWorkout,
   effectiveLoadKg,
+  entryCaloriesCounted,
+  isAppLoggedWorkoutSource,
   isBodyweightModality,
   resolveExerciseModality,
 } from '@workspace/shared';
@@ -117,13 +123,16 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     (preferences?.default_distance_unit as 'km' | 'miles') ?? 'km';
 
   const calendarSheetRef = useRef<CalendarSheetRef>(null);
+  const linkSheetRef = useRef<LinkSyncedWorkoutSheetRef>(null);
   const exerciseListRef = useRef<WorkoutFormExerciseListHandle>(null);
 
-  const [accentPrimary, heartRateColor, activeEnergyColor] = useCSSVariable([
-    '--color-accent-primary',
-    '--color-heart-rate',
-    '--color-active-energy',
-  ]) as [string, string, string];
+  const [accentPrimary, heartRateColor, activeEnergyColor, textMuted] =
+    useCSSVariable([
+      '--color-accent-primary',
+      '--color-heart-rate',
+      '--color-active-energy',
+      '--color-text-muted',
+    ]) as [string, string, string, string];
   const usesNativeHeader = useNativeIOSHeadersActive();
 
   // Superset display (view mode only): grouped members get a flat left rail
@@ -173,6 +182,14 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const sourceLabel = getSourceLabel(session.source);
   const canEdit = canEditGroupedWorkout(session.source);
+  // Linking works on the whole session, so any of its exercises will do. Only
+  // a workout logged in the app can be linked to a synced one.
+  const linkEntryId =
+    session.exercises.length > 0 &&
+    isAppLoggedWorkoutSource(session.exercises[0].source)
+      ? session.exercises[0].id
+      : null;
+  const isLinked = session.exercises.some((ex) => !!ex.calorie_link_resolution);
   const entryDate = session.entry_date ?? '';
   const normalizedDate = normalizeDate(entryDate);
 
@@ -671,10 +688,19 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     const totalCalories = isEditing
       ? formState.exercises.reduce((sum, ex) => {
           const cal = parseDecimalInput(ex.calories ?? '');
-          return sum + (isNaN(cal) ? 0 : cal);
+          const saved = session.exercises.find(
+            (entry) => entry.id === ex.serverId
+          );
+          return (
+            sum +
+            entryCaloriesCounted({
+              calories_burned: isNaN(cal) ? 0 : cal,
+              calories_applied: saved?.calories_applied,
+            })
+          );
         }, 0)
       : session.exercises.reduce(
-          (sum, ex) => sum + (ex.calories_burned ?? 0),
+          (sum, ex) => sum + entryCaloriesCounted(ex),
           0
         );
 
@@ -737,6 +763,18 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
           defaultValue: 'Max HR',
         }),
         icon: { name: 'heart-rate', color: heartRateColor },
+      });
+    }
+    // The person's own rating (from the watch's prompt or Apple Health), so
+    // it is shown from the saved session even while editing.
+    const effort = summarizeWorkoutEffort(session.exercises);
+    if (effort != null) {
+      summaryItems.push({
+        value: t('workoutEffort.value', {
+          defaultValue: '{{rating}}/10',
+          rating: formatLocalizedNumber(effort),
+        }),
+        label: t('workoutDetail.summary.effort', { defaultValue: 'Effort' }),
       });
     }
     if (summaryItems.length === 0) return null;
@@ -976,6 +1014,28 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
           </Button>
         )}
 
+        {!isEditing && linkEntryId && (
+          <TouchableOpacity
+            className="bg-surface rounded-xl px-4 py-3 mt-4 shadow-sm flex-row items-center"
+            onPress={() => linkSheetRef.current?.present()}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            testID="link-synced-workout"
+          >
+            <Icon name="link" size={16} color={accentPrimary} />
+            <Text className="flex-1 ml-2 text-base text-text-primary">
+              {isLinked
+                ? t('calorieLink.linked', {
+                    defaultValue: 'Linked to a synced workout',
+                  })
+                : t('calorieLink.action', {
+                    defaultValue: 'Link a synced workout',
+                  })}
+            </Text>
+            <Icon name="chevron-forward" size={16} color={textMuted} />
+          </TouchableOpacity>
+        )}
+
         {/* Pull back part of the scroll container's px-4 so the cards sit at
             the same 12px inset as the active workout screen (px-3). */}
         <View className="-mx-1">
@@ -1106,6 +1166,24 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
         selectedDate={isEditing ? formState.entryDate : normalizedDate}
         onSelectDate={setFormDate}
       />
+
+      {linkEntryId && (
+        <LinkSyncedWorkoutSheet
+          ref={linkSheetRef}
+          entryId={linkEntryId}
+          entryDate={normalizedDate}
+          onLinkChange={(resolution, applied) =>
+            setSession((current) => ({
+              ...current,
+              exercises: current.exercises.map((exercise) => ({
+                ...exercise,
+                calorie_link_resolution: resolution,
+                calories_applied: applied[exercise.id] ?? null,
+              })),
+            }))
+          }
+        />
+      )}
 
       <MetricColumnMenu
         anchor={metricMenu?.anchor ?? null}

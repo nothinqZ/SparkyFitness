@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import WatchConnectivity, {
   type WatchWorkoutStartRequestedPayload,
 } from '../../modules/watch-connectivity';
@@ -20,7 +21,10 @@ import {
   getLoggedAssignmentIds,
   getUncompletedActivePlans,
 } from '../utils/workoutPlanSchedule';
-import type { StartLiveWorkoutArgs } from './useStartLiveWorkout';
+import {
+  armWatchForActiveSession,
+  type StartLiveWorkoutArgs,
+} from './useStartLiveWorkout';
 
 type StartFn = (args: StartLiveWorkoutArgs) => Promise<void>;
 
@@ -29,17 +33,23 @@ type StartFn = (args: StartLiveWorkoutArgs) => Promise<void>;
  * preset, links it to today's plan assignment when one is due, and starts it
  * like the phone's own preset list. A preset id the phone cannot load, one
  * from another server, or a second request while that preset is already live
- * is ignored. Shared by the Apple Watch (`useWatchWorkoutStart`) and the
- * Garmin watch (`useGarminWatchBridge`); each passes its own trigger.
+ * is ignored, except that `onAlreadyLive` runs for that last case. Shared by
+ * the Apple Watch (`useWatchWorkoutStart`) and the Garmin watch
+ * (`useGarminWatchBridge`); each passes its own trigger.
  */
-export function useWatchPresetStarter(start: StartFn): {
+export function useWatchPresetStarter(
+  start: StartFn,
+  onAlreadyLive?: () => void
+): {
   run: (payload: WatchWorkoutStartRequestedPayload) => Promise<void>;
   /** Drops starts still in flight, e.g. when the trigger is switched off. */
   cancel: () => void;
 } {
   const startRef = useRef(start);
+  const onAlreadyLiveRef = useRef(onAlreadyLive);
   useEffect(() => {
     startRef.current = start;
+    onAlreadyLiveRef.current = onAlreadyLive;
   });
   const generationRef = useRef(0);
   useEffect(
@@ -76,9 +86,12 @@ export function useWatchPresetStarter(start: StartFn): {
         generation !== generationRef.current ||
         preset.exercises.length === 0 ||
         (await getActiveServerConfigId()) !== serverId ||
-        generation !== generationRef.current ||
-        (live.sessionId != null && live.sourcePresetId === preset.id)
+        generation !== generationRef.current
       ) {
+        return;
+      }
+      if (live.sessionId != null && live.sourcePresetId === preset.id) {
+        onAlreadyLiveRef.current?.();
         return;
       }
       // A preset that is due today under an active plan counts toward that
@@ -110,9 +123,15 @@ export function useWatchPresetStarter(start: StartFn): {
       const liveAfter = useActiveWorkoutStore.getState();
       if (
         (await getActiveServerConfigId()) !== serverId ||
-        generation !== generationRef.current ||
-        (liveAfter.sessionId != null && liveAfter.sourcePresetId === preset.id)
+        generation !== generationRef.current
       ) {
+        return;
+      }
+      if (
+        liveAfter.sessionId != null &&
+        liveAfter.sourcePresetId === preset.id
+      ) {
+        onAlreadyLiveRef.current?.();
         return;
       }
       const exercises = buildPresetStartExercisesPayload(preset).map(
@@ -148,15 +167,21 @@ export function useWatchPresetStarter(start: StartFn): {
  * The listener stays up while the server is offline. A tap that arrives
  * then is kept and run once the connection is back, instead of being
  * dropped because nothing was listening. A second delivery while that
- * preset's session is already live is ignored, so a queued copy or the
- * watch's retry does not open the "workout in progress" prompt.
+ * preset's session is already live re-arms the watch so a restarted watch
+ * app or retry still transitions into the live workout.
  */
 export function useWatchWorkoutStart(
   enabled: boolean,
   connected: boolean,
   start: StartFn
 ): void {
-  const { run, cancel } = useWatchPresetStarter(start);
+  const { t } = useTranslation();
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  });
+  const rearm = useCallback(() => armWatchForActiveSession(tRef.current), []);
+  const { run, cancel } = useWatchPresetStarter(start, rearm);
   const connectedRef = useRef(connected);
   useEffect(() => {
     connectedRef.current = connected;

@@ -19,6 +19,7 @@ import { addLog } from '../services/LogService';
 import {
   GpxFileTooLargeError,
   pickAndImportGpx,
+  useRouteGenerationAvailable,
   useRoutes,
 } from '../services/routeService';
 import { formatRouteDistance } from '../utils/routeDisplay';
@@ -34,6 +35,7 @@ const RoutesScreen: React.FC<Props> = ({ navigation }) => {
   const { routes, isLoading, isError, refetch } = useRoutes();
   const { preferences } = usePreferences();
   const unit = preferences?.default_distance_unit ?? 'km';
+  const { available: canGenerate } = useRouteGenerationAvailable();
   const [importing, setImporting] = useState(false);
   useRefetchOnFocus(refetch, true);
 
@@ -67,8 +69,9 @@ const RoutesScreen: React.FC<Props> = ({ navigation }) => {
       .finally(() => setImporting(false));
   };
 
-  // Drawing needs a map to tap on; an Android build without a Google Maps key
-  // renders a blank one, so it is not offered there (importing still is).
+  // Drawing and generating both need a map to show the route on; an Android
+  // build without a Google Maps key renders a blank one, so neither is offered
+  // there (importing still is).
   const add = () =>
     Alert.alert(t('routes.addTitle', { defaultValue: 'Add a route' }), '', [
       ...(canShowRouteMap()
@@ -76,6 +79,16 @@ const RoutesScreen: React.FC<Props> = ({ navigation }) => {
             {
               text: t('routes.draw', { defaultValue: 'Draw on a map' }),
               onPress: () => navigation.navigate('RouteDraw'),
+            },
+          ]
+        : []),
+      ...(canGenerate && canShowRouteMap()
+        ? [
+            {
+              text: t('routes.generateRoute', {
+                defaultValue: 'Generate a loop or out-and-back',
+              }),
+              onPress: () => navigation.navigate('RouteGenerate'),
             },
           ]
         : []),

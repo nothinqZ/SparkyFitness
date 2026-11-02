@@ -61,8 +61,8 @@ interface Spec {
 const RUN_WALK: Shape = { style: 'runWalk', warmup: 300, cooldown: 300 };
 const SPEED: Shape = { style: 'fastEasy', warmup: 600, cooldown: 600 };
 const EASY: Shape = { style: 'fastEasy', warmup: 300, cooldown: 300 };
-// Brisk walking and easy walking, named Fast and Easy so nothing says "run".
-const WALKING: Shape = { style: 'fastEasy', warmup: 300, cooldown: 300 };
+// Brisk walking and easy walking. Named Brisk and Easy so a walk never says "run".
+const WALKING: Shape = { style: 'briskWalk', warmup: 300, cooldown: 300 };
 
 /** A warm-up, the given run/walk pieces (work/recovery steps), a cool-down. */
 function workout(spec: Spec): IntervalPlan {
@@ -113,6 +113,17 @@ const stridesRun = (minutes: number, count = 6): Spec => ({
   ],
   shape: EASY,
 });
+/**
+ * A steady Zone 2 run of `minutes`: easy running held to the Zone 2 heart-rate
+ * range, or to the talk test when no heart rate is known. Not a pace.
+ */
+const zone2 = (minutes: number): Spec => rw([['run', minutes * 60, 'zone2']]);
+/** A Zone 2 run of `minutes` that ends with `count` relaxed strides, a small dose of quick running. */
+const zone2Strides = (minutes: number, count = 4): Spec =>
+  rw([
+    ['run', minutes * 60, 'zone2'],
+    ...repeat(count, [['run', 20, 'stride'], walk(70)]),
+  ]);
 /** Hill repeats: `count` hard efforts of `upSeconds` uphill, each followed by an easy walk or jog back down. */
 const hills = (count: number, upSeconds: number, downSeconds: number): Spec =>
   speed(repeat(count, [['run', upSeconds, 'hill'], walk(downSeconds)]));
@@ -262,11 +273,47 @@ const MARATHON_WEEKS = steadyWeeks([
   [30, 25, 20],
 ]);
 
+// Ten weeks of base building at Zone 2, three runs a week: a short run, a
+// middle run and a long run, all easy. Total time in zone grows about a tenth a
+// week with an easier fourth and eighth week. Weeks 6, 7 and 9 end the short run
+// with four strides; the middle run of weeks 4, 8 and 10 is a zone check.
+const ZONE2_BASE_WEEKS: readonly (readonly Spec[])[] = [
+  [zone2(30), zone2(30), zone2(40)],
+  [zone2(30), zone2(35), zone2(45)],
+  [zone2(35), zone2(35), zone2(50)],
+  [zone2(30), zone2(30), zone2(40)],
+  [zone2(35), zone2(40), zone2(55)],
+  [zone2Strides(40), zone2(40), zone2(60)],
+  [zone2Strides(40), zone2(45), zone2(65)],
+  [zone2(30), zone2(35), zone2(45)],
+  [zone2Strides(40), zone2(45), zone2(70)],
+  [zone2(30), zone2(30), zone2(40)],
+];
+
+// The four-run version: a second short, easy run between the middle and long
+// runs, so the long run is a smaller share of the week.
+const ZONE2_BASE_4_WEEKS: readonly (readonly Spec[])[] = [
+  [zone2(30), zone2(30), zone2(30), zone2(40)],
+  [zone2(30), zone2(35), zone2(30), zone2(45)],
+  [zone2(35), zone2(35), zone2(30), zone2(50)],
+  [zone2(30), zone2(30), zone2(25), zone2(40)],
+  [zone2(35), zone2(40), zone2(30), zone2(55)],
+  [zone2Strides(40), zone2(40), zone2(30), zone2(60)],
+  [zone2Strides(40), zone2(45), zone2(35), zone2(65)],
+  [zone2(30), zone2(35), zone2(25), zone2(45)],
+  [zone2Strides(40), zone2(45), zone2(35), zone2(70)],
+  [zone2(30), zone2(30), zone2(25), zone2(40)],
+];
+
+/** Weeks (0-based) whose middle run is a zone check: a normal Zone 2 run done as a retest. */
+export const ZONE2_CHECK_WEEKS: readonly number[] = [3, 7, 9];
+
 /** The same workout three times: a week that repeats one session. */
 const thrice = (spec: Spec): Spec[] => Array(3).fill(spec);
 
 // Twelve weeks from nothing to 10K: the beginner 5K ramp from run/walk to
-// continuous running, then longer runs to an hour. Three runs a week.
+// continuous running, then longer runs to an hour, with a lighter tenth week.
+// Three runs a week.
 const BEGINNER_10K_WEEKS: readonly (readonly Spec[])[] = [
   thrice(rw(repeat(8, [run(60), walk(90)]))),
   thrice(rw(repeat(6, [run(90), walk(120)]))),
@@ -288,8 +335,8 @@ const BEGINNER_10K_WEEKS: readonly (readonly Spec[])[] = [
     [25, 25, 30],
     [28, 30, 35],
     [30, 30, 40],
-    [30, 35, 45],
-    [30, 35, 55],
+    [25, 25, 30],
+    [30, 35, 50],
     [25, 30, 60],
   ]),
 ];
@@ -562,6 +609,8 @@ export const RUN_PROGRAMS: readonly RunProgram[] = [
   buildProgram('gentle5k', GENTLE_5K_WEEKS),
   buildProgram('beginner5k', BEGINNER_5K_WEEKS),
   buildProgram('fiveToTenK', FIVE_TO_TEN_K_WEEKS),
+  buildProgram('zone2Base', ZONE2_BASE_WEEKS),
+  buildProgram('zone2Base4', ZONE2_BASE_4_WEEKS, 'run', 'zone2Base'),
   buildProgram('faster5k', FASTER_5K_WEEKS),
   buildProgram('beginner10k', BEGINNER_10K_WEEKS),
   buildProgram('faster10k', FASTER_10K_WEEKS),
@@ -581,6 +630,26 @@ export const RUN_PROGRAMS: readonly RunProgram[] = [
   buildProgram('marathon', MARATHON_WEEKS),
   buildProgram('advancedMarathon', ADVANCED_MARATHON_WEEKS),
 ];
+
+/** Whether a program is the Zone 2 base-building program, in either version. */
+export const isZone2Program = (id: string): boolean =>
+  id === 'zone2Base' || id === 'zone2Base4';
+
+/** Whether a workout of a built-in program is a Zone 2 zone check (the middle run in a check week). */
+export function isZoneCheckWorkout(
+  programId: string,
+  workout: Pick<ProgramWorkout, 'week' | 'day'>
+): boolean {
+  return (
+    isZone2Program(programId) &&
+    workout.day === 1 &&
+    ZONE2_CHECK_WEEKS.includes(workout.week)
+  );
+}
+
+/** Whether a plan has a step held to Zone 2. */
+export const planHasZone2 = (plan: IntervalPlan): boolean =>
+  plan.steps.some((step) => step.effort === 'zone2');
 
 /** What a program's workouts are recorded as; a program that is gone reads as a run. */
 export function programActivity(id: string): RunProgram['activity'] {
@@ -604,6 +673,21 @@ export function programVersions(id: string): RunProgram[] {
   return RUN_PROGRAMS.filter(
     (program) => program.id === id || program.variantOf === id
   ).sort((a, b) => a.workoutsPerWeek - b.workoutsPerWeek);
+}
+
+/**
+ * The built-in workouts a stored copy is measured against when it is adjusted,
+ * or undefined once the copy has a different length (a realignment dropped or
+ * added workouts, so the positions no longer line up).
+ */
+export function builtInBaseline(
+  programId: string,
+  workouts: readonly ProgramWorkout[]
+): ProgramWorkout[] | undefined {
+  const program = findProgram(programId);
+  return program && program.workouts.length === workouts.length
+    ? program.workouts
+    : undefined;
 }
 
 /** Where a person stands in a program. */
@@ -659,29 +743,46 @@ export function planMinutes(plan: IntervalPlan): number {
   return Math.round(plan.steps.reduce((sum, s) => sum + s.seconds, 0) / 60);
 }
 
-/** Whole minutes of running (work steps) in a plan, walking and warm-up left out. */
+/**
+ * Whole minutes of the effort. A fast/easy plan counts its easy stretches too,
+ * so an easy run is not zero. Warm-up, cool-down, and the easy walking of a
+ * brisk-walk plan are left out.
+ */
 export function runMinutes(plan: IntervalPlan): number {
+  const easyCounts = plan.style === 'fastEasy';
   return Math.round(
     plan.steps
-      .filter((s) => s.kind === 'work')
+      .filter((s) => s.kind === 'work' || (easyCounts && s.kind === 'recovery'))
       .reduce((sum, s) => sum + s.seconds, 0) / 60
   );
 }
 
 export interface ProgramOutline {
-  /** Total minutes of each workout in week 1, in order. */
+  /** Minutes of each week-1 workout, warm-up and cool-down left out. A walk counts brisk time only. */
   firstWeek: number[];
-  /** Minutes of running in the biggest workout, where it builds to. */
+  /** The same minutes in the biggest workout: where the program builds to. */
   peakRunMinutes: number;
+}
+
+/** Minutes the card quotes, so week 1 and the peak use one unit. */
+function quotedMinutes(program: RunProgram, plan: IntervalPlan): number {
+  const countRecovery = program.activity !== 'walk';
+  return Math.round(
+    plan.steps
+      .filter(
+        (s) => s.kind === 'work' || (countRecovery && s.kind === 'recovery')
+      )
+      .reduce((sum, s) => sum + s.seconds, 0) / 60
+  );
 }
 
 /** A glance at a program: what week 1 looks like and what it builds to. */
 export function programOutline(program: RunProgram): ProgramOutline {
   const first = program.workouts.filter((w) => w.week === 0);
   return {
-    firstWeek: first.map((w) => planMinutes(w.plan)),
+    firstWeek: first.map((w) => quotedMinutes(program, w.plan)),
     peakRunMinutes: program.workouts.reduce(
-      (max, w) => Math.max(max, runMinutes(w.plan)),
+      (max, w) => Math.max(max, quotedMinutes(program, w.plan)),
       0
     ),
   };

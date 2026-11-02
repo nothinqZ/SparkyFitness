@@ -1,6 +1,10 @@
 import { HealthMetric } from '../HealthMetrics';
 import { SleepStageEvent } from './mobileHealthData';
 import type { RecordSyncError } from '../services/api/healthDataApi';
+import type {
+  AppleWorkoutZoneDuration,
+  MindfulnessSessionType,
+} from '@workspace/shared';
 
 // ==========================================
 // RAW INPUT TYPES (for aggregation functions)
@@ -150,6 +154,8 @@ export interface TransformedExerciseSession extends RecordTimezoneMetadata {
   hr_samples?: WorkoutHrSample[];
   laps?: WorkoutLapWindow[];
   telemetry?: WorkoutTelemetry;
+  /** Apple's time in each heart-rate zone, when the workout carried a zone group. */
+  hr_zones?: AppleWorkoutZoneDuration[];
 }
 
 /**
@@ -203,6 +209,8 @@ export interface WorkoutLapWindow {
  * omitted is derived server-side from the series where possible.
  */
 export interface WorkoutTelemetry {
+  /** The person's own 1 to 10 rating of the workout, from Apple Health. */
+  workout_effort?: number | null;
   avg_heart_rate?: number | null;
   max_heart_rate?: number | null;
   /** Metres per second. */
@@ -302,12 +310,30 @@ export interface TransformedNutritionEntry extends RecordTimezoneMetadata {
   caffeine_mg?: number;
 }
 
+/** Mindfulness session output (one per Health Connect MindfulnessSessionRecord). */
+export interface TransformedMindfulnessSession extends RecordTimezoneMetadata {
+  type: 'MindfulnessSession';
+  source: typeof HEALTHKIT_SOURCE | typeof HEALTH_CONNECT_SOURCE;
+  /** Stable record id, used for idempotent re-sync. */
+  source_id: string;
+  /** Session start; the server derives the calendar day from this + offset. */
+  timestamp: string;
+  startTime: string;
+  endTime: string;
+  duration_seconds: number;
+  /** Duration in minutes; required by the server's field check. */
+  value: number;
+  session_type: MindfulnessSessionType;
+  notes?: string;
+}
+
 /** Union type for all possible transform outputs */
 export type TransformOutput =
   | TransformedRecord
   | AggregatedSleepSession
   | TransformedExerciseSession
-  | TransformedNutritionEntry;
+  | TransformedNutritionEntry
+  | TransformedMindfulnessSession;
 
 // ==========================================
 // SYNC RESULT TYPES (Phase 5)

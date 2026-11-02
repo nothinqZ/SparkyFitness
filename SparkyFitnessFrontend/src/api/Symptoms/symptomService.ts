@@ -8,6 +8,7 @@ import type {
   SymptomEntryResponse,
   SymptomEpisodeContext,
   SymptomFreeDayResponse,
+  SymptomImpact,
   SymptomOptionKind,
   SymptomOptionResponse,
   SymptomPhotoResponse,
@@ -89,11 +90,13 @@ export const endSymptomEpisode = (
 
 export const addSymptomSeverity = (
   id: string,
-  severity: number
+  severity: number,
+  impact?: SymptomImpact
 ): Promise<SymptomEntryResponse> =>
   apiCall(`/v2/symptoms/entries/${id}/severity`, {
     method: 'POST',
-    body: { severity },
+    // Impact goes along only when chosen, so the reading alone stays as before.
+    body: impact ? { severity, impact } : { severity },
   });
 
 export const deleteSymptomEntry = (id: string): Promise<void> =>

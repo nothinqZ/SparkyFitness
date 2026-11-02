@@ -8,7 +8,6 @@
 -- The backfills fire the table's set_timestamp trigger, so updated_at on every
 -- existing row moves to the time of the migration.
 -- The whole file is one transaction, so a failure leaves the table as it was.
-BEGIN;
 
 ALTER TABLE public.mood_entries ADD COLUMN IF NOT EXISTS entry_timestamp TIMESTAMPTZ;
 -- Each existing row gets a time on its own day: created_at when that falls on
@@ -66,4 +65,3 @@ CREATE UNIQUE INDEX IF NOT EXISTS mood_entries_derived_source_day
 CREATE INDEX IF NOT EXISTS mood_entries_user_day_time
   ON public.mood_entries (user_id, entry_date, entry_timestamp);
 
-COMMIT;

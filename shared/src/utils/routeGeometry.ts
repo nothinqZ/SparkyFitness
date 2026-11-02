@@ -260,3 +260,173 @@ export function routeBounds(points: readonly RoutePoint[]): RouteBounds | null {
   }
   return bounds;
 }
+
+type LatLon = Pick<RoutePoint, 'lat' | 'lon'>;
+type Xy = { x: number; y: number };
+
+/**
+ * An equirectangular projection around `origin`, in metres. Accurate to a
+ * few centimetres over the distances a route spans, and far cheaper than
+ * great-circle maths for nearest-point searches.
+ */
+export function localProjector(origin: LatLon): (p: LatLon) => Xy {
+  const metresPerDegLat = (Math.PI * EARTH_RADIUS_M) / 180;
+  const metresPerDegLon = metresPerDegLat * Math.cos(toRad(origin.lat));
+  return (p) => ({
+    x: (p.lon - origin.lon) * metresPerDegLon,
+    y: (p.lat - origin.lat) * metresPerDegLat,
+  });
+}
+
+/** Distance from `p` to the segment `a`-`b`, and where along it (0 to 1). */
+export function distanceToSegment(
+  p: Xy,
+  a: Xy,
+  b: Xy
+): { distance: number; t: number } {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lengthSq = dx * dx + dy * dy;
+  const t =
+    lengthSq === 0
+      ? 0
+      : Math.max(
+          0,
+          Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSq)
+        );
+  return {
+    distance: Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)),
+    t,
+  };
+}
+
+const MAX_OVERLAP_SAMPLES = 20000;
+
+/** Points every `stepM` along the line, always including both ends. */
+function sampleLine(line: readonly Xy[], stepM: number): Xy[] {
+  const samples: Xy[] = [];
+  const first = line[0];
+  if (!first) return samples;
+  samples.push(first);
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1] as Xy;
+    const b = line[i] as Xy;
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    const pieces = Math.max(1, Math.ceil(length / stepM));
+    for (let k = 1; k <= pieces; k++) {
+      const t = k / pieces;
+      samples.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    }
+  }
+  return samples;
+}
+
+/**
+ * The share (0 to 1) of route `a` that lies within `toleranceM` of route `b`.
+ * Both are sampled along their length, so sparse points do not matter, and
+ * the work is bounded however long the routes are.
+ */
+export function routeOverlapFraction(
+  a: readonly RoutePoint[],
+  b: readonly RoutePoint[],
+  toleranceM = 30
+): number {
+  const origin = a[0];
+  if (!origin || a.length < 2 || b.length < 2) return 0;
+  const project = localProjector(origin);
+  const lineA = a.map(project);
+  const lineB = b.map(project);
+
+  const totalM = routeDistanceMeters(a) + routeDistanceMeters(b);
+  const stepM = Math.max(toleranceM / 2, totalM / MAX_OVERLAP_SAMPLES);
+  const samplesA = sampleLine(lineA, stepM);
+  const samplesB = sampleLine(lineB, stepM);
+
+  const cell = toleranceM;
+  const grid = new Map<string, Xy[]>();
+  // A sample within a quarter of the tolerance of one already in its cell adds
+  // nothing, and skipping it keeps a cell to a few dozen samples however
+  // tangled the line is (a track that doubles back over one spot would
+  // otherwise make the search below quadratic).
+  const dedupeM = toleranceM / 4;
+  for (const s of samplesB) {
+    const key = `${Math.floor(s.x / cell)},${Math.floor(s.y / cell)}`;
+    const bucket = grid.get(key);
+    if (!bucket) {
+      grid.set(key, [s]);
+    } else if (
+      !bucket.some((q) => Math.hypot(q.x - s.x, q.y - s.y) < dedupeM)
+    ) {
+      bucket.push(s);
+    }
+  }
+
+  let near = 0;
+  for (const s of samplesA) {
+    const cx = Math.floor(s.x / cell);
+    const cy = Math.floor(s.y / cell);
+    let found = false;
+    for (let dx = -1; dx <= 1 && !found; dx++) {
+      for (let dy = -1; dy <= 1 && !found; dy++) {
+        const bucket = grid.get(`${cx + dx},${cy + dy}`);
+        found =
+          bucket?.some((q) => Math.hypot(q.x - s.x, q.y - s.y) <= toleranceM) ??
+          false;
+      }
+    }
+    if (found) near++;
+  }
+  return near / samplesA.length;
+}
+
+/**
+ * Whether two routes really are different shapes: false when most of each
+ * lies on the other.
+ */
+export function routesAreDistinct(
+  a: readonly RoutePoint[],
+  b: readonly RoutePoint[],
+  { toleranceM = 30, maxOverlap = 0.7 } = {}
+): boolean {
+  const overlap = Math.min(
+    routeOverlapFraction(a, b, toleranceM),
+    routeOverlapFraction(b, a, toleranceM)
+  );
+  return overlap < maxOverlap;
+}
+
+/**
+ * Filters out invalid GPS points (Null Island, out-of-range coordinates)
+ * and extreme distance outliers (> maxRadiusMeters, default 500 km from the workout's median center).
+ *
+ * This guards against corrupted coordinate columns, sensor glitches, or stale first fixes
+ * that draw straight lines across continents.
+ */
+export function filterGpsTrackOutliers<T extends { lat: number; lon: number }>(
+  points: readonly T[],
+  maxRadiusMeters = 500_000
+): T[] {
+  const valid = points.filter(
+    (p) =>
+      Number.isFinite(p.lat) &&
+      Number.isFinite(p.lon) &&
+      !(p.lat === 0 && p.lon === 0) &&
+      p.lat >= -90 &&
+      p.lat <= 90 &&
+      p.lon >= -180 &&
+      p.lon <= 180
+  );
+  if (valid.length < 3) return valid;
+
+  const sortedLats = valid.map((p) => p.lat).sort((a, b) => a - b);
+  const sortedLons = valid.map((p) => p.lon).sort((a, b) => a - b);
+  const mid = Math.floor(valid.length / 2);
+  const medianPoint: LatLon = {
+    lat: sortedLats[mid] as number,
+    lon: sortedLons[mid] as number,
+  };
+
+  return valid.filter(
+    (p) => haversineMeters(medianPoint, p) <= maxRadiusMeters
+  );
+}

@@ -2,11 +2,29 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import Toast from 'react-native-toast-message';
 import RouteDrawScreen from '../../src/screens/RouteDrawScreen';
 import { saveDrawnRoute } from '../../src/services/routeService';
+import { ROUTE_EDITOR_MAX_POINTS } from '../../src/utils/routeEditor';
 import { initializeI18n } from '../../src/localization/i18n';
 import type { RootStackScreenProps } from '../../src/types/navigation';
 
 jest.mock('../../src/services/routeService', () => ({
   saveDrawnRoute: jest.fn(),
+  saveRouteEdits: jest.fn(),
+  useRoute: () => ({ route: undefined }),
+  useRouteGenerationCapabilities: () => ({
+    capabilities: {
+      available: false,
+      maxAlternatives: 1,
+      style: {
+        surface: false,
+        hilliness: false,
+        avoidSteps: false,
+        avoidBusyRoads: false,
+      },
+      stops: false,
+      source: null,
+    },
+    isLoading: false,
+  }),
 }));
 jest.mock('expo-location', () => ({
   getForegroundPermissionsAsync: jest
@@ -36,14 +54,26 @@ jest.mock('react-native-toast-message', () => ({
 const replace = jest.fn();
 const hidden = { includeHiddenElements: true };
 
-const renderScreen = () =>
-  render(
+const renderScreen = () => {
+  const utils = render(
     <RouteDrawScreen
       {...({
         navigation: { replace },
+        route: { key: 'k', name: 'RouteDraw' },
       } as unknown as RootStackScreenProps<'RouteDraw'>)}
     />
   );
+  // Zoomed in, so a tap only lands on the line when it is close to it.
+  act(() =>
+    utils.getByTestId('map-view', hidden).props.onRegionChangeComplete({
+      latitude: 40,
+      longitude: -74,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    })
+  );
+  return utils;
+};
 
 type HeaderOptions = {
   right: { onPress: () => void; disabled: boolean; busy: boolean };
@@ -90,10 +120,10 @@ describe('RouteDrawScreen', () => {
     expect(screen.getByText(/^0\.1\d km$|^0\.11 km$/)).toBeTruthy();
   });
 
-  it('marks only the start and the finish', () => {
+  it('marks every point so each can be dragged or selected', () => {
     const screen = renderScreen();
     for (let i = 0; i < 6; i++) tap(screen, 40 + i * 0.001, -74);
-    expect(screen.getAllByTestId('map-marker', hidden)).toHaveLength(2);
+    expect(screen.getAllByTestId('map-marker', hidden)).toHaveLength(6);
   });
 
   it('needs a name and at least 10 m before it can be saved', () => {
@@ -123,16 +153,20 @@ describe('RouteDrawScreen', () => {
 
   it('stops adding points at the limit and says so', () => {
     const screen = renderScreen();
-    for (let i = 0; i < 500; i++) tap(screen, 40 + i * 0.0001, -74);
-    expect(Toast.show).not.toHaveBeenCalled();
+    for (let i = 0; i < ROUTE_EDITOR_MAX_POINTS; i++) {
+      tap(screen, 40 + i * 0.001, -74);
+    }
+    expect(screen.getByText(/takes up to 100 points/)).toBeTruthy();
     tap(screen, 41, -74);
-    expect(Toast.show).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'info' })
+    expect(screen.getAllByTestId('map-marker', hidden)).toHaveLength(
+      ROUTE_EDITOR_MAX_POINTS
     );
     // Undo frees a slot again.
     fireEvent.press(screen.getByText('Undo'));
     tap(screen, 41, -74);
-    expect(Toast.show).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByTestId('map-marker', hidden)).toHaveLength(
+      ROUTE_EDITOR_MAX_POINTS
+    );
   }, 60_000);
 
   it('saves the trimmed name with the points and opens the route', async () => {

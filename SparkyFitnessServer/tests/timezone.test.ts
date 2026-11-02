@@ -4,6 +4,7 @@ import {
   dayOfWeek,
   addDays,
   compareDays,
+  daysInRange,
   dayToPickerDate,
   localDateToDay,
   isValidTimeZone,
@@ -83,6 +84,22 @@ describe('compareDays', () => {
     expect(compareDays('2024-01-01', '2024-01-01')).toBe(0);
     expect(compareDays('2024-01-02', '2024-01-01')).toBe(1);
     expect(compareDays('2023-12-31', '2024-01-01')).toBe(-1);
+  });
+});
+// ---------------------------------------------------------------------------
+// daysInRange
+// ---------------------------------------------------------------------------
+describe('daysInRange', () => {
+  it('lists every day from start to end inclusive, across a month end', () => {
+    expect(daysInRange('2024-02-28', '2024-03-01')).toEqual([
+      '2024-02-28',
+      '2024-02-29',
+      '2024-03-01',
+    ]);
+    expect(daysInRange('2024-05-05', '2024-05-05')).toEqual(['2024-05-05']);
+  });
+  it('is empty when end is before start', () => {
+    expect(daysInRange('2024-05-05', '2024-05-04')).toEqual([]);
   });
 });
 // ---------------------------------------------------------------------------

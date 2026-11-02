@@ -5,6 +5,7 @@ import RoutesScreen from '../../src/screens/RoutesScreen';
 import {
   GpxFileTooLargeError,
   pickAndImportGpx,
+  useRouteGenerationAvailable,
   useRoutes,
 } from '../../src/services/routeService';
 import { canShowRouteMap } from '../../src/utils/routeMapSupport';
@@ -14,6 +15,7 @@ import type { RootStackScreenProps } from '../../src/types/navigation';
 jest.mock('../../src/services/routeService', () => ({
   GpxFileTooLargeError: class GpxFileTooLargeError extends Error {},
   useRoutes: jest.fn(),
+  useRouteGenerationAvailable: jest.fn(),
   pickAndImportGpx: jest.fn(),
 }));
 jest.mock('../../src/utils/routeMapSupport', () => ({
@@ -69,6 +71,9 @@ beforeAll(async () => {
 });
 beforeEach(() => {
   jest.clearAllMocks();
+  (useRouteGenerationAvailable as jest.Mock).mockReturnValue({
+    available: false,
+  });
   (useRoutes as jest.Mock).mockReturnValue({
     routes: [],
     isLoading: false,
@@ -98,6 +103,29 @@ describe('RoutesScreen add menu', () => {
     (canShowRouteMap as jest.Mock).mockReturnValue(false);
     const labels = openAddMenu();
     expect(labels).not.toContain('Draw on a map');
+    expect(labels).toContain('Import a GPX file');
+  });
+
+  it('offers generating only when there is a routing provider and a map', () => {
+    (useRouteGenerationAvailable as jest.Mock).mockReturnValue({
+      available: true,
+    });
+    (canShowRouteMap as jest.Mock).mockReturnValue(true);
+    expect(openAddMenu()).toContain('Generate a loop or out-and-back');
+  });
+
+  it('does not offer generating without a routing provider', () => {
+    (canShowRouteMap as jest.Mock).mockReturnValue(true);
+    expect(openAddMenu()).not.toContain('Generate a loop or out-and-back');
+  });
+
+  it('does not offer generating where the map would render blank', () => {
+    (useRouteGenerationAvailable as jest.Mock).mockReturnValue({
+      available: true,
+    });
+    (canShowRouteMap as jest.Mock).mockReturnValue(false);
+    const labels = openAddMenu();
+    expect(labels).not.toContain('Generate a loop or out-and-back');
     expect(labels).toContain('Import a GPX file');
   });
 });

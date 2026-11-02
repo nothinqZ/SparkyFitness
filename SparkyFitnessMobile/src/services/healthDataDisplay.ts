@@ -10,6 +10,7 @@ import {
 } from './healthConnectService';
 import { HEALTH_METRICS } from '../HealthMetrics';
 import { addLog } from './LogService';
+import { isAuthorizationNotDeterminedError } from '../utils/healthErrors';
 import type { HealthDataDisplayState } from '../types/healthRecords';
 import type { TimeRange } from './storage';
 import i18n, { formatLocalizedNumber } from '../localization/i18n';
@@ -602,6 +603,25 @@ const RAW_FORMATTERS: Record<string, (records: unknown[]) => string> = {
     return totalPushes === 0 ? NO_DATA_DISPLAY : number(totalPushes);
   },
 
+  MindfulnessSession: (records) => {
+    const totalMindfulMinutes = (
+      records as { startTime: string; endTime: string }[]
+    ).reduce((sum, record) => {
+      const duration =
+        (new Date(record.endTime).getTime() -
+          new Date(record.startTime).getTime()) /
+        (1000 * 60);
+      return sum + duration;
+    }, 0);
+    return totalMindfulMinutes === 0
+      ? NO_DATA_DISPLAY
+      : unit(
+          'healthDataDisplay.minutes',
+          Math.round(totalMindfulMinutes),
+          '{{count}} min'
+        );
+  },
+
   ExerciseSession: (records) => {
     const totalExerciseMinutes = (
       records as { startTime: string; endTime: string }[]
@@ -740,6 +760,11 @@ export async function fetchHealthDisplayData(
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
+      if (isAuthorizationNotDeterminedError(error)) {
+        result[metric.id] = NO_DATA_DISPLAY;
+        continue;
+      }
+
       addLog(
         `[healthDataDisplay] Error fetching ${metric.defaultLabel}: ${errorMessage}`,
         'ERROR'

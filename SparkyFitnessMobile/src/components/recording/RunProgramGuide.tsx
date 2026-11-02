@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { isZone2Program } from '@workspace/shared';
 import Icon from '../Icon';
 import { programName } from './RunProgramCard';
 
@@ -22,6 +23,16 @@ export function programStructure(t: TFunction, id: string): string {
       return t('runPrograms.guide.structure.fiveToTenK', {
         defaultValue:
           'Each week has two steady runs and a long run. The long run grows from 40 to 65 minutes. Every fourth week is lighter so you can recover, and the last week eases off.',
+      });
+    case 'zone2Base':
+      return t('runPrograms.guide.structure.zone2Base', {
+        defaultValue:
+          'Each week has a short run, a middle run and a long run, all easy and held to Zone 2. Time in zone grows from 100 to 155 minutes a week, the long run from 40 to 70 minutes, and weeks 4 and 8 are lighter. Weeks 6, 7 and 9 end the short run with four relaxed strides. The middle run of weeks 4, 8 and 10 is a zone check.',
+      });
+    case 'zone2Base4':
+      return t('runPrograms.guide.structure.zone2Base4', {
+        defaultValue:
+          'Each week has two short runs, a middle run and a long run, all easy and held to Zone 2. Time in zone grows from 130 to 190 minutes a week, the long run from 40 to 70 minutes, and weeks 4 and 8 are lighter. Weeks 6, 7 and 9 end the first run with four relaxed strides. The middle run of weeks 4, 8 and 10 is a zone check.',
       });
     case 'faster5k':
       return t('runPrograms.guide.structure.faster5k', {
@@ -56,12 +67,12 @@ export function programStructure(t: TFunction, id: string): string {
     case 'beginner10k':
       return t('runPrograms.guide.structure.beginner10k', {
         defaultValue:
-          'Weeks 1 to 6 follow the beginner 5K build from short runs and walks to continuous running. Weeks 7 to 12 are three runs a week, with the long run growing from 30 to 60 minutes.',
+          'Weeks 1 to 6 follow the beginner 5K build from short runs and walks to continuous running. Weeks 7 to 12 are three runs a week. The long run grows from 30 to 60 minutes, and week 10 is lighter.',
       });
     case 'faster10k':
       return t('runPrograms.guide.structure.faster10k', {
         defaultValue:
-          'Each week has a speed session (fast and easy repeats), an easy run and a longer run. In weeks 5 to 7 the longer run is a tempo run of 20, 25 and then 30 minutes, and the last week eases off.',
+          'Each week has a speed session (fast repeats or hills), an easy run and a longer run. Week 4 is lighter. In weeks 5 to 7 the longer run is a tempo run of 20, 25 and then 30 minutes, and the last week eases off.',
       });
     case 'tenKToHalf':
       return t('runPrograms.guide.structure.tenKToHalf', {
@@ -81,27 +92,27 @@ export function programStructure(t: TFunction, id: string): string {
     case 'advancedMarathon':
       return t('runPrograms.guide.structure.advancedMarathon', {
         defaultValue:
-          'Most weeks have two easy runs, a speed or tempo session, a middle run and a long run. The long run builds from 90 minutes to three hours, every fourth week is lighter, and the last two weeks taper before race day.',
+          'Most weeks have two easy runs, a speed, hill or tempo session, a middle run and a long run. Most easy runs from week 3 end with strides. From week 9 the long run includes a block at marathon pace, except in the lighter weeks. The long run builds from 90 minutes to three hours, every fourth week is lighter, and the last two weeks taper before race day.',
       });
     case 'halfMarathon4':
       return t('runPrograms.guide.structure.halfMarathon4', {
         defaultValue:
-          'Each week has two easy runs, a middle run and a long run. The long run builds from 60 to 125 minutes, every fourth week is lighter, and the last two weeks taper before race day. The final week has three shorter runs.',
+          'Each week has two easy runs, a middle run and a long run. The long run builds from 50 to 115 minutes, every fourth week is lighter, and the last two weeks taper before race day. The final week has three shorter runs.',
       });
     case 'tenKToHalf4':
       return t('runPrograms.guide.structure.tenKToHalf4', {
         defaultValue:
-          'Each week has two short runs, a middle run and a long run. The long run builds from 75 to 125 minutes, week 4 is lighter, and the last three weeks taper before race day. The final week has three shorter runs.',
+          'Each week has two short runs, a middle run and a long run. The long run builds from 65 to 115 minutes, weeks 4 and 8 are lighter, and the last two weeks taper before race day. The final week has three shorter runs.',
       });
     case 'fasterHalf4':
       return t('runPrograms.guide.structure.fasterHalf4', {
         defaultValue:
-          'Each week has a speed session, two easy runs and a long run. The long run builds from 80 to 120 minutes, week 4 is lighter, and the last three weeks taper before race day. The final week has three shorter runs.',
+          'Each week has a speed session, two easy runs and a long run. The long run builds from 70 to 110 minutes. Tempo runs of 25 and 30 minutes replace the speed session in weeks 6 and 8, week 4 is lighter, and the last three weeks taper before race day. The final week has three shorter runs.',
       });
     case 'beginnerMarathon4':
       return t('runPrograms.guide.structure.beginnerMarathon4', {
         defaultValue:
-          'Each week has two short runs, a middle run and a long run. The long run builds from 80 minutes to 2 hours 40 minutes, every fourth week is lighter, and the last three weeks taper before race day. The final week has three shorter runs.',
+          'Each week has two short runs, a middle run and a long run. The long run builds from 70 minutes to 2½ hours, every fourth week is lighter, and the last three weeks taper before race day. The final week has three shorter runs.',
       });
     default:
       return '';
@@ -125,6 +136,11 @@ export function programRest(t: TFunction, id: string): string {
         defaultValue:
           'Keep a rest day between the two steady runs, and put the long run a day or two after a rest day. Rest or cross-train (cycling, swimming, an easy walk) on the other days.',
       });
+    case 'zone2Base':
+      return t('runPrograms.guide.rest.zone2Base', {
+        defaultValue:
+          'Keep a rest day between runs where you can, and put the long run a day or two after a rest day. Easy runs add up quickly, so if you feel flat, take the day off rather than running harder. Rest or cross-train on the other days.',
+      });
     case 'faster5k':
     case 'faster10k':
     case 'fasterHalf':
@@ -137,6 +153,7 @@ export function programRest(t: TFunction, id: string): string {
         defaultValue:
           'Leave a day or two between runs, for example Monday, Thursday and Saturday, and keep every run easy and conversational. Rest, walk or cycle gently on the other days. If anything hurts more as you go, drop back to the previous week.',
       });
+    case 'zone2Base4':
     case 'halfMarathon4':
     case 'tenKToHalf4':
     case 'fasterHalf4':
@@ -233,6 +250,21 @@ const RunProgramGuide: React.FC<{
                 'Go by effort, not pace. Run slowly enough that you could talk in short sentences. If you cannot, slow down or take a walk break early. Beginner runs should feel easy to moderate, around 4 to 5 out of 10. Easy runs stay conversational, tempo runs feel comfortably hard (about 6 to 7 out of 10), and the fast pieces in speed sessions feel hard but controlled (7 to 8 out of 10), with the easy pieces between them a relaxed jog.',
             })}
           </Section>
+          {programId && isZone2Program(programId) ? (
+            <Section
+              title={t('runPrograms.guide.zone2.title', {
+                defaultValue: 'Zone 2 runs',
+              })}
+            >
+              {`${t('runPrograms.guide.zone2.body', {
+                defaultValue:
+                  'Zone 2 is easy aerobic running: about 60 to 70 percent of your maximum heart rate. Zone 2 runs are held to a heart rate range, not a pace, because the same pace is harder on a hot day or a tired week. The Record screen shows the range and tells you when you are above or below it. If you have no heart rate reading, use the talk test: you should be able to speak in full sentences. Heart rate drifts up a little on a long run, so the top of the range loosens after 20 minutes. If your breathing is easy, a few beats over is fine; if it feels harder, slow down or walk. The range comes from your own heart rate zone settings; if you have not set a maximum, it is an estimate from your age, which can be off by ten beats or more either way. If it feels too easy or too hard, trust the talk test.',
+              })}\n\n${t('runPrograms.guide.zone2.check', {
+                defaultValue:
+                  'Weeks 4, 8 and 10 each have a zone check: the middle run. Run it on the same flat, familiar route at the same heart rate or effort, and compare your pace with the last one. If it is faster at the same effort, your base is growing. If you are slower, do not push: sleep, heat and stress show up here.',
+              })}`}
+            </Section>
+          ) : null}
           <Section
             title={t('runPrograms.guide.efforts.title', {
               defaultValue: 'Strides, hills, tempo and marathon pace',

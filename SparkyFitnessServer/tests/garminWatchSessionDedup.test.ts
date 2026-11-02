@@ -101,7 +101,7 @@ describe('Garmin import of watch-recorded sessions', () => {
       'UTC'
     );
 
-    expect(result).toEqual({ processedEntries: 2 });
+    expect(result).toEqual({ processedEntries: 2, failedDefinitions: 0 });
     // Only the unrelated activity becomes a Garmin diary entry.
     expect(
       exerciseEntryRepository._createExerciseEntryWithClient

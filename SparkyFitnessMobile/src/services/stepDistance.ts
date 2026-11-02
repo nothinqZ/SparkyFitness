@@ -1,4 +1,4 @@
-import { getStepsBetween } from './stepCounter';
+import { getHealthStepsBetween, getStepsBetween } from './stepCounter';
 import { getStride, learnStride } from './strideCalibration';
 import {
   activeShare,
@@ -6,12 +6,13 @@ import {
   estimateDistanceMeters,
   type FormMetrics,
   isStepActivity,
+  MIN_CALIBRATION_METERS,
 } from '../utils/stride';
-import type { RecordingActivity } from '../utils/gpsRecording';
+import type { DiaryActivity } from '../utils/gpsRecording';
 
 /** What a recording needs to turn steps into distance. */
 export interface StepWindow {
-  activity: RecordingActivity;
+  activity: DiaryActivity;
   startedAt: number;
   finishedAt: number;
   /** Time on the clock, with pauses removed. */
@@ -85,7 +86,7 @@ export async function estimateIndoorDistance(
  * took to cover it.
  */
 export async function learnFromIndoorEntry(
-  activity: RecordingActivity,
+  activity: DiaryActivity,
   estimate: IndoorDistanceEstimate | null,
   enteredKm: number | null
 ): Promise<void> {
@@ -126,4 +127,59 @@ export async function measureOutdoorForm(
   const steps = await activeSteps(window, false);
   if (steps == null) return null;
   return computeFormMetrics(steps, window.activeSeconds, distanceMeters);
+}
+
+/** Form worked out for a watch run, with the steps it came from. */
+export interface WatchRunForm extends FormMetrics {
+  /** Steps over the moving time, kept so a corrected distance can redo the stride. */
+  steps: number;
+}
+
+/**
+ * Cadence and stride length for a run the watch recorded. The watch's own
+ * step count is used when it sent one (an indoor run files before Apple
+ * Health has those steps). Otherwise Apple Health, then the phone's
+ * pedometer. A window with too few steps, or one whose steps do not fit the
+ * distance (a stride no runner has), is ignored rather than trusted. Never
+ * raises a permission prompt: filing a run in the background must not ask.
+ */
+export async function measureWatchRunForm(
+  window: StepWindow,
+  distanceMeters: number,
+  knownSteps?: number | null
+): Promise<WatchRunForm | null> {
+  if (!isStepActivity(window.activity)) return null;
+  // Already the moving-time count. A pause was taken off on the watch.
+  const reported =
+    knownSteps != null && knownSteps > 0 ? Math.round(knownSteps) : null;
+  const health =
+    reported == null
+      ? await getHealthStepsBetween(window.startedAt, window.finishedAt)
+      : null;
+  const steps =
+    reported != null
+      ? reported
+      : health != null
+        ? Math.round(
+            health *
+              activeShare(
+                window.activeSeconds,
+                (window.finishedAt - window.startedAt) / 1000
+              )
+          )
+        : await activeSteps(window, false);
+  if (steps == null) return null;
+  const metrics = computeFormMetrics(
+    steps,
+    window.activeSeconds,
+    distanceMeters
+  );
+  if (!metrics) return null;
+  if (
+    distanceMeters >= MIN_CALIBRATION_METERS &&
+    metrics.strideLengthCm == null
+  ) {
+    return null;
+  }
+  return { ...metrics, steps };
 }

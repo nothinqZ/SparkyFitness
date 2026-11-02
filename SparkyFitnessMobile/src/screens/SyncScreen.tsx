@@ -42,6 +42,7 @@ import {
   loadHealthPreference,
   saveHealthPreference,
   requestHealthPermissions,
+  requestGrantedHealthPermissions,
   refreshEnabledMetricPermissions,
   loadAllEnabledPermissions,
   enableBackgroundDeliveryForMetric,
@@ -97,6 +98,7 @@ import type {
 import { useSyncHealthData, usePreferences } from '../hooks';
 import type { RootStackScreenProps } from '../types/navigation';
 import { fetchHealthDisplayData } from '../services/healthDataDisplay';
+import { metricsCoveredByGrant } from '../utils/healthPermissionGrants';
 import { shareHealthDiagnosticReport } from '../services/healthDiagnosticService';
 
 type SyncScreenProps = RootStackScreenProps<'Sync'>;
@@ -613,24 +615,48 @@ const SyncScreen: React.FC<SyncScreenProps> = ({ navigation }) => {
       );
 
       try {
-        const granted = await requestHealthPermissions(allPermissions);
+        const grantedPermissions =
+          await requestGrantedHealthPermissions(allPermissions);
+        const granted = allPermissions.every((permission) =>
+          grantedPermissions.some(
+            (g) =>
+              g.recordType === permission.recordType &&
+              g.accessType === permission.accessType
+          )
+        );
 
         if (!granted) {
+          // Keep each metric whose own permissions were granted: one that
+          // was declined, or that this Health Connect can't grant, must not
+          // switch every other metric off.
+          const covered = metricsCoveredByGrant(
+            HEALTH_METRICS,
+            grantedPermissions
+          );
+          const onlyWritebackDeclined = covered.size === HEALTH_METRICS.length;
           Alert.alert(
             t('syncScreen.permissionRequired.allTitle', {
               defaultValue: 'Permissions Required',
             }),
-            t('syncScreen.permissionRequired.allMessage', {
-              defaultValue:
-                'Some permissions were not granted. Please enable all required health permissions in the {{settings}} to sync all data.',
-              settings: healthSettingsName,
-            })
+            onlyWritebackDeclined
+              ? t('syncScreen.permissionRequired.writebackMessage', {
+                  defaultValue:
+                    'Every metric will sync. To write your data back, grant the missing permissions in {{settings}}.',
+                  settings: healthSettingsName,
+                })
+              : t('syncScreen.permissionRequired.allMessage', {
+                  defaultValue:
+                    'Some permissions were not granted. Please enable all required health permissions in the {{settings}} to sync all data.',
+                  settings: healthSettingsName,
+                })
           );
           HEALTH_METRICS.forEach((metric) => {
-            newHealthMetricStates[metric.stateKey] = false;
+            newHealthMetricStates[metric.stateKey] = covered.has(
+              metric.stateKey
+            );
           });
           addLog(
-            '[SyncScreen] Not all permissions were granted. Reverting "Enable All".',
+            `[SyncScreen] Not all permissions were granted. Enabled the ${covered.size}/${HEALTH_METRICS.length} metrics that were.`,
             'WARNING'
           );
         } else {

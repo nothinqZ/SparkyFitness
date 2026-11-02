@@ -1,5 +1,7 @@
 import {
   requestAuthorization,
+  getRequestStatusForAuthorization,
+  AuthorizationRequestStatus,
   queryQuantitySamples,
   queryStatisticsCollectionForQuantity,
   isHealthDataAvailable,
@@ -12,6 +14,7 @@ import {
 import { Platform, Alert } from 'react-native';
 import { addLog } from '../LogService';
 import i18n from '../../localization/i18n';
+import { isAuthorizationNotDeterminedError } from '../../utils/healthErrors';
 import {
   AggregatedHealthRecord,
   MetricConfig,
@@ -33,9 +36,15 @@ import {
 } from './dataTransformation';
 import { DIETARY_WRITE_IDENTIFIERS } from './writebackMappers';
 import {
+  WORKOUT_EFFORT_IDENTIFIER,
+  matchWorkoutEffort,
+  readWorkoutEffortSamples,
+} from './workoutEffort';
+import {
   collectWorkoutTelemetry,
   type WorkoutProxyLike,
 } from './workoutTelemetry';
+import { readAppleWorkoutZoneGroups } from '../appleHeartZones';
 import {
   createTelemetryRunContext,
   type TelemetryRunContext,
@@ -123,6 +132,11 @@ const recordReadError = (error: unknown, label: string): string => {
       `[HealthKitService] ${label} failed: database inaccessible (device likely locked)`,
       'WARNING'
     );
+  } else if (isAuthorizationNotDeterminedError(error)) {
+    addLog(
+      `[HealthKitService] ${label}: authorization not determined (permission not yet granted)`,
+      'INFO'
+    );
   } else {
     addLog(`[HealthKitService] ${label} failed: ${message}`, 'ERROR');
   }
@@ -200,6 +214,8 @@ const SUPPORTED_HK_TYPES = new Set<string>([
  */
 const WORKOUT_TELEMETRY_READ_IDENTIFIERS: readonly string[] = [
   'HKWorkoutRouteTypeIdentifier',
+  // The person's own 1-10 rating of the workout, read by time window.
+  WORKOUT_EFFORT_IDENTIFIER,
   'HKQuantityTypeIdentifierStepCount',
   'HKQuantityTypeIdentifierHeartRate',
   'HKQuantityTypeIdentifierRunningSpeed',
@@ -254,6 +270,7 @@ export const HEALTHKIT_TYPE_MAP: Record<string, string> = {
   LeanBodyMass: 'HKQuantityTypeIdentifierLeanBodyMass',
   SleepSession: 'HKCategoryTypeIdentifierSleepAnalysis',
   Stress: 'HKCategoryTypeIdentifierMindfulSession', // Map Stress to MindfulSession for HealthKit
+  MindfulnessSession: 'HKCategoryTypeIdentifierMindfulSession',
   Workout: 'HKWorkoutTypeIdentifier', // Map Workout to HKWorkoutTypeIdentifier for HealthKit
   CervicalMucus: 'HKCategoryTypeIdentifierCervicalMucusQuality',
   // The route is its own HealthKit type; mapping it to the workout type would
@@ -315,43 +332,9 @@ export const initHealthConnect = async (): Promise<boolean> => {
   }
 };
 
-export const requestHealthPermissions = async (
+const healthKitAuthorizationTypes = (
   permissionsToRequest: PermissionRequest[]
-): Promise<boolean> => {
-  if (!isHealthKitAvailable) {
-    Alert.alert(
-      i18n.t('healthSync.alerts.healthAppUnavailableTitle', {
-        defaultValue: 'Health App Not Available',
-      }),
-      i18n.t('healthSync.alerts.healthAppUnavailableMessage', {
-        defaultValue:
-          'Please install the Apple Health app to sync your health data.',
-      })
-    );
-    return false;
-  }
-
-  const isSimulator =
-    Platform.OS === 'ios' &&
-    (Platform.constants as { simulator?: boolean })?.simulator === true;
-  if (
-    isSimulator &&
-    !(globalThis as Record<string, unknown>).FORCE_HEALTHKIT_ON_SIM
-  ) {
-    // Returning true here is a convenience for simulator runs, but callers log it as
-    // "permission granted" — say plainly that nothing was requested so the log is not
-    // read as evidence that HealthKit was asked.
-    addLog(
-      '[HealthKitService] Simulator: skipped the authorization request entirely (no sheet, no grant). Set FORCE_HEALTHKIT_ON_SIM to exercise the real path.',
-      'WARNING'
-    );
-    return true;
-  }
-
-  if (!permissionsToRequest || permissionsToRequest.length === 0) {
-    return true;
-  }
-
+): { toRead: string[]; toShare: string[] } => {
   const readPermissionsSet = new Set<string>();
   const writePermissionsSet = new Set<string>();
 
@@ -435,6 +418,90 @@ export const requestHealthPermissions = async (
 
   const toRead = Array.from(readPermissionsSet);
   const toShare = Array.from(writePermissionsSet);
+
+  return { toRead, toShare };
+};
+
+/**
+ * Whether any of these permissions includes a HealthKit type the user has never been
+ * asked about, e.g. one added to a metric in an app update. HealthKit only shows the
+ * sheet for such types, so re-requesting when this is true is safe. An unknown status
+ * or a failed check counts as true: a request with nothing new shows no sheet.
+ */
+export const hasUnrequestedHealthPermissions = async (
+  permissions: PermissionRequest[]
+): Promise<boolean> => {
+  if (!isHealthKitAvailable) {
+    return false;
+  }
+  const { toRead: allToRead, toShare } =
+    healthKitAuthorizationTypes(permissions);
+  // HealthKit keeps reporting the workout effort rating and the workout route
+  // as never requested, so counting them would show the sheet on every visit.
+  // They are still asked for with the rest whenever something else is
+  // genuinely new.
+  const toRead = allToRead.filter(
+    (identifier) =>
+      identifier !== WORKOUT_EFFORT_IDENTIFIER &&
+      identifier !== 'HKWorkoutRouteTypeIdentifier'
+  );
+  if (toRead.length === 0 && toShare.length === 0) {
+    return false;
+  }
+  try {
+    const status = await getRequestStatusForAuthorization({
+      toRead: toRead as Parameters<typeof requestAuthorization>[0]['toRead'],
+      toShare: toShare as Parameters<typeof requestAuthorization>[0]['toShare'],
+    });
+    return status !== AuthorizationRequestStatus.unnecessary;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    addLog(
+      `[HealthKitService] Failed to check HealthKit authorization status: ${message}`,
+      'WARNING'
+    );
+    return true;
+  }
+};
+
+export const requestHealthPermissions = async (
+  permissionsToRequest: PermissionRequest[]
+): Promise<boolean> => {
+  if (!isHealthKitAvailable) {
+    Alert.alert(
+      i18n.t('healthSync.alerts.healthAppUnavailableTitle', {
+        defaultValue: 'Health App Not Available',
+      }),
+      i18n.t('healthSync.alerts.healthAppUnavailableMessage', {
+        defaultValue:
+          'Please install the Apple Health app to sync your health data.',
+      })
+    );
+    return false;
+  }
+
+  const isSimulator =
+    Platform.OS === 'ios' &&
+    (Platform.constants as { simulator?: boolean })?.simulator === true;
+  if (
+    isSimulator &&
+    !(globalThis as Record<string, unknown>).FORCE_HEALTHKIT_ON_SIM
+  ) {
+    // Returning true here is a convenience for simulator runs, but callers log it as
+    // "permission granted" — say plainly that nothing was requested so the log is not
+    // read as evidence that HealthKit was asked.
+    addLog(
+      '[HealthKitService] Simulator: skipped the authorization request entirely (no sheet, no grant). Set FORCE_HEALTHKIT_ON_SIM to exercise the real path.',
+      'WARNING'
+    );
+    return true;
+  }
+
+  if (!permissionsToRequest || permissionsToRequest.length === 0) {
+    return true;
+  }
+
+  const { toRead, toShare } = healthKitAuthorizationTypes(permissionsToRequest);
 
   if (toRead.length === 0 && toShare.length === 0) {
     // Every requested record type expanded to nothing — an unmapped record type, or one
@@ -1054,6 +1121,51 @@ const handleStress: RecordHandler = async (identifier, startDate, endDate) => {
   }));
 };
 
+// Handler for MindfulnessSession records. Unlike Stress (presence only), each
+// sample keeps its uuid and source so the server can upsert it by id.
+const handleMindfulnessSession: RecordHandler = async (
+  identifier,
+  startDate,
+  endDate
+) => {
+  const samples = await queryCategorySamples(
+    identifier as Parameters<typeof queryCategorySamples>[0],
+    {
+      ascending: false,
+      limit: 0,
+      filter: { date: { startDate, endDate } },
+    }
+  );
+
+  return samples
+    .filter((s) => isInDateRange(new Date(s.startDate), startDate, endDate))
+    .map((s) => {
+      const sample = s as unknown as {
+        uuid?: string;
+        metadata?: Record<string, unknown>;
+        metadataTimeZone?: string;
+        sourceRevision?: { source?: { bundleIdentifier?: string } };
+      };
+      const flatTz = sample.metadataTimeZone;
+      const metadata =
+        sample.metadata || flatTz
+          ? {
+              ...sample.metadata,
+              ...(flatTz && !sample.metadata?.HKTimeZone
+                ? { HKTimeZone: flatTz }
+                : {}),
+            }
+          : undefined;
+      return {
+        uuid: sample.uuid,
+        startTime: s.startDate,
+        endTime: s.endDate,
+        metadata,
+        sourceBundleId: sample.sourceRevision?.source?.bundleIdentifier,
+      };
+    });
+};
+
 // Handler for reproductive health category types
 const handleReproductiveHealth: RecordHandler = async (
   identifier,
@@ -1144,6 +1256,23 @@ const handleWorkout: RecordHandler = async (
     if (!ctx.claim()) break;
     telemetryAllowed.add(w);
   }
+
+  // One read of the ratings covers every workout in the window.
+  const effortSamples =
+    filteredWorkouts.length > 0
+      ? await readWorkoutEffortSamples(
+          new Date(
+            Math.min(
+              ...filteredWorkouts.map((w) => new Date(w.startDate).getTime())
+            )
+          ),
+          new Date(
+            Math.max(
+              ...filteredWorkouts.map((w) => new Date(w.endDate).getTime())
+            )
+          )
+        )
+      : [];
 
   // Fetch statistics (calories, distance) for each workout. Bounded fan-out:
   // each workout issues several statistics queries plus, when telemetry is
@@ -1343,6 +1472,8 @@ const handleWorkout: RecordHandler = async (
       // budget on a backfill silently loses elevation/floors/strokes/elapsed time
       // as well, even though the budget exists only to cap the expensive reads.
       const telemetry: Record<string, number | null | undefined> = {};
+      const effort = matchWorkoutEffort(effortSamples, w);
+      if (effort != null) telemetry.workout_effort = effort;
       const gain = elevation.metadataElevationAscended?.quantity;
       const loss = elevation.metadataElevationDescended?.quantity;
       // The sample property when it carries a value, else the statistic read
@@ -1431,6 +1562,8 @@ const handleWorkout: RecordHandler = async (
     result.status === 'fulfilled' ? [result.value] : []
   );
 
+  await attachAppleZoneGroups(workoutsWithStats);
+
   // One summary line per run — the field-verifiable signal for #2191. See the
   // matching log in healthconnect/index.ts.
   const overBudget =
@@ -1444,6 +1577,29 @@ const handleWorkout: RecordHandler = async (
 
   return workoutsWithStats;
 };
+
+/**
+ * Copies Apple's heart-rate zone group onto each workout that has one.
+ * Own-watch workouts are still skipped later by the transformer; this only
+ * fills the field. A failure leaves the workout to be bucketed on the server.
+ */
+async function attachAppleZoneGroups(
+  records: Record<string, unknown>[]
+): Promise<void> {
+  const uuids = records.flatMap((record) =>
+    typeof record.uuid === 'string' && record.uuid.length > 0
+      ? [record.uuid]
+      : []
+  );
+  if (uuids.length === 0) return;
+  const groups = await readAppleWorkoutZoneGroups(uuids);
+  if (groups.size === 0) return;
+  for (const record of records) {
+    if (typeof record.uuid !== 'string') continue;
+    const zones = groups.get(record.uuid.toLowerCase());
+    if (zones) record.hr_zones = zones;
+  }
+}
 
 // Handler for BloodPressure records (requires merging systolic and diastolic samples)
 const handleBloodPressure: RecordHandler = async (
@@ -1903,6 +2059,7 @@ const handleNutrition: RecordHandler = async (
 const RECORD_HANDLERS: Record<string, RecordHandler> = {
   SleepSession: handleSleepSession,
   Stress: handleStress,
+  MindfulnessSession: handleMindfulnessSession,
   IntermenstrualBleeding: handleReproductiveHealth,
   MenstruationFlow: handleReproductiveHealth,
   OvulationTest: handleReproductiveHealth,
@@ -2015,6 +2172,7 @@ const probeWorkoutEarliest = async (now: Date): Promise<Date | null> => {
 const CATEGORY_PROBE_TYPES = new Set([
   'SleepSession',
   'Stress',
+  'MindfulnessSession',
   'IntermenstrualBleeding',
   'MenstruationFlow',
   'OvulationTest',

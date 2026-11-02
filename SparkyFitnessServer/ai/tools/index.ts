@@ -14,6 +14,7 @@ import { buildCustomNutrientTools } from './customNutrientTools.js';
 import { buildWaterContainerTools } from './waterContainerTools.js';
 import { buildCaffeineKineticsTools } from './caffeineKineticsTools.js';
 import { buildCoachTools } from './coachTools.js';
+import { buildCompareTools } from './compareTools.js';
 import { buildEngagementTools } from './engagementTools.js';
 import { buildExerciseStatsTools } from './exerciseStatsTools.js';
 import { buildExerciseTools } from './exerciseTools.js';
@@ -131,6 +132,7 @@ const CATEGORY_BUILDERS: Record<
   reports: [
     (u, tz) => buildReportTools(u, tz),
     (u, tz) => buildDashboardTools(u, tz),
+    (u, tz) => buildCompareTools(u, tz),
   ],
   medications: [(u, tz) => buildMedicationTools(u, tz)],
 };

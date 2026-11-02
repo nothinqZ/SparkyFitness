@@ -177,6 +177,8 @@ export const endSymptomEpisodeBodySchema = z.object({
 export const addSymptomSeverityBodySchema = z.object({
   severity: z.number(),
   at: optionalNullableString,
+  // Impact at the same moment, appended to impact_timeline alongside severity.
+  impact: z.enum(SYMPTOM_IMPACT_LEVELS).nullable().optional(),
 });
 
 const queryBool = z
@@ -216,6 +218,10 @@ export const symptomEntryResponseSchema = z.object({
   severity_timeline: z.array(
     z.object({ at: z.string(), severity: z.number() })
   ),
+  // Optional so clients keep parsing responses from servers without it.
+  impact_timeline: z
+    .array(z.object({ at: z.string(), impact: z.enum(SYMPTOM_IMPACT_LEVELS) }))
+    .optional(),
   context_text: z.string().nullable(),
   bristol_type: z.number().nullable(),
   source: z.string(),

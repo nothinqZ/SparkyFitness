@@ -52,6 +52,7 @@ import type {
   PrBaselineEntry,
 } from '../utils/workoutSession';
 import { newUuid } from '../utils/ids';
+import { buildExerciseReorderItems } from '../utils/workoutSupersets';
 import {
   addNotificationResponseListener,
   cancelScheduledNotification,
@@ -557,6 +558,16 @@ export interface ActiveWorkoutState {
    * move or a null session leaves state untouched.
    */
   reorderExercises: (fromItemIndex: number, toItemIndex: number) => void;
+  /**
+   * Do an upcoming exercise now: it moves to sit just before the exercise the
+   * cursor is on, and the cursor moves to its first set still to do — for a
+   * machine that is taken, or a quick change of order. The exercise that was
+   * current comes straight after. A superset moves as one block, as in
+   * `reorderExercises`. No-op for the current exercise or an earlier one.
+   * `anchorEntryId` overrides "the current exercise" (the watch sends the
+   * one it is on).
+   */
+  doExerciseNow: (entryId: string, anchorEntryId?: string) => void;
   /** Update session location */
   setSessionLocation: (location: string | null) => void;
   /**
@@ -2556,8 +2567,38 @@ export const useActiveWorkoutStore = create<ActiveWorkoutState>()(
           calories_per_hour: exercise.calories_per_hour ?? null,
         };
 
-        // Reset to a single default set — the old sets no longer describe the
-        // new movement. `?? null` on distance/heart_rate keeps the entry valid.
+        // Same modality: keep the set structure and the planned weight/reps/
+        // duration/distance so a swap doesn't mean re-entering them. What the
+        // old movement's sets recorded (notes, rpe, completion, PR) doesn't
+        // carry over. A different modality can't reuse the values (a duration
+        // set's null reps, a weight_reps set's stale duration), so it resets to
+        // one default set — the old sets no longer describe the new movement.
+        // `?? null` on distance/heart_rate keeps the entry valid.
+        const replaced = session.exercises.find((e) => e.id === entryId);
+        const newModality = resolveSnapshotModality(snapshot);
+        const preserveSets =
+          replaced != null &&
+          replaced.sets.length > 0 &&
+          resolveSnapshotModality(replaced.exercise_snapshot) === newModality;
+        const preservedIds = new Set(
+          preserveSets ? replaced.sets.map((s) => String(s.id)) : []
+        );
+        const sets: ExerciseEntrySetResponse[] = preserveSets
+          ? replaced.sets.map((s) => ({
+              ...s,
+              notes: null,
+              rpe: null,
+              rir: null,
+              completed_at: null,
+              is_pr: false,
+            }))
+          : [
+              makeDefaultSet(
+                nextTempSetId(session, state.setRenderKeys),
+                1,
+                newModality
+              ),
+            ];
         const next: PresetSessionResponse = {
           ...session,
           exercises: session.exercises.map((e) =>
@@ -2566,17 +2607,27 @@ export const useActiveWorkoutStore = create<ActiveWorkoutState>()(
                   ...e,
                   exercise_id: exercise.id,
                   exercise_snapshot: snapshot,
-                  sets: [
-                    makeDefaultSet(
-                      nextTempSetId(session, state.setRenderKeys),
-                      1,
-                      resolveSnapshotModality(snapshot)
-                    ),
-                  ],
+                  sets,
                 }
               : e
           ),
         };
+        // Preserved sets keep their ids, so clear their completion and PR
+        // stamps here or the edit would still treat them as performed.
+        const completedSetIds = { ...state.completedSetIds };
+        const prSetIds = { ...state.prSetIds };
+        // A running set timer was started on the old exercise; keeping it
+        // would write that time as the new exercise's duration on stop.
+        const setTimerStartedAt = { ...state.setTimerStartedAt };
+        let clearedCompletion = false;
+        for (const id of replaced?.sets.map((s) => String(s.id)) ?? []) {
+          delete setTimerStartedAt[id];
+        }
+        for (const id of preservedIds) {
+          if (completedSetIds[id] != null) clearedCompletion = true;
+          delete completedSetIds[id];
+          delete prSetIds[id];
+        }
         // The entry keeps its id, so drop the replaced exercise's preset
         // progression/ramp settings rather than applying them to the new one.
         const { [entryId]: _replaced, ...exerciseConfigs } =
@@ -2586,9 +2637,20 @@ export const useActiveWorkoutStore = create<ActiveWorkoutState>()(
         const { [entryId]: _declined, ...declinedAdaptive } =
           state.declinedAdaptive;
         set({
-          ...buildSessionEditState(state, next),
+          ...buildSessionEditState(
+            {
+              ...state,
+              completedSetIds,
+              prSetIds,
+              // Un-logged sets are due again, so send the cursor back to the
+              // first one still to do.
+              activeSetId: clearedCompletion ? null : state.activeSetId,
+            },
+            next
+          ),
           exerciseConfigs,
           declinedAdaptive,
+          setTimerStartedAt,
         });
       },
 
@@ -2630,6 +2692,38 @@ export const useActiveWorkoutStore = create<ActiveWorkoutState>()(
         // no spurious revision bump or autosave is triggered.
         if (moved === session.exercises) return;
         set(buildSessionEditState(state, { ...session, exercises: moved }));
+      },
+
+      doExerciseNow: (entryId, anchorEntryId) => {
+        const state = get();
+        const session = state.session;
+        if (!session || state.activeSetId == null) return;
+        const currentEntryId =
+          anchorEntryId ??
+          session.exercises.find((e) =>
+            e.sets.some((s) => String(s.id) === state.activeSetId)
+          )?.id;
+        if (currentEntryId == null) return;
+        const items = buildExerciseReorderItems(session.exercises);
+        const from = items.findIndex((i) => i.entryIds.includes(entryId));
+        const to = items.findIndex((i) => i.entryIds.includes(currentEntryId));
+        if (from < 0 || to < 0 || from <= to) return;
+        const edit = buildSessionEditState(state, {
+          ...session,
+          exercises: moveSessionExerciseItem(session.exercises, from, to),
+        });
+        const picked = edit.session?.exercises.find((e) => e.id === entryId);
+        const firstToDo = picked?.sets
+          .map((s) => String(s.id))
+          .find((id) => edit.completedSetIds?.[id] == null);
+        if (firstToDo != null && firstToDo !== edit.activeSetId) {
+          // The rest was the break before the set that was due; the picked
+          // exercise starts fresh.
+          cancelCurrentRestNotification(state.rest);
+          edit.activeSetId = firstToDo;
+          edit.rest = READY_REST;
+        }
+        set(edit);
       },
 
       setSessionLocation: (location) => {

@@ -22,6 +22,7 @@ export interface SharedSymptomEntry {
   impact?: string | null;
   peak_severity?: number | null;
   severity_timeline?: Array<{ at: string; severity: number }>;
+  impact_timeline?: Array<{ at: string; impact: string }>;
   custom_fields?: Record<string, unknown>;
 }
 

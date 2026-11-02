@@ -3,7 +3,12 @@ import { z } from 'zod';
 export const routesIdSchema = z.string();
 
 export const routeActivitySchema = z.enum(['run', 'walk', 'ride', 'hike']);
-export const routeSourceSchema = z.enum(['drawn', 'gpx', 'activity']);
+export const routeSourceSchema = z.enum([
+  'drawn',
+  'gpx',
+  'activity',
+  'generated',
+]);
 
 export const routesSchema = z.object({
   id: routesIdSchema,

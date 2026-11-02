@@ -29,6 +29,14 @@
         "resourceClass": "medium",
         "image": "macos-tahoe-26.6-xcode-27.0"
       }
+    },
+    "wearos": {
+      "extends": "production",
+      "autoIncrement": false,
+      "android": {
+        "gradleCommand": ":wearos:bundleRelease",
+        "applicationArchivePath": "android/wearos/build/outputs/bundle/release/*.aab"
+      }
     }
   },
   "submit": {

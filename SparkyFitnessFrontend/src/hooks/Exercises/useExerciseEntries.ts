@@ -9,15 +9,19 @@ import {
   createPresetSession,
   logWorkoutPreset,
   deleteExercisePresetEntry,
-  fetchExerciseDetails,
   getExerciseHistory,
   fetchWorkoutLocations,
+  fetchCalorieLinkSuggestions,
+  setCalorieLink,
+  clearCalorieLink,
 } from '@/api/Exercises/exerciseEntryService';
-import { exerciseEntryKeys, exerciseKeys } from '@/api/keys/exercises';
-import i18n from '@/i18n';
+import { exerciseEntryKeys } from '@/api/keys/exercises';
 import { dailyProgressKeys } from '@/api/keys/diary';
 import { shoeKeys } from '@/api/keys/shoes';
-import { UpdateExerciseEntryRequest } from '@workspace/shared';
+import {
+  SetCalorieLinkRequest,
+  UpdateExerciseEntryRequest,
+} from '@workspace/shared';
 import { useDiaryInvalidation } from '../useInvalidateKeys';
 
 // --- Queries ---
@@ -212,16 +216,76 @@ export const useDeleteExercisePresetEntryMutation = () => {
   });
 };
 
-export const exerciseDetailsOptions = (exerciseId: string) => ({
-  queryKey: exerciseKeys.detail(exerciseId),
-  queryFn: () => fetchExerciseDetails(exerciseId),
-  staleTime: 1000 * 60 * 60,
-  enabled: !!exerciseId,
-  meta: {
-    errorMessage: i18n.t(
-      'exercise.failedToFetchDetails',
-      'Could not fetch exercise details. Please try again.'
-    ),
-  },
-});
 export { fetchExerciseProgressionStats };
+
+// --- Calorie link (a logged workout and the same session synced from a watch) ---
+
+export const useCalorieLinkSuggestions = (
+  entryId: string,
+  enabled: boolean
+) => {
+  return useQuery({
+    queryKey: exerciseEntryKeys.calorieLink(entryId),
+    queryFn: () => fetchCalorieLinkSuggestions(entryId),
+    enabled,
+    staleTime: 0,
+  });
+};
+
+export const useSetCalorieLinkMutation = () => {
+  const invalidate = useDiaryInvalidation();
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+
+  return useMutation({
+    mutationFn: ({
+      entryId,
+      body,
+    }: {
+      entryId: string;
+      body: SetCalorieLinkRequest;
+    }) => setCalorieLink(entryId, body),
+    onSuccess: (_data, { entryId }) => {
+      invalidate();
+      queryClient.invalidateQueries({
+        queryKey: exerciseEntryKeys.calorieLink(entryId),
+      });
+    },
+    meta: {
+      successMessage: t(
+        'exercise.calorieLink.linked',
+        'Workouts linked. The session now counts once.'
+      ),
+      errorMessage: t(
+        'exercise.calorieLink.linkError',
+        'Failed to link the workouts.'
+      ),
+    },
+  });
+};
+
+export const useClearCalorieLinkMutation = () => {
+  const invalidate = useDiaryInvalidation();
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+
+  return useMutation({
+    mutationFn: (entryId: string) => clearCalorieLink(entryId),
+    onSuccess: (_data, entryId) => {
+      invalidate();
+      queryClient.invalidateQueries({
+        queryKey: exerciseEntryKeys.calorieLink(entryId),
+      });
+    },
+    meta: {
+      successMessage: t(
+        'exercise.calorieLink.unlinked',
+        'Workouts unlinked. Each counts its own calories again.'
+      ),
+      errorMessage: t(
+        'exercise.calorieLink.unlinkError',
+        'Failed to unlink the workouts.'
+      ),
+    },
+  });
+};

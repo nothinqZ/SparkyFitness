@@ -771,10 +771,14 @@ export async function getGroupedExerciseSessionByIdWithClient(
   presetEntryId: string,
   lockExerciseEntries = false
 ): Promise<PresetSessionResponse | null> {
+  // The session row is locked before its exercises because every other
+  // writer of the session (a date move, a delete) takes it first; taking the
+  // exercises first deadlocks against them.
   const metaResult = await client.query(
     `SELECT id, workout_preset_id, name, description, notes, source, entry_date, location
      FROM exercise_preset_entries
-     WHERE user_id = $1 AND id = $2`,
+     WHERE user_id = $1 AND id = $2
+     ${lockExerciseEntries ? 'FOR NO KEY UPDATE' : ''}`,
     [targetUserId, presetEntryId]
   );
 

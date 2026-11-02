@@ -6,6 +6,7 @@ import { ActivityPaceChart } from '@/components/ExerciseCharts/ActivityPaceChart
 import { ActivityStatsGrid } from '@/components/ExerciseCharts/ActivityStatsGrid';
 import ZoomableChart from '@/components/ZoomableChart';
 import { usePreferences } from '@/contexts/PreferencesContext';
+import { storedZoneMethodOf } from '@/utils/heartRateZoneLabels';
 import {
   useActivityDetailsQuery,
   useExerciseEntryById,
@@ -37,7 +38,10 @@ import WorkoutSessionBreakdown from '@/components/ExerciseCharts/WorkoutSessionB
 import ActivityReportMap from './ActivityReportMap';
 import WorkoutReportVisualizer from './WorkoutReportVisualizer';
 import { ChartDataPoint } from '@/types/reports';
-import { buildWorkoutHeartRateSeries } from '@workspace/shared';
+import {
+  buildWorkoutHeartRateSeries,
+  filterGpsTrackOutliers,
+} from '@workspace/shared';
 
 interface ActivityReportVisualizerProps {
   exerciseEntryId: string;
@@ -248,7 +252,9 @@ const ActivityReportVisualizer = ({
   // activities synced before this table existed / before the backfill has run.
   let hrInTimezonesData:
     Array<{ name: string; [key: string]: string | number }> | undefined;
+  let hrZoneMethod: ReturnType<typeof storedZoneMethodOf> = null;
   if (dbHrZones && dbHrZones.length > 0) {
+    hrZoneMethod = storedZoneMethodOf(dbHrZones);
     hrInTimezonesData = dbHrZones.map((zone) => ({
       name: `Zone ${zone.zone_index} (${zone.zone_lower_bpm ?? 0} bpm)`,
       [t('reports.activityReport.timeInZoneS')]: zone.seconds_in_zone,
@@ -460,12 +466,11 @@ const ActivityReportVisualizer = ({
     t('common.workout', 'Workout');
 
   if (variant === 'outdoor') {
-    const mapPolyline =
+    const rawPolyline =
       gpsPoints && gpsPoints.length > 0
-        ? gpsPoints
-            .filter((p) => p.lat !== 0 && p.lon !== 0)
-            .map((p) => ({ lat: p.lat, lon: p.lon }))
+        ? gpsPoints.map((p) => ({ lat: p.lat, lon: p.lon }))
         : activityData?.activity?.details?.geoPolylineDTO?.polyline || [];
+    const mapPolyline = filterGpsTrackOutliers(rawPolyline);
     return (
       <div className="space-y-4">
         {mapPolyline.length > 0 ? (
@@ -521,6 +526,7 @@ const ActivityReportVisualizer = ({
           <ActivityHeartRateZonesChart
             data={hrInTimezonesData}
             providerName={providerName}
+            zoneMethod={hrZoneMethod}
           />
         )}
       </div>
@@ -585,12 +591,11 @@ const ActivityReportVisualizer = ({
       )}
 
       {(() => {
-        const mapPolyline =
+        const rawPolyline =
           gpsPoints && gpsPoints.length > 0
-            ? gpsPoints
-                .filter((p) => p.lat !== 0 && p.lon !== 0)
-                .map((p) => ({ lat: p.lat, lon: p.lon }))
+            ? gpsPoints.map((p) => ({ lat: p.lat, lon: p.lon }))
             : activityData?.activity?.details?.geoPolylineDTO?.polyline || [];
+        const mapPolyline = filterGpsTrackOutliers(rawPolyline);
         if (mapPolyline.length === 0) return null;
         return (
           <div className="mb-8">
@@ -694,6 +699,7 @@ const ActivityReportVisualizer = ({
           <ActivityHeartRateZonesChart
             data={hrInTimezonesData}
             providerName={providerName}
+            zoneMethod={hrZoneMethod}
           />
         )}
       </div>

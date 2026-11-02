@@ -92,6 +92,40 @@ export function projectedFinishDay({
   return runs.at(-1)?.day ?? null;
 }
 
+/** The most workout days counted ahead, far past the longest plan. */
+const MAX_COUNTED_SLOTS = 400;
+
+/**
+ * How many workout days fall from today (or the first day, or tomorrow once
+ * today's workout is done) to the goal day, both ends included. Zero with no
+ * weekdays or no goal day. This is the room a plan has, whatever its length.
+ */
+export function countRunSlots({
+  schedule,
+  today,
+  doneToday,
+}: {
+  schedule: ProgramSchedule;
+  today: string;
+  doneToday: boolean;
+}): number {
+  const days = new Set(schedule.runDays);
+  if (days.size === 0 || !schedule.endDay) return 0;
+  let cursor = doneToday ? addDays(today, 1) : today;
+  if (schedule.startDay && compareDays(schedule.startDay, cursor) > 0) {
+    cursor = schedule.startDay;
+  }
+  let count = 0;
+  while (
+    compareDays(cursor, schedule.endDay) <= 0 &&
+    count < MAX_COUNTED_SLOTS
+  ) {
+    if (days.has(dayOfWeek(cursor))) count++;
+    cursor = addDays(cursor, 1);
+  }
+  return count;
+}
+
 export interface DiaryProgramRun {
   kind: 'scheduled' | 'upNext';
   /** Index of the workout to show. */

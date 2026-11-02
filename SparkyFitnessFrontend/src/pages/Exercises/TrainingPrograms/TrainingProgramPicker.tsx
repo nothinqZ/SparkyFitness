@@ -124,7 +124,7 @@ const TrainingProgramPicker = ({
                       )
                     : t(
                         'trainingPrograms.picker.outline',
-                        'Week 1: workouts of {{weekOne}} minutes. Builds to {{peak}} minutes of running.',
+                        'Week 1: workouts of {{weekOne}} minutes. Builds to {{peak}} minutes of effort.',
                         {
                           weekOne: outline.firstWeek.join(', '),
                           peak: outline.peakRunMinutes,

@@ -75,6 +75,13 @@ vi.mock('../models/fastingRepository', () => ({
     getFastingLogsOverlappingDay: vi.fn(),
   },
 }));
+// get_fasting_status falls back to the auto-calculated fast, which reads
+// fasting preferences and food entries from the database.
+vi.mock('../services/fastingAutoCalculationService', () => ({
+  default: {
+    getCurrentAutoFast: vi.fn(async () => null),
+  },
+}));
 vi.mock('../models/sleepRepository', () => ({
   default: {
     getSleepEntriesByUserIdAndDateRange: vi.fn(),

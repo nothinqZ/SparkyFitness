@@ -7,6 +7,7 @@ import symptomRepository from '../models/symptomRepository.js';
 import type {
   SymptomDefinitionRow,
   SymptomEntryWithDetails,
+  SymptomEntryWrite,
 } from '../models/symptomRepository.js';
 import symptomOptionRepository from '../models/symptomOptionRepository.js';
 import symptomService, {
@@ -113,6 +114,7 @@ function entryRow(
     impact: null,
     peak_severity: 6,
     severity_timeline: [],
+    impact_timeline: [],
     context_text: null,
     bristol_type: null,
     source: 'manual',
@@ -123,6 +125,18 @@ function entryRow(
     photo_ids: [],
     ...overrides,
   };
+}
+
+/**
+ * The fields updateEntry writes: those it sends plus those it works out from
+ * `stored`, the entry as the update finds it under the row lock.
+ */
+function written(
+  call: Parameters<typeof symptomRepository.updateSymptomEntry>,
+  stored: SymptomEntryWithDetails
+): SymptomEntryWrite {
+  const [, , data, , fromCurrent] = call;
+  return { ...data, ...fromCurrent?.(stored) };
 }
 
 describe('Symptom Pattern Hints Shared Logic', () => {
@@ -444,6 +458,59 @@ describe('Symptom Repository', () => {
     expect(sqls).toContain('ROLLBACK');
   });
 
+  it('updateSymptomEntry works out fromCurrent from the row it locked', async () => {
+    const stored = entryRow({ severity: 4 });
+    mockClient.query.mockImplementation(async (sql: string) =>
+      sql.includes('FOR UPDATE') || sql.includes('UPDATE symptom_entries')
+        ? { rows: [stored] }
+        : { rows: [] }
+    );
+    const fromCurrent = vi.fn(() => ({ peak_severity: 9 }));
+
+    await symptomRepository.updateSymptomEntry(
+      'testUser',
+      UID,
+      { severity: 9 },
+      undefined,
+      fromCurrent
+    );
+
+    expect(fromCurrent).toHaveBeenCalledWith(stored);
+    const sqls: string[] = mockClient.query.mock.calls.map(
+      (c: unknown[]) => c[0] as string
+    );
+    const lock = sqls.findIndex((q) => q.includes('FOR UPDATE'));
+    const update = sqls.findIndex((q) =>
+      q.trimStart().startsWith('UPDATE symptom_entries')
+    );
+    expect(sqls.indexOf('BEGIN')).toBeLessThan(lock);
+    expect(lock).toBeLessThan(update);
+    expect(sqls[update]).toContain('peak_severity');
+  });
+
+  it('updateSymptomEntry returns null without updating when the locked entry is missing', async () => {
+    mockClient.query.mockResolvedValue({ rows: [] });
+    const fromCurrent = vi.fn(() => ({}));
+
+    expect(
+      await symptomRepository.updateSymptomEntry(
+        'testUser',
+        UID,
+        { severity: 1 },
+        undefined,
+        fromCurrent
+      )
+    ).toBeNull();
+    expect(fromCurrent).not.toHaveBeenCalled();
+    const sqls: string[] = mockClient.query.mock.calls.map(
+      (c: unknown[]) => c[0] as string
+    );
+    expect(sqls).toContain('ROLLBACK');
+    expect(
+      sqls.some((q) => q.trimStart().startsWith('UPDATE symptom_entries'))
+    ).toBe(false);
+  });
+
   it('listSymptomEntries applies every filter', async () => {
     mockClient.query.mockResolvedValue({ rows: [] });
 
@@ -540,6 +607,51 @@ describe('Symptom Repository', () => {
     const update = mockClient.query.mock.calls[0][0] as string;
     expect(update).toContain('GREATEST(COALESCE(peak_severity, $3), $3)');
     expect(update).toContain('severity_timeline || jsonb_build_array');
+  });
+
+  it('appendSymptomSeverity keeps both timelines in time order', async () => {
+    mockClient.query.mockImplementation(async (sql: string) =>
+      sql.includes('UPDATE symptom_entries')
+        ? { rows: [entryRow({ severity: 4, impact: 'mild' })] }
+        : { rows: [] }
+    );
+    await symptomRepository.appendSymptomSeverity(
+      'testUser',
+      UID,
+      4,
+      '2026-06-25T10:00:00.000Z',
+      'mild'
+    );
+    const [update, params] = mockClient.query.mock.calls[0] as [
+      string,
+      unknown[],
+    ];
+    expect(params).toEqual([
+      UID,
+      'testUser',
+      4,
+      '2026-06-25T10:00:00.000Z',
+      'mild',
+    ]);
+    // Points are re-sorted by `at`, and the current values come from the
+    // latest point rather than the one just appended.
+    expect(update).toContain("ORDER BY (p->>'at')::timestamptz, n");
+    expect(update).toContain("ORDER BY (p->>'at')::timestamptz DESC, n DESC");
+    expect(update).toContain('impact_timeline || jsonb_build_array');
+    // Without an impact both impact columns stay as they are.
+    expect(update).toContain('WHEN $5::text IS NULL THEN impact_timeline');
+    expect(update).toContain('WHEN $5::text IS NULL THEN impact');
+  });
+
+  it('appendSymptomSeverity passes no impact when the caller sends none', async () => {
+    mockClient.query.mockImplementation(async (sql: string) =>
+      sql.includes('UPDATE symptom_entries')
+        ? { rows: [entryRow()] }
+        : { rows: [] }
+    );
+    await symptomRepository.appendSymptomSeverity('testUser', UID, 5, null);
+    const params = mockClient.query.mock.calls[0][1] as unknown[];
+    expect(params[4]).toBeNull();
   });
 
   it('deleteSymptomEntry reports the photo paths to clean up', async () => {
@@ -713,6 +825,26 @@ describe('Symptom Service', () => {
     expect(create.mock.calls[1][1].severity_timeline).toBeUndefined();
   });
 
+  it('starts an episode impact timeline, but not for a quick log', async () => {
+    const create = spyCreate();
+
+    await symptomService.createEntry('testUser', {
+      symptom_name_snapshot: 'Migraine',
+      impact: 'moderate',
+      started_at: '2026-06-25T09:00:00.000Z',
+    });
+    expect(create.mock.calls[0][1].impact_timeline).toEqual([
+      { at: '2026-06-25T09:00:00.000Z', impact: 'moderate' },
+    ]);
+
+    await symptomService.createEntry('testUser', {
+      symptom_name_snapshot: 'Nausea',
+      impact: 'mild',
+    });
+    expect(create.mock.calls[1][1].impact).toBe('mild');
+    expect(create.mock.calls[1][1].impact_timeline).toBeUndefined();
+  });
+
   it('keeps body_location and body_locations in step', async () => {
     const create = spyCreate();
 
@@ -800,21 +932,20 @@ describe('Symptom Service', () => {
   });
 
   it('updateEntry appends a timeline point and recomputes the peak for an episode', async () => {
-    vi.spyOn(symptomRepository, 'getSymptomEntry').mockResolvedValue(
-      entryRow({
-        started_at: new Date('2026-06-25T09:00:00Z'),
-        severity: 7,
-        peak_severity: 7,
-        severity_timeline: [{ at: '2026-06-25T09:00:00.000Z', severity: 7 }],
-      })
-    );
+    const stored = entryRow({
+      started_at: new Date('2026-06-25T09:00:00Z'),
+      severity: 7,
+      peak_severity: 7,
+      severity_timeline: [{ at: '2026-06-25T09:00:00.000Z', severity: 7 }],
+    });
+    vi.spyOn(symptomRepository, 'getSymptomEntry').mockResolvedValue(stored);
     const update = vi
       .spyOn(symptomRepository, 'updateSymptomEntry')
       .mockResolvedValue(entryRow());
 
     await symptomService.updateEntry('testUser', UID, { severity: 3 });
 
-    const write = update.mock.calls[0][2];
+    const write = written(update.mock.calls[0], stored);
     expect(write.severity_timeline).toHaveLength(2);
     expect(write.severity_timeline?.[1].severity).toBe(3);
     // The peak reflects the whole episode, not the latest reading.
@@ -822,14 +953,13 @@ describe('Symptom Service', () => {
   });
 
   it('updateEntry does not append to severity_timeline when severity is unchanged', async () => {
-    vi.spyOn(symptomRepository, 'getSymptomEntry').mockResolvedValue(
-      entryRow({
-        started_at: new Date('2026-06-25T09:00:00Z'),
-        severity: 7,
-        peak_severity: 7,
-        severity_timeline: [{ at: '2026-06-25T09:00:00.000Z', severity: 7 }],
-      })
-    );
+    const stored = entryRow({
+      started_at: new Date('2026-06-25T09:00:00Z'),
+      severity: 7,
+      peak_severity: 7,
+      severity_timeline: [{ at: '2026-06-25T09:00:00.000Z', severity: 7 }],
+    });
+    vi.spyOn(symptomRepository, 'getSymptomEntry').mockResolvedValue(stored);
     const update = vi
       .spyOn(symptomRepository, 'updateSymptomEntry')
       .mockResolvedValue(entryRow());
@@ -839,8 +969,56 @@ describe('Symptom Service', () => {
       context_text: 'updated note',
     });
 
-    const write = update.mock.calls[0][2];
+    const write = written(update.mock.calls[0], stored);
     expect(write.severity_timeline).toBeUndefined();
+  });
+
+  it('updateEntry appends an impact point when an episode impact changes', async () => {
+    const stored = entryRow({
+      started_at: new Date('2026-06-25T09:00:00Z'),
+      impact: 'severe',
+      impact_timeline: [{ at: '2026-06-25T09:00:00.000Z', impact: 'severe' }],
+    });
+    vi.spyOn(symptomRepository, 'getSymptomEntry').mockResolvedValue(stored);
+    const update = vi
+      .spyOn(symptomRepository, 'updateSymptomEntry')
+      .mockResolvedValue(entryRow());
+
+    await symptomService.updateEntry('testUser', UID, { impact: 'mild' });
+
+    const write = written(update.mock.calls[0], stored);
+    expect(write.impact).toBe('mild');
+    expect(write.impact_timeline).toHaveLength(2);
+    expect(write.impact_timeline?.[0].impact).toBe('severe');
+    expect(write.impact_timeline?.[1].impact).toBe('mild');
+  });
+
+  it('updateEntry leaves impact_timeline alone when impact is unchanged or not an episode', async () => {
+    const update = vi
+      .spyOn(symptomRepository, 'updateSymptomEntry')
+      .mockResolvedValue(entryRow());
+
+    const episode = entryRow({
+      started_at: new Date('2026-06-25T09:00:00Z'),
+      impact: 'mild',
+      impact_timeline: [{ at: '2026-06-25T09:00:00.000Z', impact: 'mild' }],
+    });
+    vi.spyOn(symptomRepository, 'getSymptomEntry').mockResolvedValueOnce(
+      episode
+    );
+    await symptomService.updateEntry('testUser', UID, { impact: 'mild' });
+    expect(
+      written(update.mock.calls[0], episode).impact_timeline
+    ).toBeUndefined();
+
+    const quickLog = entryRow({ impact: 'mild' });
+    vi.spyOn(symptomRepository, 'getSymptomEntry').mockResolvedValueOnce(
+      quickLog
+    );
+    await symptomService.updateEntry('testUser', UID, { impact: 'severe' });
+    const write = written(update.mock.calls[1], quickLog);
+    expect(write.impact).toBe('severe');
+    expect(write.impact_timeline).toBeUndefined();
   });
 
   it('updateEntry never changes the source of a row', async () => {
@@ -1420,7 +1598,44 @@ describe('Symptom Routes V2', () => {
         .set('Cookie', cookie)
         .send({ severity: 8 });
       expect(res.statusCode).toBe(200);
-      expect(append).toHaveBeenCalledWith('testUser', UID, 8, null);
+      expect(append).toHaveBeenCalledWith('testUser', UID, 8, null, null);
+    });
+
+    it('POST /entries/:id/severity records severity and impact together', async () => {
+      const append = vi
+        .spyOn(symptomRepository, 'appendSymptomSeverity')
+        .mockResolvedValue(
+          entryRow({
+            severity: 4,
+            impact: 'mild',
+            impact_timeline: [
+              { at: '2026-06-25T10:00:00.000Z', impact: 'mild' },
+            ],
+          })
+        );
+      const res = await request(app)
+        .post(`/api/v2/symptoms/entries/${UID}/severity`)
+        .set('Cookie', cookie)
+        .send({ severity: 4, at: '2026-06-25T10:00:00.000Z', impact: 'mild' });
+      expect(res.statusCode).toBe(200);
+      expect(append).toHaveBeenCalledWith(
+        'testUser',
+        UID,
+        4,
+        '2026-06-25T10:00:00.000Z',
+        'mild'
+      );
+      expect(res.body.impact_timeline).toEqual([
+        { at: '2026-06-25T10:00:00.000Z', impact: 'mild' },
+      ]);
+    });
+
+    it('POST /entries/:id/severity rejects an unknown impact', async () => {
+      const res = await request(app)
+        .post(`/api/v2/symptoms/entries/${UID}/severity`)
+        .set('Cookie', cookie)
+        .send({ severity: 4, impact: 'terrible' });
+      expect(res.statusCode).toBe(400);
     });
 
     it('POST /entries/:id/severity validates the body and 404s a missing entry', async () => {

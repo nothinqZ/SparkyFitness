@@ -57,12 +57,17 @@ These tables contain highly sensitive credentials, API keys, SSO tokens, 2FA rec
 | `pregnancy_photos` | Bump photo journal (image bytes served only via the authenticated `GET /api/v2/pregnancy/photos/file/{id}`; excluded from the public `/uploads` static mount) | Owner-Only | Owner-Only |
 | `pregnancy_checklist_state` | Weekly pregnancy checklist completion/custom items | Owner-Only | Owner-Only |
 | `run_programs` | A person's run program (Beginner 5K), their place in it, its Diary schedule, goal date, AI adjustments and how hard finished workouts felt | Owner-Only | Owner-Only |
+| `run_goals` | A person's running goals: a weekly running distance target and a race (name, day, distance) to count down to | Owner-Only | Owner-Only |
 | `custom_run_programs` | A person's own saved run or walk plans (name, activity, workouts) that they can start | Owner-Only | Owner-Only |
+| `fitness_tests` | A person's running fitness tests (5K time trial, 30-minute run, Cooper test): the measurements, the surface (outdoor or treadmill) and incline, the result and the derived training paces, linked to the recorded activity | Owner-Only | Owner-Only |
 | `routes` | A person's saved routes (a simplified track of points, optional turn cues, distance and elevation) that they drew, imported from GPX or saved from a recorded activity | Owner-Only | Owner-Only |
+| `plate_inventories` | Bars and plates a person owns (one row per user; JSON bars and plates, unit, collar weight) for the plate calculator | Owner-Only | Owner-Only |
 | `health_appointments` | Prenatal & other health appointments | Owner-Only | Owner-Only |
 | `openfoodfacts_product_read_rate_limit` | Singleton coordination lease and cooldown for Open Food Facts product reads, including manual previews; contains no user data or credentials | System services only | Deny all |
 | `openfoodfacts_sync_queue` | Dormant automatic Open Food Facts upload state and retained history; stores food/user identifiers and retry metadata, never provider credentials. The manual first release does not enqueue or process these rows. | System worker and owning user | Owner-Only |
 | `rate_limit` | Sign-in rate limit counters shared by every server instance, keyed by client address and route; holds no account data or credentials | Better Auth only | Deny all |
+| `system.rate_limit_windows` | Fixed-window counters shared by every server instance for the per-address limits of the server's own routes (MFA factor lookup, demo login, passkey tickets), keyed by limiter and client address; holds no account data or credentials | Rate limiter via the owner pool only | Deny all; the app role has no grant on this table, so no RLS policy is needed |
+| `system.rls_policy_state` | One row recording the `rls_policies.sql` apply the server last made (the file's sha256 and a fingerprint of the policy catalogs), so startup skips an unchanged apply; holds no user data or credentials | Startup via the owner pool only | Deny all; the app role has no grant on this table, so no RLS policy is needed |
 
 ---
 
@@ -72,9 +77,10 @@ These tables contain user profiles, layouts, display settings, and custom databa
 | Table Name | Description | Write (insert/update/delete) | Read (select) |
 | :--- | :--- | :--- | :--- |
 | `profiles` | User full name, height, and display metrics | **Owner-Only** (`authenticated_user_id()`) | Switched Delegate (`current_user_id()`) |
-| `user_preferences` | Unit, calculation-method, calorie safety-floor, chart-scale, and Chat/Vision/Voice configuration preferences (`active_voice_ai_service_id` is nullable; NULL means system recognition, never the Chat provider; `voice_input_enabled` defaults to true and controls microphone visibility on web/mobile without clearing the selection) | **Owner-Only** (`authenticated_user_id()`) | Switched Delegate |
+| `user_preferences` | Unit, calculation-method, separate activity-calorie (`adaptive_activity_separate`, default false; active only for Dynamic + Adaptive), calorie safety-floor, weekly weight-change goal, chart-scale, heart rate zone settings (`max_heart_rate`, `resting_heart_rate`, `hr_zone_method`, `hr_zone_custom_floors`, `hr_zone_display_count`; read and written only through the owner-only `/api/v2/heart-rate-zones` route), and Chat/Vision/Voice configuration preferences (`goal_mode_weekly_change_kg` is signed kg/week, defaults to zero, and is used only for `goal_mode = 'weekly'`; `active_voice_ai_service_id` is nullable; NULL means system recognition, never the Chat provider; `voice_input_enabled` defaults to true and controls microphone visibility on web/mobile without clearing the selection). Calculation preferences use the existing owner-write policies; they add no access grants. | **Owner-Only** (`authenticated_user_id()`) | Switched Delegate |
 | `user_nutrient_display_preferences` | Rearranged nutrient column preferences | **Owner-Only** | Switched Delegate |
 | `user_medication_display_preferences` | Private preference on GLP-1/Medication display | **Owner-Only** | Delegate with `can_manage_medications` or `can_view_reports` |
+| `user_calorie_rule_history` | The `user_preferences` calorie settings in force from `effective_date` on (`-infinity` for the rules before the first recorded change), so a past day keeps its calorie target (#1795). Written only by the `record_calorie_rule_change` trigger on `user_preferences`; same policies as `user_preferences`. | **Owner-Only** (`authenticated_user_id()`) | Switched Delegate |
 | `user_dashboard_layouts` | Rearranged dashboard widget positions | **Owner-Only** | Switched Delegate |
 | `onboarding_data` | Initial user onboarding metrics | **Owner-Only** | Switched Delegate |
 | `onboarding_status` | User onboarding status | **Owner-Only** | Switched Delegate |
@@ -88,7 +94,7 @@ These tables contain user profiles, layouts, display settings, and custom databa
 | `workout_preset_exercises` | Exercises assigned inside a workout preset | **Owner-Only** | Delegate with `can_view_exercise_library`, `can_manage_diary`, or `can_view_reports` |
 | `workout_preset_exercise_sets` | Reps/sets configured inside a preset exercise | **Owner-Only** | Delegate with `can_view_exercise_library`, `can_manage_diary`, or `can_view_reports` |
 | `workout_plan_templates` | Templates for weekly and sequential workout schedules | **Owner-Only** | Delegate with `can_view_exercise_library`, `can_manage_diary`, or `can_view_reports` |
-| `external_data_providers` | Configured API integration credentials, including personal or global Open Food Facts accounts | **Owner-Only** | Delegate with `share_external_providers` for search only; contribution credentials are not shared. Manual contribution endpoints require the food owner to be the authenticated actor and require separate data/photo confirmation for the exact preview. |
+| `external_data_providers` | Configured API integration credentials, including personal or global Open Food Facts accounts | **Owner-Only** | Delegate with `share_external_providers` for search only; contribution credentials are not shared. Manual contribution endpoints require the food owner to be the authenticated actor and require separate data/photo confirmation for the exact preview. A `valhalla` (routing) row is not strictly private: the owner, an admin-public row or a `share_external_providers` delegate resolves it server-side in `services/routing/routingConfig.ts`; its key is encrypted in `app_key`, never returned to a non-owner, and route requests stay owner-only (`requireSelfActor`). |
 | `family_access` | Sharing rules & delegation credentials | **Owner-Only** | Owner or Switched Delegate |
 | `user_goals` | Active daily calorie/macro goals | **Owner-Only** | Delegate with `can_manage_diary` or `can_view_reports` |
 | `user_nutrient_goal_preferences` | Per-user minimum/maximum/target goal direction override per nutrient | **Owner-Only** | Delegate with `can_manage_diary` or `can_view_reports` |
@@ -108,6 +114,22 @@ Key rules that must be maintained:
 3. **Shared items fallback to hide.** When `otherUserReferences > 0`, genuine deletion is refused because cascading would strip other users' templates; the item is hidden instead (`is_quick_exercise` / `is_quick_food`).
 
 A related trap: `food_entries.images` stores paths into `uploads/foods/<foodId>/`. Removing that directory on a plain `delete` blanks the picture on every preserved entry, including other users'. It is only cleared on `delete_with_history`, where no reference can remain.
+
+### MCP OAuth System Tables (Tier 1 – System-Only)
+
+These Better Auth tables support OAuth for the remote MCP endpoint. They have no family-sharing or profile-switching access path. RLS denies the app role entirely; Better Auth and the explicit OAuth repositories access them only through owner-pool/system connections.
+
+| Table Name | Description |
+| :--- | :--- |
+| `jwks` | OAuth signing public/private key pairs |
+| `oauth_client` | Registered OAuth clients and client metadata |
+| `oauth_resource` | Protected resources, allowed scopes, and token/signing policy |
+| `oauth_client_resource` | Client-to-resource authorization mappings |
+| `oauth_refresh_token` | Refresh tokens, rotation state, scopes, and session/user links |
+| `oauth_access_token` | Access tokens, resource grants, scopes, and revocation state |
+| `oauth_consent` | OAuth consent grants |
+| `oauth_authorization_revocation` | OAuth JWT revocation watermarks |
+| `oauth_client_assertion` | Expiring client assertion replay-protection records |
 
 ### Tier 3: Delegate-Writable (Daily Logs & Schedules)
 These tables contain daily diaries, logging entries, and scheduler items. **Caregivers/delegates with active delegation permissions are granted full read and write access to log or modify data on behalf of the owner.**
@@ -161,7 +183,7 @@ Symptoms are their own domain (they used to share the medications permission). P
 
 | Table Name | Description | Write (insert/update/delete) | Read (select) |
 | :--- | :--- | :--- | :--- |
-| `check_in_measurements` | Weight, body composition, BMR, and circumference measurements | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
+| `check_in_measurements` | Weight, body composition, BMR, circumference measurements, and resting heart rate | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
 | `check_in_photos` | Progress photos (image bytes served only via the authenticated `GET /api/measurements/check-in-photos/file/{id}`; excluded from the public `/uploads` static mount) | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
 | `sleep_entries` | Sleep logs (bedtime, wake time) | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
 | `sleep_entry_stages` | Sleep stage breakdowns (REM, Deep, Light) | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
@@ -170,6 +192,8 @@ Symptoms are their own domain (they used to share the medications permission). P
 | `fasting_logs` | Logs of fasting timelines (start/end fast) | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
 | `mood_entries` | Logged mood check-ins, several per day: optional mood, energy and focus ratings, tags and journal notes, with a timestamp and a `source` (`manual`, `garmin` or `import`) | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
 | `mindfulness_sessions` | Logged mindfulness, meditation, and breathwork sessions | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
+| `lab_markers` | A user's own lab markers (name, unit, optional default reference range). Built-in markers such as HbA1c are identified by key in `@workspace/shared` and are not stored | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
+| `lab_results` | Lab results for a built-in marker (`marker_key`) or a custom marker (`custom_marker_id`), each with its own unit and reference range, a numeric or text value, and a `source` (`manual`, `report` or `fhir`). Several results per marker per day are allowed. Only the owner's own markers can be referenced | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
 | `day_classification_cache` | Daily summary caching logs | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
 | `custom_categories` | User-defined custom measurement categories (e.g. GLP-1 daily check-in metrics) | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
 | `custom_measurements` | Logged values for custom measurement categories | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
@@ -177,9 +201,9 @@ Symptoms are their own domain (they used to share the medications permission). P
 | `exercise_entry_laps` | Lap split intervals for exercise entries | Delegate with `can_manage_diary` | Delegate with `can_manage_diary` or `can_view_reports` |
 | `exercise_entry_distance_series` | Distance against active time for an entry with no route (a treadmill run from the watch), for its pace chart (one row per entry; `points` holds `[seconds, metres]` rows as JSONB) | Delegate with `can_manage_diary` | Delegate with `can_manage_diary` or `can_view_reports` |
 | `exercise_entry_gps_points` | GPS trackpoints & telemetry for exercise entries (one row per workout; `points` holds the whole track as JSONB) | Delegate with `can_manage_diary` | Delegate with `can_manage_diary` or `can_view_reports` |
-| `exercise_entry_hr_zones` | Time-in-heart-rate-zone splits for exercise entries | Delegate with `can_manage_diary` | Delegate with `can_manage_diary` or `can_view_reports` |
+| `exercise_entry_hr_zones` | Time-in-heart-rate-zone splits for exercise entries (`zone_method` records the zone method each breakdown was stored with and is not rewritten when zone settings change) | Delegate with `can_manage_diary` | Delegate with `can_manage_diary` or `can_view_reports` |
 | `health_metric_samples` | Intraday wearable telemetry — heart rate, HRV, respiration, SpO2, stress, body battery, skin temperature (one JSONB-bucketed row per user/metric/day/provider) | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
-| `vitals_entries` | Blood pressure, blood glucose, and body temperature telemetry | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
+| `vitals_entries` | Blood pressure, blood glucose, body temperature, and pulse telemetry | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
 | `daily_health_metrics` | Daily automated wearable summary, scores, total calories, and the total-calorie source capture time | Delegate with `can_manage_checkin` | Delegate with `can_manage_checkin` or `can_view_reports` |
 
 ---
@@ -189,11 +213,11 @@ These tables store global configuration settings, lookup values, and reference m
 
 | Table Name | Description | Write (insert/update/delete) | Read (select) |
 | :--- | :--- | :--- | :--- |
-| `global_settings` | Application global feature flags and system configurations | Admin-Only | Authenticated Users |
+| `global_settings` | Application global feature flags and system configurations, including release checks and the Remote MCP OAuth switch plus redirect URI allowlist | Admin-Only | Authenticated Users |
 | `backup_settings` | Automated database backup timing and storage credentials | Admin-Only | Admin-Only |
 | `sso_provider` | Active Single Sign-On providers (Google, Apple, etc.) | Admin-Only | Public (Login page) |
 | `oidc_providers` | OpenID Connect integration settings and metadata | Admin-Only | Public |
-| `external_provider_types` | Search provider configurations lookup (FatSecret, USDA, Canadian Nutrient File, Livsmedelsverket) | Admin-Only | Authenticated Users |
+| `external_provider_types` | Search provider configurations lookup (FatSecret, USDA, Canadian Nutrient File, Livsmedelsverket, Valhalla routing, Open-Meteo weather) | Admin-Only | Authenticated Users |
 | `medication_types` | Medication categories lookup (GLP-1, Insulin, ADHD, etc.) | Admin-Only | Authenticated Users |
 | `medication_route_types` | Medication administration route lookup (Subcutaneous, Oral) | Admin-Only | Authenticated Users |
 | `medication_schedule_types`| Medication scheduling frequencies lookup (Daily, Weekly) | Admin-Only | Authenticated Users |

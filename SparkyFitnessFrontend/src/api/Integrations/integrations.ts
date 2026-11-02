@@ -3,6 +3,7 @@ import { apiCall } from '@/api/api';
 interface IntegrationPayload {
   code: string;
   state: string | null;
+  redirect_uri?: string;
 }
 export const linkFitbitAccount = async (
   data: IntegrationPayload
@@ -97,6 +98,24 @@ export const syncLiftosaurData = async (
       body: JSON.stringify({ providerId, startDate, endDate }),
     }
   );
+};
+export interface IntervalsSyncResult {
+  activitiesImported: number;
+  activitiesSkipped: number;
+  activitiesFailed: number;
+  wellnessDays: number;
+}
+
+export const syncIntervalsData = async (
+  providerId?: string,
+  startDate?: string,
+  endDate?: string,
+  mock?: { saveMockData?: boolean; dataSource?: string }
+): Promise<IntervalsSyncResult> => {
+  return apiCall('/integrations/intervals/sync', {
+    method: 'POST',
+    body: JSON.stringify({ providerId, startDate, endDate, ...mock }),
+  });
 };
 export interface GarminLoginPayload {
   email: string;

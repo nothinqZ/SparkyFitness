@@ -34,6 +34,7 @@ import {
   updateCustomRunProgram,
   markRunProgramWorkoutDone,
   rateRunProgramWorkout,
+  realignRunProgram,
   saveRunProgram,
 } from './api/runProgramApi';
 
@@ -213,6 +214,32 @@ export async function adjustProgramRunning(
   count: number
 ): Promise<void> {
   setCache((await adjustRunProgramRunning({ percent, count })).program);
+}
+
+/**
+ * Rebuilds the rest of the plan to finish on the goal day. `token` is the one
+ * from the preview the person accepted, so a plan that changed meanwhile
+ * (another device, Sparky) is refused rather than rewritten blind; `force`
+ * is the person's choice to go ahead although the goal is tight.
+ */
+export async function applyProgramRealign(options: {
+  token: string;
+  force?: boolean;
+  today: string;
+}): Promise<void> {
+  try {
+    const { program } = await realignRunProgram({
+      confirmed: true,
+      token: options.token,
+      force: options.force,
+      today: options.today,
+    });
+    setCache(program);
+  } catch (error) {
+    // Whatever went wrong, the card should be worked out from the server's copy.
+    void queryClient.invalidateQueries({ queryKey: runProgramQueryKey });
+    throw error;
+  }
 }
 
 /**

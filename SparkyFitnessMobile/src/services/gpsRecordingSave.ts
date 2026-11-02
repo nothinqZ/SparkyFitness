@@ -10,6 +10,8 @@ import {
   elapsedSeconds,
   getHeartRateSamples,
   markRecordingSaved,
+  peekAppleWorkoutZones,
+  clearAppleWorkoutZones,
   type RecordingSession,
 } from './gpsRecordingService';
 import { addLog } from './LogService';
@@ -35,21 +37,24 @@ import {
   toWorkoutGpsPoints,
   type RecordedPoint,
   type RecordingActivity,
+  type DiaryActivity,
 } from '../utils/gpsRecording';
 
 /** Library names the three activities are logged under. */
-const EXERCISE_NAMES: Record<RecordingActivity, string> = {
+const EXERCISE_NAMES: Record<DiaryActivity, string> = {
   walk: 'Walking',
   run: 'Running',
   ride: 'Cycling',
+  jumpRope: 'Jump Rope',
 };
 
 // Only used when the library has no exercise of that name, so the entry still
 // gets a calorie estimate. Rough figures for an average adult.
-const FALLBACK_CALORIES_PER_HOUR: Record<RecordingActivity, number> = {
+const FALLBACK_CALORIES_PER_HOUR: Record<DiaryActivity, number> = {
   walk: 250,
   run: 600,
   ride: 450,
+  jumpRope: 700,
 };
 
 /**
@@ -57,20 +62,25 @@ const FALLBACK_CALORIES_PER_HOUR: Record<RecordingActivity, number> = {
  * one when the library has none of that name.
  */
 export async function resolveRecordingExercise(
-  activity: RecordingActivity
+  activity: DiaryActivity
 ): Promise<Exercise> {
   const name = EXERCISE_NAMES[activity];
+  // Jump rope covers no distance - it is duration-only.
+  const modality = activity === 'jumpRope' ? 'duration' : 'duration_distance';
   const matches = (await searchExercises(name)).filter(
     (exercise) => exercise.name.trim().toLowerCase() === name.toLowerCase()
   );
+  // A jump rope must be duration-only. Falling back to any other "Jump Rope"
+  // would snapshot its modality onto the entry, and a duration_distance one
+  // gives a distance-less workout a route card and distance fields.
   const best =
-    matches.find((exercise) => exercise.modality === 'duration_distance') ??
-    matches[0];
+    matches.find((exercise) => exercise.modality === modality) ??
+    (activity === 'jumpRope' ? undefined : matches[0]);
   if (best) return best;
   return createExercise({
     name,
     category: 'cardio',
-    modality: 'duration_distance',
+    modality,
     calories_per_hour: FALLBACK_CALORIES_PER_HOUR[activity],
     description: null,
   });
@@ -137,6 +147,8 @@ export interface SavedRecording {
   entryDate: string;
   /** Set when this run took the default pair to its retire-at distance. */
   wornOutShoe?: ShoeResponse;
+  /** Cadence and stride put on the entry; null when none was measured. */
+  form: FormMetrics | null;
 }
 
 /**
@@ -173,9 +185,11 @@ export async function saveRecordedActivity(
 
   let entryId = session.savedEntryId;
   let wornOutShoe: ShoeResponse | null = null;
+  // A retry reuses what the first save put on the entry.
+  let form: FormMetrics | null = entryId ? (session.savedForm ?? null) : null;
   if (!entryId) {
     const exercise = await resolveRecordingExercise(session.activity);
-    const form = await measureForm(
+    form = await measureForm(
       session,
       indoor,
       durationSeconds,
@@ -203,7 +217,7 @@ export async function saveRecordedActivity(
       }),
     });
     entryId = created.id;
-    await markRecordingSaved(entryId);
+    await markRecordingSaved(entryId, form);
     // Once, with the entry: a retry of a failed track upload must not teach
     // the same session twice. Best effort, never part of the save failing.
     try {
@@ -253,8 +267,8 @@ export async function saveRecordedActivity(
       ),
     });
   }
-  await attachWatchHeartRate(entryId);
-  return { entryId, entryDate, ...(wornOutShoe && { wornOutShoe }) };
+  await attachWatchHeartRate(entryId, session.id);
+  return { entryId, entryDate, form, ...(wornOutShoe && { wornOutShoe }) };
 }
 
 /**
@@ -292,17 +306,28 @@ async function assignDefaultShoe(
  * Best effort: the activity and its route are already stored, so a failure
  * here is logged and never blocks the save.
  */
-async function attachWatchHeartRate(entryId: string): Promise<void> {
+async function attachWatchHeartRate(
+  entryId: string,
+  sessionId: string
+): Promise<void> {
   try {
     const samples = await getHeartRateSamples();
-    // The server needs two readings to measure any time in a zone.
-    if (samples.length < 2) return;
+    const appleZones = peekAppleWorkoutZones(sessionId);
+    // The server needs two readings to measure any time in a zone, unless
+    // Apple already summed the zones.
+    if (samples.length < 2 && !appleZones) return;
     await attachExerciseEntryWatchTelemetry(entryId, {
-      hrSamples: samples.map((sample) => ({
-        t: new Date(sample.t).toISOString(),
-        bpm: sample.bpm,
-      })),
+      ...(samples.length >= 2
+        ? {
+            hrSamples: samples.map((sample) => ({
+              t: new Date(sample.t).toISOString(),
+              bpm: sample.bpm,
+            })),
+          }
+        : {}),
+      ...(appleZones ? { appleZones } : {}),
     });
+    if (appleZones) clearAppleWorkoutZones(sessionId);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     addLog(

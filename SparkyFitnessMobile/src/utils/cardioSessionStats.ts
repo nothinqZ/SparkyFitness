@@ -25,6 +25,72 @@ export const bpmText = (t: TFunction, bpm: number) =>
     value: formatLocalizedNumber(Math.round(bpm)),
   });
 
+export const spmText = (t: TFunction, cadence: number) =>
+  t('exerciseStatistics.cardio.spm', {
+    defaultValue: '{{value}} spm',
+    value: formatLocalizedNumber(Math.round(cadence)),
+  });
+
+/**
+ * "9° · Light rain" for the air temperature and conditions at the start. The
+ * temperature is stored in °C and shown in °F with the miles setting, as
+ * elevation is shown in feet; 0° is a real reading, so only null is skipped.
+ */
+function weatherText(
+  t: TFunction,
+  session: Pick<
+    ExerciseActivityQueryItem,
+    'weatherTempCelsius' | 'weatherCondition'
+  >,
+  distanceUnit: 'km' | 'miles'
+): string | null {
+  const parts: string[] = [];
+  if (session.weatherTempCelsius != null) {
+    const fahrenheit = distanceUnit === 'miles';
+    const degrees = fahrenheit
+      ? session.weatherTempCelsius * 1.8 + 32
+      : session.weatherTempCelsius;
+    const value = formatLocalizedNumber(Math.round(degrees));
+    parts.push(
+      fahrenheit
+        ? t('exerciseStatistics.cardio.degreesF', {
+            defaultValue: '{{value}}°F',
+            value,
+          })
+        : t('exerciseStatistics.cardio.degreesC', {
+            defaultValue: '{{value}}°C',
+            value,
+          })
+    );
+  }
+  if (session.weatherCondition) parts.push(session.weatherCondition);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+/** A stride stored in centimetres, shown in feet with the miles setting. */
+export function strideText(
+  t: TFunction,
+  strideLengthCm: number,
+  distanceUnit: 'km' | 'miles'
+): string {
+  const feet = distanceUnit === 'miles';
+  const value = formatLocalizedNumber(
+    feet
+      ? Math.round(strideLengthCm * FEET_PER_METER) / 100
+      : Math.round(strideLengthCm) / 100,
+    { maximumFractionDigits: 2 }
+  );
+  return feet
+    ? t('exerciseStatistics.cardio.feet', {
+        defaultValue: '{{value}} ft',
+        value,
+      })
+    : t('exerciseStatistics.cardio.meters', {
+        defaultValue: '{{value}} m',
+        value,
+      });
+}
+
 export function sessionStats(
   t: TFunction,
   session: ExerciseActivityQueryItem,
@@ -107,35 +173,26 @@ export function sessionStats(
       label: t('exerciseStatistics.cardio.cadence', {
         defaultValue: 'Avg cadence',
       }),
-      value: t('exerciseStatistics.cardio.spm', {
-        defaultValue: '{{value}} spm',
-        value: formatLocalizedNumber(Math.round(session.avgCadence)),
-      }),
+      value: spmText(t, session.avgCadence),
     });
   }
   if (session.strideLengthCm != null && session.strideLengthCm > 0) {
-    // Stored in centimetres; shown in feet with the miles setting.
-    const feet = distanceUnit === 'miles';
-    const value = formatLocalizedNumber(
-      feet
-        ? Math.round(session.strideLengthCm * FEET_PER_METER) / 100
-        : Math.round(session.strideLengthCm) / 100,
-      { maximumFractionDigits: 2 }
-    );
     stats.push({
       key: 'stride',
       label: t('exerciseStatistics.cardio.strideLength', {
         defaultValue: 'Stride length',
       }),
-      value: feet
-        ? t('exerciseStatistics.cardio.feet', {
-            defaultValue: '{{value}} ft',
-            value,
-          })
-        : t('exerciseStatistics.cardio.meters', {
-            defaultValue: '{{value}} m',
-            value,
-          }),
+      value: strideText(t, session.strideLengthCm, distanceUnit),
+    });
+  }
+  const weather = weatherText(t, session, distanceUnit);
+  if (weather) {
+    stats.push({
+      key: 'weather',
+      label: t('exerciseStatistics.cardio.weather', {
+        defaultValue: 'Weather',
+      }),
+      value: weather,
     });
   }
   if (session.avgHeartRate != null && session.avgHeartRate > 0) {
@@ -145,6 +202,16 @@ export function sessionStats(
         defaultValue: 'Avg heart rate',
       }),
       value: bpmText(t, session.avgHeartRate),
+    });
+  }
+  if (session.workoutEffort != null) {
+    stats.push({
+      key: 'effort',
+      label: t('exerciseStatistics.cardio.effort', { defaultValue: 'Effort' }),
+      value: t('workoutEffort.value', {
+        defaultValue: '{{rating}}/10',
+        rating: formatLocalizedNumber(session.workoutEffort),
+      }),
     });
   }
   if (session.caloriesBurned > 0) {

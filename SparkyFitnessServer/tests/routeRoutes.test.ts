@@ -93,6 +93,25 @@ describe('routes API', () => {
     expect(bad.status).toBe(400);
   });
 
+  it('saves a generated route but never lets a client claim gpx or activity', async () => {
+    vi.mocked(createRoute).mockResolvedValue(route as never);
+    const generated = await request(app)
+      .post('/api/v2/routes')
+      .send({ name: 'Loop', points, source: 'generated' });
+    expect(generated.status).toBe(201);
+    expect(createRoute).toHaveBeenCalledWith(
+      'test-user-id',
+      expect.objectContaining({ source: 'generated' }),
+      actingAs
+    );
+    for (const source of ['gpx', 'activity']) {
+      const res = await request(app)
+        .post('/api/v2/routes')
+        .send({ name: 'Loop', points, source });
+      expect(res.status).toBe(400);
+    }
+  });
+
   it('maps repository errors to statuses', async () => {
     vi.mocked(createRoute).mockRejectedValueOnce(
       new InvalidRouteError('short')
@@ -167,6 +186,52 @@ describe('routes API', () => {
       (await request(app).patch(`/api/v2/routes/${ID}`).send({})).status
     ).toBe(400);
 
+    const replaced = await request(app)
+      .patch(`/api/v2/routes/${ID}`)
+      .send({ points, cues: [] });
+    expect(replaced.status).toBe(200);
+    expect(vi.mocked(updateRoute).mock.calls.at(-1)?.[2]).toMatchObject({
+      points,
+    });
+    expect(
+      (await request(app).patch(`/api/v2/routes/${ID}`).send({ cues: [] }))
+        .status
+    ).toBe(400);
+    expect(
+      (
+        await request(app)
+          .patch(`/api/v2/routes/${ID}`)
+          .send({ points: [points[0]] })
+      ).status
+    ).toBe(400);
+
+    // A cue has to point at one of the new points.
+    const strayCue = await request(app)
+      .patch(`/api/v2/routes/${ID}`)
+      .send({ points, cues: [{ index: 2, kind: 'left' }] });
+    expect(strayCue.status).toBe(400);
+    expect(
+      (
+        await request(app)
+          .patch(`/api/v2/routes/${ID}`)
+          .send({ points, cues: [{ index: 1, kind: 'left' }] })
+      ).status
+    ).toBe(200);
+
+    // A line that is too short is the caller's mistake, not a server error.
+    vi.mocked(updateRoute).mockRejectedValueOnce(
+      new InvalidRouteError('A route needs to be at least 10 m long')
+    );
+    const tooShort = await request(app)
+      .patch(`/api/v2/routes/${ID}`)
+      .send({ points });
+    expect(tooShort.status).toBe(400);
+
+    vi.mocked(updateRoute).mockResolvedValueOnce(null);
+    expect(
+      (await request(app).patch(`/api/v2/routes/${ID}`).send({ points })).status
+    ).toBe(404);
+
     vi.mocked(deleteRoute).mockResolvedValueOnce(true);
     expect((await request(app).delete(`/api/v2/routes/${ID}`)).status).toBe(
       204
@@ -181,7 +246,7 @@ describe('routes API', () => {
     expect(gpx.headers['content-type']).toContain('application/gpx+xml');
     expect(gpx.text).toContain('<trkpt lat="40" lon="-74">');
     expect(gpx.headers['content-disposition']).toMatch(
-      /^attachment; filename="[^"]+\.gpx"/
+      /^attachment; filename="?[^";]+\.gpx"?/
     );
   });
 
@@ -235,20 +300,30 @@ describe('routes API input limits', () => {
     expect((await post({ name: 'x', points: many })).status).toBe(400);
   });
 
-  it('rejects an unknown activity and ignores a client-chosen source', async () => {
+  it('rejects an unknown activity and a field that is not the owner’s to set', async () => {
     expect((await post({ name: 'x', points, activity: 'swim' })).status).toBe(
       400
     );
     vi.mocked(createRoute).mockResolvedValue(route as never);
-    await post({ name: 'x', points, source: 'activity', user_id: 'other' });
-    expect(createRoute).toHaveBeenCalledWith(
-      'test-user-id',
-      expect.objectContaining({ source: 'drawn' }),
-      actingAs
-    );
+    await post({ name: 'x', points, user_id: 'other' });
     expect(vi.mocked(createRoute).mock.calls[0]?.[1]).not.toHaveProperty(
       'user_id'
     );
+  });
+
+  it('lets a client choose drawn or generated as the source, nothing else', async () => {
+    vi.mocked(createRoute).mockResolvedValue(route as never);
+    for (const source of ['gpx', 'activity', 'magic']) {
+      expect((await post({ name: 'x', points, source })).status).toBe(400);
+    }
+    expect(createRoute).not.toHaveBeenCalled();
+    expect((await post({ name: 'x', points })).status).toBe(201);
+    expect(
+      (await post({ name: 'x', points, source: 'generated' })).status
+    ).toBe(201);
+    expect(
+      vi.mocked(createRoute).mock.calls.map((call) => call[1].source)
+    ).toEqual(['drawn', 'generated']);
   });
 
   it('cuts an imported name to 100 characters without splitting an emoji', async () => {

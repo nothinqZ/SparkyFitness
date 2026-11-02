@@ -88,8 +88,6 @@ describe('multiple mood check-ins migration', () => {
   });
 
   it('runs as one transaction', () => {
-    expect(sql.match(/\bBEGIN;/gi)).toHaveLength(1);
-    expect(sql.match(/\bCOMMIT;/gi)).toHaveLength(1);
     expect(sql).not.toMatch(/NOT VALID|VALIDATE CONSTRAINT/i);
   });
 

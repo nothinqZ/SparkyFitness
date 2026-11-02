@@ -41,6 +41,10 @@ jest.mock('../../src/hooks/usePreferences', () => ({
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
+let mockCanShowMap = true;
+jest.mock('../../src/utils/routeMapSupport', () => ({
+  canShowRouteMap: () => mockCanShowMap,
+}));
 jest.mock('react-native-toast-message', () => ({
   __esModule: true,
   default: { show: jest.fn() },
@@ -231,5 +235,18 @@ describe('RouteDetailScreen', () => {
       );
       expect(goBack).not.toHaveBeenCalled();
     });
+  });
+
+  it('offers Edit route on map only where a real map can be drawn', () => {
+    show();
+    mockCanShowMap = true;
+    const withMap = renderScreen();
+    expect(withMap.getByText('Edit route on map')).toBeTruthy();
+    withMap.unmount();
+
+    mockCanShowMap = false;
+    const withoutMap = renderScreen();
+    expect(withoutMap.queryByText('Edit route on map')).toBeNull();
+    mockCanShowMap = true;
   });
 });

@@ -6,7 +6,9 @@ import WatchConnectivity, {
   type WatchCheckInPayload,
   type WatchContextPayload,
   type WatchContainerPayload,
+  type WatchExerciseSummaryPayload,
   type WatchHistoryPoint,
+  type WatchSleepSnapshotPayload,
   type WatchWaterIntakePayload,
   type WatchWaterDeletePayload,
   type WatchWaterLogPayload,
@@ -28,6 +30,7 @@ import {
   updateEntry,
 } from '../services/api/medicationsApi';
 import {
+  caffeineActiveQueryKey,
   medicationsListQueryKey,
   medicationEntriesQueryKey,
   measurementsQueryKey,
@@ -38,27 +41,39 @@ import {
 } from './queryKeys';
 import { refreshHealthSyncCache } from './refreshHealthSyncCache';
 import { getTodayDate, addDays, getDeviceTimezone } from '../utils/dateUtils';
-import { medicationsForWatch } from '../utils/watchMedications';
-import { entryMatchesDose } from '../utils/medications';
+import {
+  medicationsForWatch,
+  watchMedicationWrite,
+} from '../utils/watchMedications';
 import { invalidateMedicationEntryCaches } from './invalidateMedicationEntryCaches';
-import { getServingVolume } from '../utils/unitConversions';
 import { formatTimeLabel } from '../utils/entryTimeDisplay';
 import { addLog } from '../services/LogService';
 import { queryClient } from './queryClient';
 import { usePreferences } from './usePreferences';
-import { watchWaterFromFoodMl } from '../utils/watchWater';
+import {
+  watchContainerDisplayUnit,
+  watchContainerServingVolumeMl,
+  watchWaterFromFoodMl,
+} from '../utils/watchWater';
 import { useAppPreferencesStore } from '../stores/appPreferencesStore';
-import { useDailySummary } from './useDailySummary';
+import { useDailySummary, type DailySummaryRawData } from './useDailySummary';
 import { WATCH_PAGE_KEYS } from '../constants/watchPages';
 import { resolveKeyOrder } from '../utils/reorderUtils';
 import { buildWatchGoalNutrients, shownInOrder } from '../utils/watchNutrients';
 import { useCustomNutrients } from './useCustomNutrients';
+import { useSleepDay } from './useSleepDay';
+import { formatClockTime, resolveSleepZone } from '../utils/sleepDay';
+import { getSessionCalories, getWorkoutSummary } from '../utils/workoutSession';
 import { useTranslation } from 'react-i18next';
 import type { CheckInMeasurement } from '../types/measurements';
 import type { WorkoutPreset } from '../types/workoutPresets';
 import { useSuggestedExercises } from './useSuggestedExercises';
 import { useWorkoutPresets } from './useWorkoutPresets';
 import { getActiveServerConfigId } from '../services/storage';
+import {
+  isPayloadForActiveServer,
+  syncWatchServerCredentials,
+} from '../services/watchServerCredentials';
 import { useActiveWorkoutPlans } from './useActiveWorkoutPlan';
 import { scheduledWorkoutsForWatch } from '../utils/workoutPlanSchedule';
 import { useCurrentFast } from './useFasting';
@@ -70,12 +85,14 @@ import {
 import { useRunProgram } from '../services/runProgramService';
 import { suggestedPaceRangesFromRace } from '../utils/suggestedRanges';
 import { buildWatchRunPlans } from '../utils/watchRunPlans';
+import { useZone2HeartRateBand } from './useZone2HeartRateBand';
 import {
   getWatchIndoorScale,
   onWatchIndoorScaleChange,
 } from '../services/watchIndoorScale';
 import { presetName } from '../components/recording/IntervalSetup';
 import { programWorkoutLabel } from '../components/recording/RunProgramCard';
+import { getAppLocale } from '../localization';
 
 /** Saved workouts the watch may start. Presets with no exercises are omitted:
  * the server rejects a session that has none. */
@@ -164,6 +181,8 @@ const NO_FIGURES_FOR_TODAY = {
   waterLog: [] as WatchWaterLogPayload[],
   medications: null,
   goalNutrients: null,
+  sleep: null,
+  exerciseSummary: null,
 } as const;
 
 /**
@@ -259,6 +278,14 @@ export function useWatchCheckInBridge(enabled: boolean): void {
   // Device-local settings the watch's haptics follow.
   const hapticsEnabled = useAppPreferencesStore((s) => s.hapticsEnabled);
   const watchRpeEnabled = useAppPreferencesStore((s) => s.watchRpeEnabled);
+  const watchSetScreenMetrics = useAppPreferencesStore(
+    (s) => s.watchSetScreenMetrics
+  );
+  const watchUpNextPage = useAppPreferencesStore((s) => s.watchUpNextPage);
+  const watchLargerText = useAppPreferencesStore((s) => s.watchLargerText);
+  const watchClassicWorkout = useAppPreferencesStore(
+    (s) => s.watchClassicWorkout
+  );
   const watchDoubleTapEnabled = useAppPreferencesStore(
     (s) => s.watchDoubleTapEnabled
   );
@@ -329,6 +356,7 @@ export function useWatchCheckInBridge(enabled: boolean): void {
         : null,
     [paceReferenceOnWatch, paceReferenceRace, programStatus]
   );
+  const zone2Band = useZone2HeartRateBand(enabled);
   const runPlans = useMemo(
     () =>
       buildWatchRunPlans(
@@ -338,9 +366,10 @@ export function useWatchCheckInBridge(enabled: boolean): void {
           program: (status) => programWorkoutLabel(t, status),
           preset: (id) => presetName(t, id),
         },
-        watchPaceRanges
+        watchPaceRanges,
+        zone2Band
       ),
-    [t, programStatus, programEnabled, watchPaceRanges]
+    [t, programStatus, programEnabled, watchPaceRanges, zone2Band]
   );
   const { presets } = useWorkoutPresets({ enabled });
   const fastQuery = useCurrentFast({ enabled });
@@ -571,24 +600,21 @@ export function useWatchCheckInBridge(enabled: boolean): void {
   const watchContainers: WatchContainerPayload[] = useMemo(
     () =>
       (containers ?? []).flatMap((container) => {
-        // For standard containers, getServingVolume computes the volume per serving.
-        // For food-linked containers, fall back to the linked variant's water volume or container volume.
-        const servingVolumeMl =
-          getServingVolume(container) ??
-          (container.linked_variant_water_ml != null
-            ? Number(container.linked_variant_water_ml)
-            : container.volume || 0);
+        const rawVolumeMl = watchContainerServingVolumeMl(container);
+        const servingVolumeMl = Number.isFinite(rawVolumeMl)
+          ? Math.max(0, rawVolumeMl)
+          : 0;
 
         return [
           {
             id: container.id,
             name: container.name,
             servingVolumeMl,
-            unit: container.unit,
+            unit: watchContainerDisplayUnit(container, waterDisplayUnit),
           },
         ];
       }),
-    [containers]
+    [containers, waterDisplayUnit]
   );
 
   // Bundled so the day check below is one decision rather than sixteen. The
@@ -615,6 +641,107 @@ export function useWatchCheckInBridge(enabled: boolean): void {
     t,
   ]);
 
+  const { wakeUp: mainSleep, naps: sleepNaps } = useSleepDay(summaryDate, {
+    enabled,
+  });
+  const profileTimezone = preferences?.timezone ?? null;
+  const watchSleep: WatchSleepSnapshotPayload | null = useMemo(() => {
+    if (!mainSleep && sleepNaps.length === 0) return null;
+    const napSeconds = sleepNaps.reduce(
+      (sum, nap) => sum + Math.max(0, nap.time_asleep_in_seconds ?? 0),
+      0
+    );
+    const mainAsleepSeconds = mainSleep
+      ? Math.max(0, mainSleep.time_asleep_in_seconds ?? 0)
+      : 0;
+    const mainInBedSeconds = mainSleep
+      ? Math.max(
+          0,
+          mainSleep.duration_in_seconds ?? mainSleep.time_asleep_in_seconds ?? 0
+        )
+      : 0;
+    const zone = mainSleep
+      ? resolveSleepZone(mainSleep, profileTimezone)
+      : null;
+    const bedtime = mainSleep
+      ? formatClockTime(mainSleep.bedtime, timeFormat, zone)
+      : '';
+    const wakeTime = mainSleep
+      ? formatClockTime(mainSleep.wake_time, timeFormat, zone)
+      : '';
+    return {
+      day: summaryDate,
+      totalSeconds: Math.round(mainAsleepSeconds + napSeconds),
+      timeInBedSeconds: Math.round(mainInBedSeconds),
+      sleepScore:
+        mainSleep?.sleep_score != null
+          ? Math.round(mainSleep.sleep_score)
+          : null,
+      bedtime: bedtime === '—' ? '' : bedtime,
+      wakeTime: wakeTime === '—' ? '' : wakeTime,
+      deepSeconds:
+        mainSleep?.deep_sleep_seconds != null
+          ? Math.round(mainSleep.deep_sleep_seconds)
+          : null,
+      remSeconds:
+        mainSleep?.rem_sleep_seconds != null
+          ? Math.round(mainSleep.rem_sleep_seconds)
+          : null,
+      lightSeconds:
+        mainSleep?.light_sleep_seconds != null
+          ? Math.round(mainSleep.light_sleep_seconds)
+          : null,
+      awakeSeconds:
+        mainSleep?.awake_sleep_seconds != null
+          ? Math.round(mainSleep.awake_sleep_seconds)
+          : null,
+      restingHeartRate:
+        mainSleep?.resting_heart_rate != null
+          ? Math.round(mainSleep.resting_heart_rate)
+          : null,
+      hrvMs:
+        mainSleep?.avg_overnight_hrv != null
+          ? Math.round(mainSleep.avg_overnight_hrv)
+          : null,
+      spo2:
+        mainSleep?.average_spo2_value != null
+          ? Math.round(mainSleep.average_spo2_value)
+          : null,
+      napCount: sleepNaps.length,
+      napSeconds: Math.round(napSeconds),
+    };
+  }, [mainSleep, sleepNaps, profileTimezone, timeFormat, summaryDate]);
+
+  const watchExerciseSummary: WatchExerciseSummaryPayload | null =
+    useMemo(() => {
+      if (!dailySummary) return null;
+      const loggedSessions = dailySummary.exerciseEntries.flatMap((entry) => {
+        if (
+          entry.type !== 'preset' &&
+          (entry.name ?? entry.exercise_snapshot?.name) === 'Active Calories'
+        ) {
+          return [];
+        }
+        const summary = getWorkoutSummary(entry, t);
+        return [
+          {
+            name: summary.name,
+            durationMinutes: Math.round(Number(summary.duration) || 0),
+            calories: Math.round(Number(getSessionCalories(entry)) || 0),
+          },
+        ];
+      });
+      return {
+        day: summaryDate,
+        minutes: Math.round(dailySummary.exerciseMinutes || 0),
+        minutesGoal: Math.round(dailySummary.exerciseMinutesGoal || 0),
+        calories: Math.round(dailySummary.otherExerciseCalories || 0),
+        caloriesGoal: Math.round(dailySummary.exerciseCaloriesGoal || 0),
+        sessionCount: loggedSessions.length,
+        sessions: loggedSessions.slice(0, 3),
+      };
+    }, [dailySummary, summaryDate, t]);
+
   const figuresForSummaryDate = useMemo(
     () => ({
       calorieGoalProgress,
@@ -635,6 +762,8 @@ export function useWatchCheckInBridge(enabled: boolean): void {
       waterLog: watchWaterLog,
       medications: watchMedications,
       goalNutrients,
+      sleep: watchSleep,
+      exerciseSummary: watchExerciseSummary,
     }),
     [
       calorieGoalProgress,
@@ -655,6 +784,8 @@ export function useWatchCheckInBridge(enabled: boolean): void {
       watchWaterLog,
       watchMedications,
       goalNutrients,
+      watchSleep,
+      watchExerciseSummary,
     ]
   );
 
@@ -673,7 +804,7 @@ export function useWatchCheckInBridge(enabled: boolean): void {
     // ordering that sticks.
     const generation = ++pushGenerationRef.current;
     try {
-      const workoutServerId = await getActiveServerConfigId();
+      const workoutServerId = await syncWatchServerCredentials();
       const today = getTodayDate();
       const startDate = addDays(today, -(HISTORY_DAYS - 1));
       const range = await fetchMeasurementsRange(startDate, today);
@@ -759,7 +890,16 @@ export function useWatchCheckInBridge(enabled: boolean): void {
         restAlertsEnabled,
         doubleTapEnabled: watchDoubleTapEnabled,
         rpeEnabled: watchRpeEnabled,
+        setScreenMetrics: watchSetScreenMetrics,
+        upNextPage: watchUpNextPage,
+        largerText: watchLargerText,
+        classicWorkout: watchClassicWorkout,
+        // This build handles a skipped dose from the watch.
+        medicationSkip: true,
+        // ... and "do this exercise now" from the workout pages.
+        exerciseDoNow: true,
         runVoiceCues: recording.audioCues,
+        appLanguage: getAppLocale(),
         runAutoPause: recording.autoPause,
         runCheckInMinutes: recording.checkInMinutes,
         ...(recording.heartRateBand
@@ -821,6 +961,10 @@ export function useWatchCheckInBridge(enabled: boolean): void {
     restAlertsEnabled,
     watchDoubleTapEnabled,
     watchRpeEnabled,
+    watchSetScreenMetrics,
+    watchUpNextPage,
+    watchLargerText,
+    watchClassicWorkout,
     runPlans,
     indoorDistanceScale,
     startableWorkouts,
@@ -951,6 +1095,7 @@ export function useWatchCheckInBridge(enabled: boolean): void {
   const handleCheckIn = useCallback(
     async (payload: WatchCheckInPayload): Promise<void> => {
       if (!WatchConnectivity) return;
+      if (!(await isPayloadForActiveServer(payload))) return;
       await ensureAckStateHydrated();
       if (
         payload.clientId &&
@@ -1019,6 +1164,7 @@ export function useWatchCheckInBridge(enabled: boolean): void {
   const handleWaterTap = useCallback(
     async (payload: WatchWaterIntakePayload): Promise<void> => {
       if (!WatchConnectivity) return;
+      if (!(await isPayloadForActiveServer(payload))) return;
       await ensureAckStateHydrated();
       if (
         payload.clientId &&
@@ -1064,13 +1210,29 @@ export function useWatchCheckInBridge(enabled: boolean): void {
         handledWaterClientIdsRef.current.add(payload.clientId);
 
       try {
-        await changeWaterIntake({
+        const response = await changeWaterIntake({
           entryDate: payload.entryDate,
           // One tap = one full serving of that container, same as the phone's
           // own +/- button.
           changeDrinks: 1,
           containerId: payload.containerId,
         });
+
+        if (response && typeof response.water_ml === 'number') {
+          queryClient.setQueryData<DailySummaryRawData>(
+            dailySummaryQueryKey(payload.entryDate),
+            (old) => {
+              if (!old) return old;
+              return {
+                ...old,
+                waterIntake: {
+                  ...old.waterIntake,
+                  water_ml: response.water_ml,
+                },
+              };
+            }
+          );
+        }
 
         // Acknowledged both ways: immediately when the watch is reachable,
         // and durably through the context push. A retry of a tap that
@@ -1086,14 +1248,19 @@ export function useWatchCheckInBridge(enabled: boolean): void {
         await persistAckState();
         await WatchConnectivity.sendAck(payload.clientId, true);
 
-        queryClient.invalidateQueries({
-          queryKey: dailySummaryQueryKey(payload.entryDate),
-        });
-        // The tap also created a new log row, which the watch's log view
-        // reads — refetch so the next push carries it.
-        await queryClient.invalidateQueries({
-          queryKey: waterIntakeLogQueryKey(payload.entryDate),
-        });
+        // Awaited so the next context push carries both the updated day total
+        // (including food-linked container calories/water) and the new log row.
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: dailySummaryQueryKey(payload.entryDate),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: waterIntakeLogQueryKey(payload.entryDate),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: caffeineActiveQueryKey(payload.entryDate),
+          }),
+        ]);
 
         addLog(
           `Watch water tap logged for ${payload.entryDate}: container ${payload.containerId}`,
@@ -1130,6 +1297,7 @@ export function useWatchCheckInBridge(enabled: boolean): void {
   const handleWaterDelete = useCallback(
     async (payload: WatchWaterDeletePayload): Promise<void> => {
       if (!WatchConnectivity) return;
+      if (!(await isPayloadForActiveServer(payload))) return;
       await ensureAckStateHydrated();
       if (
         payload.clientId &&
@@ -1167,12 +1335,17 @@ export function useWatchCheckInBridge(enabled: boolean): void {
         await persistAckState();
         await WatchConnectivity.sendAck(payload.clientId, true);
 
-        queryClient.invalidateQueries({
-          queryKey: dailySummaryQueryKey(today),
-        });
-        await queryClient.invalidateQueries({
-          queryKey: waterIntakeLogQueryKey(today),
-        });
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: dailySummaryQueryKey(today),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: waterIntakeLogQueryKey(today),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: caffeineActiveQueryKey(today),
+          }),
+        ]);
 
         addLog(`Watch deleted water log entry ${payload.entryId}`, 'INFO');
         await pushContextRef.current();
@@ -1204,12 +1377,14 @@ export function useWatchCheckInBridge(enabled: boolean): void {
    * slot has none, so a redelivery that slips past the dedupe set cannot log
    * the dose twice. A skipped or schedule-less (web-logged) entry for the slot
    * is updated to taken instead, the same way the phone's own dose row does.
-   * An un-tick (`taken: false`) deletes the taken entry the same way, and is
-   * a no-op when there is none.
+   * An un-tick (`taken: false`) deletes the slot's taken or skipped entry, and
+   * is a no-op when there is none. `skipped: true` marks a scheduled slot
+   * skipped the same way, creating or updating its entry.
    */
   const processMedicationTaken = useCallback(
     async (payload: WatchMedicationTakenPayload): Promise<void> => {
       if (!WatchConnectivity) return;
+      if (!(await isPayloadForActiveServer(payload))) return;
       await ensureAckStateHydrated();
       if (
         payload.clientId &&
@@ -1229,39 +1404,25 @@ export function useWatchCheckInBridge(enabled: boolean): void {
           fromDate: payload.entryDate,
           toDate: payload.entryDate,
         });
-        // An empty scheduleId is an as-needed row: it logs a `prn_taken`
-        // entry like the phone's PRN button, once per day from the watch.
-        const asNeeded = !payload.scheduleId;
-        const existing = asNeeded
-          ? entries.find(
-              (e) =>
-                e.medication_id === payload.medicationId &&
-                e.status === 'prn_taken'
-            )
-          : entries.find((e) =>
-              entryMatchesDose(e, payload.medicationId, payload.scheduleId)
-            );
-        const alreadyTaken =
-          existing?.status === 'taken' || existing?.status === 'prn_taken';
-        if (payload.taken === false) {
-          if (existing && alreadyTaken) await deleteEntry(existing.id);
-        } else if (!alreadyTaken) {
-          const takenAt = new Date().toISOString();
-          if (existing) {
-            await updateEntry(existing.id, {
-              schedule_id: payload.scheduleId,
-              status: 'taken',
-              taken_at: takenAt,
-            });
-          } else {
-            await createEntry({
-              medication_id: payload.medicationId,
-              ...(asNeeded ? {} : { schedule_id: payload.scheduleId }),
-              status: asNeeded ? 'prn_taken' : 'taken',
-              entry_date: payload.entryDate,
-              taken_at: takenAt,
-            });
-          }
+        const write = watchMedicationWrite(payload, entries);
+        if (write.kind === 'delete') {
+          await deleteEntry(write.entryId);
+        } else if (write.kind === 'update') {
+          await updateEntry(write.entryId, {
+            schedule_id: payload.scheduleId,
+            status: write.status,
+            taken_at: new Date().toISOString(),
+          });
+        } else if (write.kind === 'create') {
+          await createEntry({
+            medication_id: payload.medicationId,
+            ...(payload.scheduleId ? { schedule_id: payload.scheduleId } : {}),
+            status: write.status,
+            entry_date: payload.entryDate,
+            // As the phone's own create: a skipped dose was never taken.
+            taken_at:
+              write.status === 'skipped' ? undefined : new Date().toISOString(),
+          });
         }
 
         ackedClientIdsRef.current = [
@@ -1289,7 +1450,7 @@ export function useWatchCheckInBridge(enabled: boolean): void {
         invalidateMedicationEntryCaches(queryClient);
 
         addLog(
-          `Watch medication dose ${payload.taken === false ? 'unmarked' : 'logged'} for ${payload.entryDate}: ${payload.medicationId}`,
+          `Watch medication dose ${write.kind === 'delete' ? 'unmarked' : write.kind === 'none' ? 'unchanged' : write.status} for ${payload.entryDate}: ${payload.medicationId}`,
           'INFO'
         );
         await pushContextRef.current();

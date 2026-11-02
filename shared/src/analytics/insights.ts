@@ -778,7 +778,7 @@ export function missingSignals(
 
 // --- Compare view --------------------------------------------------------
 
-export const COMPARE_METRICS = [
+export const INSIGHT_COMPARE_METRICS = [
   'hrv',
   'restingHr',
   'sleepHours',
@@ -792,7 +792,8 @@ export const COMPARE_METRICS = [
   'runDistance',
   'vo2max',
 ] as const;
-export type CompareMetric = (typeof COMPARE_METRICS)[number] | `e1rm:${string}`;
+export type CompareMetric =
+  (typeof INSIGHT_COMPARE_METRICS)[number] | `e1rm:${string}`;
 
 /** Weekly metrics only exist per ISO week; daily ones are bucketed to weeks when compared with them. */
 const WEEKLY_METRICS = new Set<string>([
@@ -892,7 +893,7 @@ export interface ComparePoint {
   b: number | null;
 }
 
-export interface CompareResult {
+export interface InsightCompareResult {
   bucket: 'day' | 'week';
   points: ComparePoint[];
   /** Pearson correlation over the dates where both have a value; null below MIN_PAIRS. */
@@ -929,7 +930,7 @@ export function compareMetrics(
   overview: PerformanceOverviewResponse,
   a: CompareMetric,
   b: CompareMetric
-): CompareResult {
+): InsightCompareResult {
   const weekly = isWeeklyMetric(a) || isWeeklyMetric(b);
   let sa = metricSeries(overview, a);
   let sb = metricSeries(overview, b);

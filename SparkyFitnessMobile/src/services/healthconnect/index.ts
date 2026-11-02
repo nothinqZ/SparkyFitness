@@ -40,7 +40,11 @@ import {
 import { getErrorMessage } from '../../utils/errors';
 import { loadHealthPreference } from './preferences';
 import { collectSessionTelemetry, sessionCacheKey } from './workoutTelemetry';
-import { deriveActiveCalories } from '@workspace/shared';
+import {
+  deriveActiveCalories,
+  keepMostDetailedSleep,
+  type SleepPlacement,
+} from '@workspace/shared';
 
 // Re-export for backward compatibility with callers importing from this module
 export { getSyncStartDate };
@@ -86,31 +90,49 @@ export const initHealthConnect = async (): Promise<boolean> => {
   }
 };
 
+const uniquePermissionRequests = (
+  permissions: PermissionRequest[]
+): PermissionRequest[] =>
+  permissions.filter(
+    (permission, index, allPermissions) =>
+      allPermissions.findIndex(
+        (candidate) =>
+          candidate.recordType === permission.recordType &&
+          candidate.accessType === permission.accessType
+      ) === index
+  );
+
+/**
+ * Requests the permissions and returns the requested ones that came back
+ * granted. The person can decline some, and an older Health Connect can't
+ * grant record types it doesn't support, so callers that request many at once
+ * use this to keep what was granted.
+ */
+export const requestGrantedHealthPermissions = async (
+  permissionsToRequest: PermissionRequest[]
+): Promise<PermissionRequest[]> => {
+  const uniquePermissions = uniquePermissionRequests(permissionsToRequest);
+  // Cast to library's Permission type - our PermissionRequest interface is compatible
+  const grantedPermissions = (await requestPermission(
+    uniquePermissions as Parameters<typeof requestPermission>[0]
+  )) as GrantedPermission[];
+  return uniquePermissions.filter((requestedPerm) =>
+    grantedPermissions.some(
+      (grantedPerm) =>
+        grantedPerm.recordType === requestedPerm.recordType &&
+        grantedPerm.accessType === requestedPerm.accessType
+    )
+  );
+};
+
 export const requestHealthPermissions = async (
   permissionsToRequest: PermissionRequest[]
 ): Promise<boolean> => {
   try {
-    const uniquePermissions = permissionsToRequest.filter(
-      (permission, index, allPermissions) =>
-        allPermissions.findIndex(
-          (candidate) =>
-            candidate.recordType === permission.recordType &&
-            candidate.accessType === permission.accessType
-        ) === index
-    );
-
-    // Cast to library's Permission type - our PermissionRequest interface is compatible
-    const grantedPermissions = (await requestPermission(
-      uniquePermissions as Parameters<typeof requestPermission>[0]
-    )) as GrantedPermission[];
-
-    const allGranted = uniquePermissions.every((requestedPerm) =>
-      grantedPermissions.some(
-        (grantedPerm) =>
-          grantedPerm.recordType === requestedPerm.recordType &&
-          grantedPerm.accessType === requestedPerm.accessType
-      )
-    );
+    const uniquePermissions = uniquePermissionRequests(permissionsToRequest);
+    const grantedPermissions =
+      await requestGrantedHealthPermissions(uniquePermissions);
+    const allGranted = grantedPermissions.length === uniquePermissions.length;
 
     if (allGranted) {
       addLog(
@@ -412,10 +434,12 @@ const readHealthRecordsFallback = async (
  */
 let clientUnavailableCount = 0;
 let reconnectAttemptedThisRun = false;
+let inFlightReconnect: Promise<boolean> | null = null;
 
 export function resetClientUnavailableState(): void {
   clientUnavailableCount = 0;
   reconnectAttemptedThisRun = false;
+  inFlightReconnect = null;
 }
 
 export function getClientUnavailableCount(): number {
@@ -424,10 +448,12 @@ export function getClientUnavailableCount(): number {
 
 /**
  * Reconnects once per run and reports whether a retry is worth attempting.
- * A second caller in the same run gets false — the first attempt already
- * settled it, and the client does not become available by asking twice.
+ * Concurrent callers in the same run await the in-flight attempt; a caller
+ * arriving after that attempt has settled gets false (the client does not
+ * become available by asking twice).
  */
 const tryReconnectOnce = async (): Promise<boolean> => {
+  if (inFlightReconnect) return inFlightReconnect;
   if (reconnectAttemptedThisRun) return false;
   reconnectAttemptedThisRun = true;
 
@@ -435,7 +461,22 @@ const tryReconnectOnce = async (): Promise<boolean> => {
     '[HealthConnectService] Health Connect client is unavailable — reconnecting once before giving up.',
     'WARNING'
   );
-  return initHealthConnect();
+  inFlightReconnect = initHealthConnect().finally(() => {
+    inFlightReconnect = null;
+  });
+  return inFlightReconnect;
+};
+
+/** Retries a native aggregation once using the run's shared reconnect attempt. */
+const withClientRecovery = async <T>(read: () => Promise<T>): Promise<T> => {
+  try {
+    return await read();
+  } catch (error) {
+    if (!isClientUnavailableError(error)) throw error;
+    clientUnavailableCount++;
+    if (!(await tryReconnectOnce())) throw error;
+    return read();
+  }
 };
 
 export const readHealthRecordsDetailed = async (
@@ -931,17 +972,19 @@ const aggregateByDeviceZone = async (
   type PeriodBucket = { result: unknown; startTime: string; endTime: string };
   let buckets: PeriodBucket[];
   try {
-    buckets = (await aggregateGroupByPeriod({
-      recordType: spec.recordType as Parameters<
-        typeof aggregateGroupByPeriod
-      >[0]['recordType'],
-      timeRangeFilter: {
-        operator: 'between',
-        startTime: startDate.toISOString(),
-        endTime: endDate.toISOString(),
-      },
-      timeRangeSlicer: { period: 'DAYS', length: 1 },
-    })) as unknown as PeriodBucket[];
+    buckets = (await withClientRecovery(() =>
+      aggregateGroupByPeriod({
+        recordType: spec.recordType as Parameters<
+          typeof aggregateGroupByPeriod
+        >[0]['recordType'],
+        timeRangeFilter: {
+          operator: 'between',
+          startTime: startDate.toISOString(),
+          endTime: endDate.toISOString(),
+        },
+        timeRangeSlicer: { period: 'DAYS', length: 1 },
+      })
+    )) as unknown as PeriodBucket[];
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     addLog(
@@ -996,17 +1039,19 @@ const aggregateByRecordOffsets = async (
     };
     let buckets: DurationBucket[];
     try {
-      buckets = (await aggregateGroupByDuration({
-        recordType: spec.recordType as Parameters<
-          typeof aggregateGroupByDuration
-        >[0]['recordType'],
-        timeRangeFilter: {
-          operator: 'between',
-          startTime: new Date(segment.startMs).toISOString(),
-          endTime: new Date(segment.endMs).toISOString(),
-        },
-        timeRangeSlicer: { duration: 'DAYS', length: 1 },
-      })) as unknown as DurationBucket[];
+      buckets = (await withClientRecovery(() =>
+        aggregateGroupByDuration({
+          recordType: spec.recordType as Parameters<
+            typeof aggregateGroupByDuration
+          >[0]['recordType'],
+          timeRangeFilter: {
+            operator: 'between',
+            startTime: new Date(segment.startMs).toISOString(),
+            endTime: new Date(segment.endMs).toISOString(),
+          },
+          timeRangeSlicer: { duration: 'DAYS', length: 1 },
+        })
+      )) as unknown as DurationBucket[];
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       addLog(
@@ -1525,6 +1570,60 @@ const sleepEnrichmentWindow = (
     ),
     asleepMs: hasRecognizedStages ? asleepMs : endMs - startMs,
   };
+};
+
+/**
+ * Sleep sessions with one per night: of the sessions two apps wrote for the
+ * same night (same wake day, overlapping for most of the shorter one), only the
+ * most detailed, by the shared `keepMostDetailedSleep` rule (among sessions
+ * nearly as long as the longest: more stage kinds, then more stages, then the
+ * longer session). Every session is uploaded as 'Health Connect', so the
+ * server would otherwise merge both apps' nights into one entry. A nap that
+ * does not overlap the night stays, and a session without usable times is
+ * passed through.
+ */
+export const keepMostDetailedSleepSessions = (
+  records: unknown[]
+): unknown[] => {
+  const placed: { index: number; placement: SleepPlacement }[] = [];
+  records.forEach((record, index) => {
+    const w = sleepEnrichmentWindow(record);
+    if (!w) return;
+    const stages =
+      (
+        record as {
+          stages?: { startTime: string; endTime: string; stage: number }[];
+        }
+      ).stages ?? [];
+    const kinds = stages.flatMap((stage) => {
+      const stageType = mapHealthConnectSleepStage(stage.stage);
+      const stageMs = Date.parse(stage.endTime) - Date.parse(stage.startTime);
+      return stageType && Number.isFinite(stageMs) && stageMs > 0
+        ? [stageType]
+        : [];
+    });
+    placed.push({
+      index,
+      placement: {
+        day: w.wakeDay,
+        start: w.startMs,
+        end: w.endMs,
+        detail: {
+          stageKinds: new Set(kinds).size,
+          measures: 0,
+          segments: kinds.length,
+          durationSeconds: (w.endMs - w.startMs) / 1000,
+        },
+      },
+    });
+  });
+  const kept = new Set(
+    keepMostDetailedSleep(placed, (p) => p.placement).map((p) => p.index)
+  );
+  const placedIndexes = new Set(placed.map((p) => p.index));
+  return records.filter(
+    (_, index) => !placedIndexes.has(index) || kept.has(index)
+  );
 };
 
 /**

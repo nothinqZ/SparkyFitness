@@ -9,11 +9,13 @@ import {
   searchOpenFoodFacts,
   searchOpenFoodFactsByBarcodeFields,
 } from '../integrations/openfoodfacts/openFoodFactsService.js';
+import { PARTIAL_SERVING_DATA } from '../utils/foodRanking.js';
 import { withOpenFoodFactsProductReadPermit } from '../services/openFoodFactsProductReadRateLimitService.js';
 
 vi.mock('../integrations/openfoodfacts/openFoodFactsAuth.js', () => ({
   resolveOpenFoodFactsProvider: vi.fn(),
   invalidateOpenFoodFactsSession: vi.fn(),
+  resolveOffFetch: vi.fn(async () => fetch),
   DEFAULT_OFF_BASE_URL: 'https://world.openfoodfacts.org',
 }));
 vi.mock('../services/openFoodFactsProductReadRateLimitService.js', () => ({
@@ -749,6 +751,15 @@ describe('openFoodFactsService', () => {
         'Current First',
         'Indexed Second',
       ]);
+      // The index has no serving fields; callers must know that hit's 100 g
+      // reference is not the label serving.
+      expect(
+        result.products.map((product) => product[PARTIAL_SERVING_DATA])
+      ).toEqual([undefined, true]);
+      const mapped = mapOpenFoodFactsProduct(result.products[1]);
+      expect(mapped[PARTIAL_SERVING_DATA]).toBe(true);
+      // Server-side only: never serialized into web/mobile responses.
+      expect(JSON.stringify(mapped)).not.toContain('partial');
     });
 
     it('throws a compact error without exposing an upstream HTML response', async () => {
@@ -1277,12 +1288,17 @@ describe('openFoodFactsService', () => {
       fetch.mockResolvedValueOnce({
         ok: false,
         status: 429,
-        text: () => Promise.resolve('rate limited'),
+        text: () => Promise.resolve('SINK-DETAIL-MARKER'),
       });
 
-      await expect(
-        searchOpenFoodFactsByBarcodeFields('12345678')
-      ).rejects.toThrow('OpenFoodFacts API error');
+      let errorThrown: Error | null = null;
+      try {
+        await searchOpenFoodFactsByBarcodeFields('12345678');
+      } catch (err) {
+        errorThrown = err as Error;
+      }
+      expect(errorThrown?.message).toBe('OpenFoodFacts API error (HTTP 429)');
+      expect(errorThrown?.message).not.toContain('SINK-DETAIL-MARKER');
       expect(fetch).toHaveBeenCalledTimes(1);
     });
   });

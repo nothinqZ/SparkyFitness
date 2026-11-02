@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import Toast from 'react-native-toast-message';
 import { addLog } from './LogService';
+import { MOOD_CHECKIN_KIND } from '../utils/checkinReminderTimes';
 import i18n from '../localization/i18n';
 import { fireSuccessHaptic } from './haptics';
 import {
@@ -19,10 +20,11 @@ import {
 const CHANNEL_ID = 'workout-timer';
 const FASTING_CHANNEL_ID = 'fasting';
 const HYDRATION_CHANNEL_ID = 'hydration';
+export const MOOD_CHECKIN_CHANNEL_ID = 'mood-checkin';
 export const MEDICATION_REMINDER_CHANNEL_ID = 'medication-reminders';
 const EXACT_ALARM_PROMPT_KEY = '@SparkyFitness/exactAlarmPromptShown';
 
-function notificationCopy(
+export function notificationCopy(
   key: string,
   defaultValue: string,
   options?: Record<string, unknown>
@@ -85,6 +87,7 @@ export async function registerLocalizedNotificationPresentation(): Promise<void>
       importance: Notifications.AndroidImportance.HIGH,
       enableVibrate: true,
     });
+    await ensureMoodCheckinChannel();
     await Notifications.setNotificationChannelAsync(
       MEDICATION_REMINDER_CHANNEL_ID,
       {
@@ -165,6 +168,18 @@ export async function registerLocalizedNotificationPresentation(): Promise<void>
       },
     ]
   );
+}
+
+export async function ensureMoodCheckinChannel(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync(MOOD_CHECKIN_CHANNEL_ID, {
+    name: notificationCopy(
+      'notifications.channels.moodCheckin',
+      'Mood check-ins'
+    ),
+    importance: Notifications.AndroidImportance.HIGH,
+    enableVibrate: true,
+  });
 }
 
 export async function ensureMedicationReminderChannel(): Promise<void> {
@@ -250,14 +265,16 @@ export async function initNotifications(): Promise<void> {
           category === MEDICATION_REMINDER_CATEGORY ||
           category === MEDICATION_REMINDER_GROUP_CATEGORY;
         const isRestPing = category === REST_COMPLETE_CATEGORY;
+        const isMoodCheckin =
+          notification.request.content.data?.kind === MOOD_CHECKIN_KIND;
         // iOS also runs this while the app is frontmost-but-inactive (screen
         // locking, app switcher), where the chime never plays — so there the
         // ping carries the cue itself instead of being hidden as a duplicate.
         const restPingOwnsCue =
           isRestPing && AppState.currentState !== 'active';
         return {
-          shouldShowBanner: isMedReminder || restPingOwnsCue,
-          shouldShowList: isMedReminder || restPingOwnsCue,
+          shouldShowBanner: isMedReminder || isMoodCheckin || restPingOwnsCue,
+          shouldShowList: isMedReminder || isMoodCheckin || restPingOwnsCue,
           // Muted only while the chime owns the cue, so the two never double up.
           shouldPlaySound: !(isRestPing && willPlayRestCompleteSound()),
           shouldSetBadge: false,

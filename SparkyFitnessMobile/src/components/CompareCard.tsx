@@ -4,7 +4,7 @@ import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { CartesianChart } from 'victory-native';
 import { useCSSVariable } from 'uniwind';
 import {
-  COMPARE_METRICS,
+  INSIGHT_COMPARE_METRICS,
   MIN_COMPARE_PAIRS,
   compareMetrics,
   correlationStrength,
@@ -105,7 +105,7 @@ const CompareCard: React.FC<{
       }),
     }));
     return [
-      ...COMPARE_METRICS.map((m) => ({
+      ...INSIGHT_COMPARE_METRICS.map((m) => ({
         key: m as CompareMetric,
         label: metricLabel(t, m),
       })),

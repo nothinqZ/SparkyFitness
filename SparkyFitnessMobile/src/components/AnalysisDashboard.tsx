@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import {
-  COMPARE_METRICS,
+  INSIGHT_COMPARE_METRICS,
   metricSeries,
   type CompareMetric,
   type PerformanceOverviewResponse,
@@ -26,7 +26,7 @@ const AnalysisDashboard: React.FC<{
   const available = useMemo(
     () =>
       [
-        ...COMPARE_METRICS,
+        ...INSIGHT_COMPARE_METRICS,
         ...overview.strength.topLifts.map(
           (lift) =>
             `e1rm:${lift.exerciseId ?? lift.exerciseName}` as CompareMetric

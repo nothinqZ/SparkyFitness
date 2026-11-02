@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  distanceToSegment,
   haversineMeters,
+  localProjector,
   parseGpx,
   routeDistanceMeters,
   routeElevationGainMeters,
+  routeOverlapFraction,
+  routesAreDistinct,
   serializeGpx,
   simplifyRoute,
   type RoutePoint,
@@ -377,4 +381,54 @@ describe('parseGpx at the largest accepted size', () => {
     for (const gpx of shapes) expect(parseGpx(gpx).points).toEqual([]);
     expect(Date.now() - started).toBeLessThan(15_000);
   }, 60_000);
+
+  it('finds the nearest spot on a segment in local metres', () => {
+    const origin = { lat: 40, lon: -74 };
+    const project = localProjector(origin);
+    const a = project(origin);
+    const b = project({ lat: 40.001, lon: -74 });
+    const beside = project({ lat: 40.0005, lon: -73.9999 });
+    const hit = distanceToSegment(beside, a, b);
+    expect(hit.t).toBeCloseTo(0.5, 2);
+    expect(hit.distance).toBeGreaterThan(8);
+    expect(hit.distance).toBeLessThan(9.5);
+    // Past either end the nearest spot is the end, and a zero-length segment is a point.
+    expect(distanceToSegment(project({ lat: 40.002, lon: -74 }), a, b).t).toBe(
+      1
+    );
+    expect(distanceToSegment(beside, a, a).t).toBe(0);
+  });
+});
+
+// Bounds are far above the few tens of milliseconds measured in the sandbox so
+// a slow CI runner does not flake, and far below the minutes an unbounded
+// comparison takes on this input.
+describe('route comparison on hostile input', () => {
+  const pt = (lat: number, lon: number) => ({ lat, lon });
+
+  it('compares two 50,000-point tracks in bounded time', () => {
+    const a = Array.from({ length: 50_000 }, (_, i) =>
+      pt(40 + i * 0.000004, -74 + Math.sin(i / 80) * 0.001)
+    );
+    const b = Array.from({ length: 50_000 }, (_, i) =>
+      pt(40 + i * 0.000004, -74.0005 + Math.sin(i / 80) * 0.001)
+    );
+    const started = performance.now();
+    const overlap = routeOverlapFraction(a, b);
+    expect(performance.now() - started).toBeLessThan(5_000);
+    expect(overlap).toBeGreaterThanOrEqual(0);
+    expect(overlap).toBeLessThanOrEqual(1);
+  });
+
+  it('compares a track that doubles back over one spot in bounded time', () => {
+    // 50,000 points zigzagging inside a single 30 m cell: every sample lands
+    // in the same bucket, which made the nearest-sample search quadratic.
+    const zigzag = Array.from({ length: 50_000 }, (_, i) =>
+      pt(40 + (i % 2) * 0.00005, -74 + (i % 3) * 0.00003)
+    );
+    const started = performance.now();
+    const distinct = routesAreDistinct(zigzag, zigzag);
+    expect(performance.now() - started).toBeLessThan(5_000);
+    expect(distinct).toBe(false);
+  });
 });

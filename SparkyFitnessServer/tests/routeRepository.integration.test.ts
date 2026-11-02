@@ -178,6 +178,20 @@ describe.runIf(RUN)('routeRepository against Postgres', () => {
     expect((await getRoute(ALICE, mine.id))?.name).toBe('Loop');
   });
 
+  it('stores a generated route and reads it back with its cues', async () => {
+    const created = await createRoute(ALICE, {
+      ...draft,
+      source: 'generated',
+      cues: [
+        { index: 0, kind: 'depart' },
+        { index: 29, kind: 'arrive' },
+      ],
+    });
+    expect(created.source).toBe('generated');
+    expect(routeSchema.parse(created)).toEqual(created);
+    expect(created.cues.map((cue) => cue.kind)).toEqual(['depart', 'arrive']);
+  });
+
   it('renames, changes the activity and deletes', async () => {
     const created = await createRoute(ALICE, { ...draft, source: 'drawn' });
     const renamed = await updateRoute(ALICE, created.id, {
@@ -189,6 +203,70 @@ describe.runIf(RUN)('routeRepository against Postgres', () => {
     expect(await deleteRoute(ALICE, created.id)).toBe(true);
     expect(await getRoute(ALICE, created.id)).toBeNull();
     expect(await deleteRoute(ALICE, created.id)).toBe(false);
+  });
+
+  it('replaces the line, recomputing distance and climb and keeping the rest', async () => {
+    const created = await createRoute(ALICE, {
+      ...draft,
+      source: 'generated',
+      cues: [{ index: 0, kind: 'depart' }],
+    });
+    const longer: RoutePoint[] = Array.from({ length: 60 }, (_, i) => ({
+      lat: 40 + i * 0.001,
+      // A zigzag, so thinning keeps the corners.
+      lon: -74.01 + (i % 2) * 0.002,
+      alt: 5 + i * 2,
+    }));
+    const updated = await updateRoute(ALICE, created.id, {
+      points: longer,
+      cues: [
+        { index: 0, kind: 'depart' },
+        { index: 59, kind: 'arrive' },
+      ],
+    });
+    expect(updated).not.toBeNull();
+    expect(routeSchema.parse(updated)).toEqual(updated);
+    expect(updated?.points.length).toBeGreaterThan(30);
+    expect(updated?.distanceM).toBeGreaterThan(created.distanceM);
+    expect(updated?.elevationGainM).not.toBe(created.elevationGainM);
+    expect(updated?.cues.map((cue) => cue.kind)).toEqual(['depart', 'arrive']);
+    // Name, activity, source and creation time are not touched.
+    expect(updated).toMatchObject({
+      name: created.name,
+      activity: created.activity,
+      source: 'generated',
+      sourceExerciseEntryId: created.sourceExerciseEntryId,
+      createdAt: created.createdAt,
+    });
+    expect(Date.parse(updated?.updatedAt ?? '')).toBeGreaterThanOrEqual(
+      Date.parse(created.updatedAt)
+    );
+    expect(await getRoute(ALICE, created.id)).toEqual(updated);
+
+    // Points without cues clear the old cues; a rename keeps the new line.
+    const cleared = await updateRoute(ALICE, created.id, { points: longer });
+    expect(cleared?.cues).toEqual([]);
+    const renamed = await updateRoute(ALICE, created.id, { name: 'Again' });
+    expect(renamed?.points).toEqual(cleared?.points);
+    expect(renamed?.distanceM).toBe(cleared?.distanceM);
+  });
+
+  it('keeps a route a person edits to something too short, and another person’s route', async () => {
+    const created = await createRoute(ALICE, { ...draft, source: 'drawn' });
+    await expect(
+      updateRoute(ALICE, created.id, {
+        points: [
+          { lat: 40, lon: -74 },
+          { lat: 40.00001, lon: -74 },
+        ],
+      })
+    ).rejects.toBeInstanceOf(InvalidRouteError);
+    expect(await getRoute(ALICE, created.id)).toEqual(created);
+
+    expect(
+      await updateRoute(BOB, created.id, { points: [...points].reverse() })
+    ).toBeNull();
+    expect(await getRoute(ALICE, created.id)).toEqual(created);
   });
 
   it('refuses a route under 10 m and stores nothing', async () => {

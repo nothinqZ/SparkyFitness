@@ -839,6 +839,70 @@ async function getActiveProvidersByTypes(
     client.release();
   }
 }
+/** A routing provider as the routing layer needs it: the URL and the decrypted key. */
+export interface RoutingProviderRow {
+  id: string;
+  user_id: string;
+  provider_name: string;
+  base_url: string;
+  app_key: string | null;
+}
+
+// The active provider of one type the user may use, with its decrypted key:
+// their own first, then an admin's public one, then a family member's shared
+// one (same visibility as getExternalDataProviders), ties broken by the
+// manual sort order. `sort_order` is set separately in each owner's list, so
+// it only compares rows of the same tier and never ranks one owner's row
+// against another's. Backs routing resolution, which needs the key server-side.
+async function getActiveProviderWithKeyByType(
+  userId: string,
+  providerType: string
+): Promise<RoutingProviderRow | null> {
+  const client = await getClient(userId);
+  try {
+    const result = await client.query(
+      `SELECT edp.id, edp.user_id, edp.provider_name, edp.base_url,
+              edp.encrypted_app_key, edp.app_key_iv, edp.app_key_tag
+       FROM external_data_providers edp
+       LEFT JOIN external_provider_types ept ON edp.provider_type = ept.id
+       WHERE (
+         edp.user_id = $1
+         OR (edp.is_public = TRUE AND edp.is_active = TRUE)
+         OR (edp.is_public = FALSE AND edp.is_active = TRUE AND public.has_family_access(edp.user_id, 'share_external_providers') AND ept.is_strictly_private = FALSE)
+       )
+       AND edp.is_active = TRUE
+       AND edp.provider_type = $2
+       AND edp.base_url IS NOT NULL AND edp.base_url <> ''
+       ORDER BY (edp.user_id = $1) DESC, edp.is_public DESC, edp.sort_order ASC NULLS LAST, edp.created_at DESC
+       LIMIT 1`,
+      [userId, providerType]
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    let appKey: string | null = null;
+    if (row.encrypted_app_key && row.app_key_iv && row.app_key_tag) {
+      try {
+        appKey = await decrypt(
+          row.encrypted_app_key,
+          row.app_key_iv,
+          row.app_key_tag,
+          ENCRYPTION_KEY
+        );
+      } catch (e) {
+        log('error', 'Error decrypting app_key for provider:', row.id, e);
+      }
+    }
+    return {
+      id: row.id,
+      user_id: row.user_id,
+      provider_name: row.provider_name,
+      base_url: row.base_url,
+      app_key: appKey,
+    };
+  } finally {
+    client.release();
+  }
+}
 async function getExternalProviderTypes() {
   const client = await getSystemClient(); // System-level read operation
   try {
@@ -1063,6 +1127,7 @@ async function deleteGlobalExternalDataProvider(id: any) {
 export { getExternalDataProviders };
 export { getExternalDataProvidersByUserId };
 export { getActiveProvidersByTypes };
+export { getActiveProviderWithKeyByType };
 export { createExternalDataProvider };
 export { updateExternalDataProvider };
 export { getExternalDataProviderById };
@@ -1086,6 +1151,7 @@ export default {
   getExternalDataProviders,
   getExternalDataProvidersByUserId,
   getActiveProvidersByTypes,
+  getActiveProviderWithKeyByType,
   createExternalDataProvider,
   updateExternalDataProvider,
   getExternalDataProviderById,

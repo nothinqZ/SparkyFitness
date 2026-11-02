@@ -10,6 +10,8 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Clipboard } from 'lucide-react';
+import { RoutingProviderFields } from './RoutingProviderFields';
+import { WeatherProviderFields } from './WeatherProviderFields';
 import { Trans, useTranslation } from 'react-i18next';
 import type { ExternalDataProvider } from './ExternalProviderSettings';
 import { toast } from '@/hooks/use-toast';
@@ -222,6 +224,32 @@ export const EditProviderForm = ({
           </p>
         </>
       )}
+      {editData.provider_type === 'valhalla' && (
+        <RoutingProviderFields
+          idPrefix="edit"
+          baseUrl={editData.base_url}
+          appKey={editData.app_key}
+          onBaseUrlChange={(value) =>
+            setEditData((prev) => ({ ...prev, base_url: value }))
+          }
+          onAppKeyChange={(value) =>
+            setEditData((prev) => ({ ...prev, app_key: value }))
+          }
+        />
+      )}
+      {editData.provider_type === 'open_meteo' && (
+        <WeatherProviderFields
+          idPrefix="edit"
+          baseUrl={editData.base_url}
+          appKey={editData.app_key}
+          onBaseUrlChange={(value) =>
+            setEditData((prev) => ({ ...prev, base_url: value }))
+          }
+          onAppKeyChange={(value) =>
+            setEditData((prev) => ({ ...prev, app_key: value }))
+          }
+        />
+      )}
       {(editData.provider_type === 'mealie' ||
         editData.provider_type === 'tandoor' ||
         editData.provider_type === 'norish') && (
@@ -383,9 +411,17 @@ export const EditProviderForm = ({
                 <Trans
                   i18nKey="settings.editProviderForm.forMoreInformationClientCredentials2"
                   defaults={
-                    'For more information & client credentials, see <link>saganos/yazio_public_api</link>.'
+                    'For more information & client credentials, see <1>saganos/yazio_public_api</1>.'
                   }
                   components={{
+                    1: (
+                      <a
+                        href="https://github.com/saganos/yazio_public_api"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-red-800 dark:text-red-200 underline font-medium"
+                      />
+                    ),
                     link: (
                       <a
                         href="https://github.com/saganos/yazio_public_api"
@@ -1180,6 +1216,52 @@ export const EditProviderForm = ({
           </p>
         </>
       )}
+      {editData.provider_type === 'intervals' && (
+        <>
+          <div>
+            <Label>{t('integrations.intervalsAthleteId', 'Athlete ID')}</Label>
+            <Input
+              type="text"
+              value={editData.app_id || ''}
+              onChange={(e) =>
+                setEditData((prev) => ({
+                  ...prev,
+                  app_id: e.target.value,
+                }))
+              }
+              placeholder={t(
+                'integrations.intervalsAthleteIdPlaceholder',
+                'Enter Athlete ID (i12345)'
+              )}
+              autoComplete="off"
+            />
+          </div>
+          <div>
+            <Label>{t('settings.editProviderForm.apiKey', 'API Key')}</Label>
+            <Input
+              type="password"
+              value={editData.app_key || ''}
+              onChange={(e) =>
+                setEditData((prev) => ({
+                  ...prev,
+                  app_key: e.target.value,
+                }))
+              }
+              placeholder={t(
+                'integrations.intervalsApiKeyPlaceholder',
+                'Enter API Key'
+              )}
+              autoComplete="off"
+            />
+          </div>
+          <p className="text-sm text-muted-foreground col-span-2">
+            {t(
+              'integrations.intervalsCredentialsHelp',
+              'Find your Athlete ID and API Key on intervals.icu under Settings > Developer Settings.'
+            )}
+          </p>
+        </>
+      )}
       {(editData.provider_type === 'withings' ||
         editData.provider_type === 'garmin' ||
         editData.provider_type === 'fitbit' ||
@@ -1189,7 +1271,8 @@ export const EditProviderForm = ({
         editData.provider_type === 'polar' ||
         editData.provider_type === 'coros_mcp' ||
         editData.provider_type === 'hevy' ||
-        editData.provider_type === 'liftosaur') && (
+        editData.provider_type === 'liftosaur' ||
+        editData.provider_type === 'intervals') && (
         <div>
           <Label htmlFor="edit_sync_frequency">
             {t('settings.editProviderForm.syncFrequency', 'Sync Frequency')}
